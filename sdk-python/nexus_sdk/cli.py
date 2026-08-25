@@ -157,6 +157,31 @@ def run_keygen(args):
     print(f"\n\033[36mClé publique PEM :\033[0m\n{pk_pem}")
 
 
+def run_apikey(args):
+    """Génère une clé d'API de compte de service et l'entrée de configuration."""
+    import json as _json
+    from nexus_sdk.apikeys import default_keys_path, generate_key
+
+    key = generate_key()
+    entry = {
+        key: {
+            "org_id": args.org,
+            "roles": args.roles.split(",") if args.roles else ["service_account"],
+            "permissions": args.permissions.split(",") if args.permissions else [],
+        }
+    }
+
+    print("\033[32m✓ Clé d'API générée :\033[0m\n")
+    print(f"  \033[36m{key}\033[0m\n")
+    print("\033[31m⚠️  Elle ne sera plus jamais affichée. Copiez-la maintenant.\033[0m")
+    print("   Le Hub n'en conserve que l'empreinte SHA-256 et ne peut pas la retrouver.\n")
+    print(f"Ajoutez cette entrée à \033[36m{default_keys_path()}\033[0m :\n")
+    print(_json.dumps(entry, indent=2, ensure_ascii=False))
+    print("\nPuis verrouillez le fichier :")
+    print(f"  chmod 600 {default_keys_path()}")
+    print("\nEn production, préférez la variable d'environnement NEXUS_API_KEYS.")
+
+
 def run_hub(args):
     import websockets
     from nexus_sdk.message import MessageType, NexusMessage
@@ -361,6 +386,12 @@ def main():
     key_parser.add_argument("--capabilities", "-c", type=str, help="Capacités")
     key_parser.add_argument("--roles", "-r", type=str, help="Rôles")
 
+    # Command: apikey
+    ak_parser = subparsers.add_parser("apikey", help="Générer une clé d'API de compte de service")
+    ak_parser.add_argument("--org", type=str, required=True, help="Organisation propriétaire")
+    ak_parser.add_argument("--roles", "-r", type=str, help="Rôles séparés par des virgules")
+    ak_parser.add_argument("--permissions", "-p", type=str, help="Permissions séparées par des virgules")
+
     # Command: docs
     doc_parser = subparsers.add_parser("docs", help="Afficher documentation")
     doc_parser.add_argument("topic", choices=["rfc", "security", "api"], help="Thème")
@@ -378,6 +409,7 @@ def main():
     elif args.command == "ask": asyncio.run(run_ask(args))
     elif args.command == "task": asyncio.run(run_task(args))
     elif args.command == "keygen": run_keygen(args)
+    elif args.command == "apikey": run_apikey(args)
     elif args.command == "docs": run_docs(args)
 
 

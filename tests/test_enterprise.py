@@ -50,14 +50,14 @@ async def test_service_account_api_key_authentication():
     await asyncio.sleep(0.5)
 
     hub_proc = subprocess.Popen([sys.executable, "server/hub.py", "--port", "8765", "--org", "acme",
-                                 "--ephemeral-state", "--ephemeral-secret"])
+                                 "--ephemeral-state", "--ephemeral-secret", "--dev-api-keys"])
     await asyncio.sleep(1.0)
 
     try:
         # Connexion avec une clé d'API Entreprise valide
         agent = NexusAgent(
             name="backend_microservice",
-            api_key="nx_live_acme_super_secret_key_123",
+            api_key="nx_dev_acme_demo_key",
             hub_url="ws://localhost:8765"
         )
         await agent.connect()

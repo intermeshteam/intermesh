@@ -6,8 +6,9 @@ from nexus_sdk.audit import ImmutableAuditLog, AuditEntry
 from nexus_sdk.ratelimit import RateLimiter, TokenBucket
 from nexus_sdk.secret import resolve_hub_secret, default_secret_path
 from nexus_sdk.store import NexusStore, default_state_path
+from nexus_sdk.apikeys import ApiKeyStore, generate_key, hash_key
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = [
     "NexusAgent",
     "NexusMessage",
@@ -23,4 +24,7 @@ __all__ = [
     "default_secret_path",
     "NexusStore",
     "default_state_path",
+    "ApiKeyStore",
+    "generate_key",
+    "hash_key",
 ]

@@ -101,21 +101,75 @@ et le Hub l'annonce explicitement au démarrage :
    Le journal a été modifié en dehors du Hub.
 ```
 
-### Tâches interrompues
+### Reprise des tâches interrompues
 
-Les tâches `pending` ou `running` au moment de l'arrêt sont rechargées et
-signalées au démarrage, mais **ne sont pas réassignées automatiquement**.
-Leurs exécutants doivent se reconnecter. Une reprise automatique reste à faire.
+Une tâche `pending` ou `running` est réassignée à son exécutant dès qu'il se
+reconnecte — qu'elle ait été interrompue par un arrêt du Hub ou par la
+déconnexion de l'agent. L'orchestrateur n'a rien à resoumettre.
 
-## 5. Limites connues
+Une tâche `running` repasse à `pending` avant réémission : le travail engagé
+est perdu, et prétendre le contraire induirait l'orchestrateur en erreur.
+**Les exécutants doivent donc être idempotents** — une tâche peut être
+exécutée plus d'une fois.
+
+Chaque reprise est consignée au journal sous l'événement `TASK_RESUMED`.
+
+## 5. Comptes de service (clés d'API)
+
+Les clés d'API étaient écrites en clair dans `server/hub.py`, donc publiées
+avec le dépôt. Une clé versionnée dans Git est une clé compromise : elle reste
+lisible dans l'historique même après suppression.
+
+Elles sont désormais chargées depuis une source externe, et le Hub **n'en
+conserve que l'empreinte SHA-256**. Il peut vérifier une clé, jamais la
+révéler — même si sa configuration fuit.
+
+### Sources, par ordre de priorité
+
+| Priorité | Source | Usage visé |
+|---|---|---|
+| 1 | `NEXUS_API_KEYS` (JSON inline) | Kubernetes, CI |
+| 2 | `NEXUS_API_KEYS_FILE` | Chemin explicite |
+| 3 | `~/.nexus/api_keys.json` | Développement local |
+| 4 | aucune | Comptes de service **désactivés** |
+
+Sans configuration, aucune clé ne fonctionne. Il n'existe aucune valeur par
+défaut devinable.
+
+### Créer une clé
+
+```bash
+nexus apikey --org acme --roles admin,service_account --permissions "admin:*"
+```
+
+La commande affiche la clé une seule fois et l'entrée JSON à ajouter. Le Hub
+ne pourra jamais la retrouver.
+
+### Clés de démonstration
+
+`--dev-api-keys` active deux clés publiques, uniquement pour les tests. Le Hub
+affiche un avertissement en rouge à chaque démarrage dans ce mode. Ne jamais
+l'utiliser en production.
+
+### Comparaison à temps constant
+
+La vérification utilise `secrets.compare_digest`. Comparer des empreintes avec
+`==` laisse fuir, par le temps de réponse, le nombre d'octets corrects en
+tête — de quoi reconstruire une empreinte valide octet par octet.
+
+Une clé refusée n'est jamais écrite au journal d'audit : celui-ci est lisible
+par plus de monde que la clé elle-même.
+
+## 6. Limites connues
 
 - **Un seul Hub par base** : SQLite convient à un Hub unique. Plusieurs Hubs
   partageant un état demanderont PostgreSQL.
-- **Pas de reprise des tâches interrompues** (voir ci-dessus).
-- **Clés d'API entreprise en dur** dans `server/hub.py` — acceptable pour une
-  démonstration, à remplacer par un magasin de secrets avant tout usage réel.
+- **Exécutants supposés idempotents** : une tâche reprise peut être exécutée
+  deux fois (voir §4).
 - **Pas de TLS** sur le transport WebSocket par défaut : le chiffrement E2E
   protège le contenu, mais les métadonnées (qui parle à qui) transitent en
   clair. Placez le Hub derrière une terminaison TLS en production.
 - **Pas de rotation de clé sans coupure** : changer `NEXUS_HUB_SECRET` éjecte
   toute la flotte.
+- **Pas de révocation de clé d'API à chaud** : retirer une clé exige de
+  recharger la configuration, donc de redémarrer le Hub.

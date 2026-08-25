@@ -14,20 +14,16 @@ from nexus_sdk.audit import ImmutableAuditLog
 from nexus_sdk.ratelimit import RateLimiter
 from nexus_sdk.secret import resolve_hub_secret
 from nexus_sdk.store import NexusStore
+from nexus_sdk.apikeys import ApiKeyStore
 
 # Résolue au démarrage dans main(), pas à l'import : écrire un fichier de
 # clé comme effet de bord d'un import serait inattendu.
 HUB_SECRET_KEY = None
 TOKEN_EXPIRY_SECONDS = 3600
 
-ENTERPRISE_API_KEYS = {
-    "nx_live_acme_super_secret_key_123": {
-        "org_id": "acme", "roles": ["admin", "service_account"], "permissions": ["admin:*"]
-    },
-    "nx_live_globex_production_key_456": {
-        "org_id": "globex", "roles": ["worker", "service_account"], "permissions": ["compute:execute"]
-    }
-}
+# Chargé au démarrage depuis une source externe (voir nexus_sdk.apikeys).
+# Seules les empreintes SHA-256 des clés sont conservées en mémoire.
+api_keys = ApiKeyStore()
 
 # `agents` mappe un nom vers une connexion WebSocket vivante : être « en
 # ligne » est une propriété du processus courant, jamais un fait durable.
@@ -72,6 +68,43 @@ def verify_token(token: str, expected_agent: str) -> bool:
         return p.get("agent_name") == expected_agent and p.get("expires_at", 0) >= time.time()
     except Exception:
         return False
+
+
+def unfinished_tasks_for(assignee: str) -> list:
+    """Tâches confiées à cet agent et jamais menées à terme."""
+    return [
+        t for t in task_registry.values()
+        if t.assignee == assignee
+        and t.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
+    ]
+
+
+async def resume_unfinished_tasks(agent_name: str, websocket, token: str) -> None:
+    """
+    Réassigne à un agent qui vient de se connecter les tâches restées en
+    suspens — typiquement celles interrompues par un arrêt du Hub, ou par
+    la déconnexion de l'agent lui-même.
+
+    Une tâche RUNNING est repassée à PENDING avant réémission : le travail
+    précédent est perdu, prétendre le contraire induirait l'orchestrateur
+    en erreur. Les exécutants doivent donc être idempotents.
+    """
+    pending = unfinished_tasks_for(agent_name)
+    if not pending:
+        return
+
+    print(f"\033[36m↻ Reprise de {len(pending)} tâche(s) pour {agent_name}\033[0m")
+
+    for task in pending:
+        was = task.status.value
+        task.update_status(TaskStatus.PENDING, output_data=task.output_data)
+        remember_task(task)
+        audit_log.log("TASK_RESUMED", "hub", agent_name,
+                      {"task_id": task.task_id, "title": task.title, "previous_status": was})
+        await websocket.send(NexusMessage(
+            type=MessageType.TASK_ASSIGN, sender="hub", to=agent_name,
+            content=task.to_dict(), token=token,
+        ).to_json())
 
 
 async def connect_to_peer(peer_org: str, peer_url: str, my_org: str):
@@ -153,11 +186,13 @@ async def handle_agent(websocket, my_org: str):
                 
                 api_key = d.get("api_key")
                 if api_key:
-                    if api_key not in ENTERPRISE_API_KEYS:
+                    key_info = api_keys.lookup(api_key)
+                    if key_info is None:
+                        # Ne jamais journaliser la clé présentée : le journal
+                        # d'audit est lisible par plus de monde qu'elle.
                         audit_log.log("AUTH_FAILED", raw_name, None, {"reason": "INVALID_API_KEY"})
                         await websocket.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content="API Key Entreprise invalide.").to_json())
                         continue
-                    key_info = ENTERPRISE_API_KEYS[api_key]
                     org_id = key_info["org_id"]
                     roles = key_info["roles"]
                     perms = key_info["permissions"]
@@ -187,6 +222,8 @@ async def handle_agent(websocket, my_org: str):
                     "roles": identity.roles, "permissions": identity.permissions, "org_id": identity.org_id,
                     "token": token, "online_agents": list(agents.keys())
                 }).to_json())
+
+                await resume_unfinished_tasks(agent_name, websocket, token)
 
             elif msg.type in (MessageType.MESSAGE, MessageType.REQUEST, MessageType.RESPONSE, MessageType.TASK_SUBMIT, MessageType.TASK_UPDATE, MessageType.WHO_IS, MessageType.DISCOVER):
                 if not msg.token or not verify_token(msg.token, msg.sender):
@@ -274,9 +311,11 @@ async def main():
                         help="Base d'état SQLite (défaut: ~/.nexus/hub_state.db)")
     parser.add_argument("--ephemeral-state", action="store_true",
                         help="État en mémoire : tout est perdu à l'arrêt")
+    parser.add_argument("--dev-api-keys", action="store_true",
+                        help="Active des clés d'API de démonstration PUBLIQUES (tests uniquement)")
     args = parser.parse_args()
 
-    global HUB_SECRET_KEY, store, identity_registry, task_registry, audit_log
+    global HUB_SECRET_KEY, store, identity_registry, task_registry, audit_log, api_keys
     try:
         HUB_SECRET_KEY, secret_source = resolve_hub_secret(
             secret_file=args.secret_file,
@@ -284,6 +323,12 @@ async def main():
         )
     except ValueError as exc:
         print(f"\033[31m❌ Clé de signature invalide : {exc}\033[0m")
+        sys.exit(1)
+
+    try:
+        api_keys = ApiKeyStore.load(dev_keys=args.dev_api_keys)
+    except ValueError as exc:
+        print(f"\033[31m❌ Clés d'API illisibles : {exc}\033[0m")
         sys.exit(1)
 
     store = NexusStore(path=args.state_file, ephemeral=args.ephemeral_state)
@@ -307,7 +352,12 @@ async def main():
     print(f"  Audit Cryptographique : \033[32mACTIF\033[0m | Rate Limiting : \033[32mACTIF\033[0m")
     print(f"  Clé de signature JWT  : {secret_status} — {secret_source}")
     print(f"  État du Hub           : {state_status} — {store.description}")
+    print(f"  Comptes de service    : {len(api_keys)} clé(s) — {api_keys.source}")
     print("=" * 60)
+
+    if args.dev_api_keys:
+        print("\033[31m⚠️  Clés d'API de DÉMONSTRATION actives — elles sont publiques.\033[0m")
+        print("   N'utilisez jamais --dev-api-keys en production.")
 
     if not persistent:
         print("\033[33m⚠️  Les tokens émis seront invalidés au prochain redémarrage.\033[0m")
@@ -333,9 +383,8 @@ async def main():
             print("\033[32m✓ Intégrité de la chaîne d'audit vérifiée.\033[0m")
         if pending:
             print(
-                f"\033[33m⚠️  {pending} tâche(s) étaient en cours à l'arrêt. "
-                "Leurs exécutants doivent se reconnecter ; il n'y a pas encore "
-                "de reprise automatique.\033[0m"
+                f"\033[33m↻ {pending} tâche(s) inachevée(s) : elles seront "
+                "réassignées dès que leur exécutant se reconnectera.\033[0m"
             )
 
     if args.peer:
