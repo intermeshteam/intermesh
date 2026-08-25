@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import json
 import os
-import secrets
 import sys
 import time
 import websockets
@@ -13,8 +12,11 @@ from nexus_sdk.identity import AgentIdentity
 from nexus_sdk.task import NexusTask, TaskStatus
 from nexus_sdk.audit import ImmutableAuditLog
 from nexus_sdk.ratelimit import RateLimiter
+from nexus_sdk.secret import resolve_hub_secret
 
-HUB_SECRET_KEY = secrets.token_hex(32)
+# Résolue au démarrage dans main(), pas à l'import : écrire un fichier de
+# clé comme effet de bord d'un import serait inattendu.
+HUB_SECRET_KEY = None
 TOKEN_EXPIRY_SECONDS = 3600
 
 ENTERPRISE_API_KEYS = {
@@ -243,12 +245,35 @@ async def main():
     parser.add_argument("--port", type=int, default=8765, help="Port d'écoute")
     parser.add_argument("--org", type=str, default="default", help="Nom organisation")
     parser.add_argument("--peer", type=str, help="Peering: 'org=ws://host:port'")
+    parser.add_argument("--secret-file", type=str, default=None,
+                        help="Fichier de clé JWT (défaut: ~/.nexus/hub_secret)")
+    parser.add_argument("--ephemeral-secret", action="store_true",
+                        help="Clé jetable : tous les tokens meurent au redémarrage")
     args = parser.parse_args()
+
+    global HUB_SECRET_KEY
+    try:
+        HUB_SECRET_KEY, secret_source = resolve_hub_secret(
+            secret_file=args.secret_file,
+            ephemeral=args.ephemeral_secret,
+        )
+    except ValueError as exc:
+        print(f"\033[31m❌ Clé de signature invalide : {exc}\033[0m")
+        sys.exit(1)
+
+    persistent = not secret_source.startswith("éphémère")
+    secret_status = (
+        f"\033[32mPERSISTANTE\033[0m" if persistent else f"\033[33mÉPHÉMÈRE\033[0m"
+    )
 
     print("=" * 60)
     print(f"  NEXUS HUB v1.4 — Enterprise Infrastructure")
     print(f"  Audit Cryptographique : \033[32mACTIF\033[0m | Rate Limiting : \033[32mACTIF\033[0m")
+    print(f"  Clé de signature JWT  : {secret_status} — {secret_source}")
     print("=" * 60)
+
+    if not persistent:
+        print("\033[33m⚠️  Les tokens émis seront invalidés au prochain redémarrage.\033[0m")
 
     if args.peer:
         peer_org, peer_url = args.peer.split("=")

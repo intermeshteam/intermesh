@@ -7,6 +7,18 @@ services:
     container_name: nexus-hub
     ports:
       - "8765:8765"
+    environment:
+      # Le Hub écrit sa clé de signature JWT dans NEXUS_HOME. Sans volume,
+      # elle serait régénérée à chaque `docker compose down && up`, ce qui
+      # invaliderait les tokens de tous les agents.
+      - NEXUS_HOME=/data/nexus
+      # En production, préférez injecter la clé sans jamais l'écrire sur
+      # disque (le volume ci-dessous devient alors inutile) :
+      #   NEXUS_HUB_SECRET=${NEXUS_HUB_SECRET}
+      # Générez-la avec :
+      #   python3 -c "import secrets; print(secrets.token_hex(32))"
+    volumes:
+      - nexus-hub-secret:/data/nexus
     networks:
       - nexus-net
     restart: unless-stopped
@@ -54,6 +66,10 @@ services:
     depends_on:
       - nexus-hub
     restart: unless-stopped
+
+volumes:
+  # Conserve la clé de signature JWT entre les recréations du conteneur.
+  nexus-hub-secret:
 
 networks:
   nexus-net:

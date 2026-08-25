@@ -163,8 +163,17 @@ def run_hub(args):
     from nexus_sdk.identity import AgentIdentity
     from nexus_sdk.task import NexusTask, TaskStatus
     import secrets, jwt
+    from nexus_sdk.secret import resolve_hub_secret
 
-    HUB_SECRET_KEY = secrets.token_hex(32)
+    try:
+        HUB_SECRET_KEY, secret_source = resolve_hub_secret(
+            secret_file=getattr(args, "secret_file", None),
+            ephemeral=getattr(args, "ephemeral_secret", False),
+        )
+    except ValueError as exc:
+        print(f"\033[31m❌ Clé de signature invalide : {exc}\033[0m")
+        sys.exit(1)
+
     agents = {}
     identity_registry = {}
     task_registry = {}
@@ -273,6 +282,11 @@ def run_hub(args):
     async def start_server():
         port = args.port
         print(f"\033[32m✓ Nexus Hub démarré avec télémétrie sur ws://localhost:{port}\033[0m")
+        if secret_source.startswith("éphémère"):
+            print(f"  \033[33mClé JWT : ÉPHÉMÈRE — {secret_source}\033[0m")
+            print("  \033[33m⚠️  Les tokens seront invalidés au prochain redémarrage.\033[0m")
+        else:
+            print(f"  \033[32mClé JWT : PERSISTANTE\033[0m — {secret_source}")
         print("  En attente de connexions... (Ctrl+C pour arrêter)\n")
         async with websockets.serve(handle_agent, "0.0.0.0", port):
             await asyncio.Future()
@@ -288,6 +302,10 @@ def main():
     # Command: hub
     hub_parser = subparsers.add_parser("hub", help="Démarrer le Hub Nexus")
     hub_parser.add_argument("--port", type=int, default=8765, help="Port d'écoute (défaut: 8765)")
+    hub_parser.add_argument("--secret-file", type=str, default=None,
+                            help="Fichier de clé JWT (défaut: ~/.nexus/hub_secret)")
+    hub_parser.add_argument("--ephemeral-secret", action="store_true",
+                            help="Clé jetable : tous les tokens meurent au redémarrage")
 
     # Command: dashboard
     dash_parser = subparsers.add_parser("dashboard", help="Lancer l'interface Web Mission Control")
