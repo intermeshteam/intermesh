@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Non publié]
+
+### Added
+
+- **Admin console.** `dashboard/` is now a working administration console
+  rather than a telemetry page that never received anything: `server/hub.py`
+  emitted no telemetry at all, so the dashboard connected to the production
+  hub and displayed nothing. The hub now broadcasts agent, task, routing, and
+  admin events to subscribed consoles.
+- **Admin command API** (`admin_request` / `admin_result`): `hub.info`,
+  `agents.list`, `agent.disconnect`, `tasks.list`, `task.cancel`,
+  `task.retry`, `audit.list`, `audit.verify`, `apikeys.list`,
+  `apikey.create`, `apikey.revoke`.
+- **API keys can be created and revoked at runtime**, persisted as SHA-256
+  digests only. The plaintext value exists once, in the response, and is
+  never written to disk or to the audit log.
+- `NexusAgent.admin()` for scripting administration from Python.
+
+### Security
+
+- **Administration requires a key-authenticated identity.** At registration
+  an agent picks its own roles (`roles = d.get("roles", ["standard"])`),
+  which is fine for a message mesh and unacceptable for a console that can
+  revoke keys. Admin commands therefore require both an identity proven by
+  API key and the `admin` role. The proof is the `auth_method` claim inside
+  the hub-signed JWT, so a client can neither forge nor alter it.
+- Every mutation is audited as `ADMIN_ACTION` with its author; every refused
+  attempt as `ADMIN_DENIED`.
+- The web console never writes the API key to `localStorage` or
+  `sessionStorage` — it lives in a variable for the lifetime of the tab.
+- Key fingerprints are truncated to 12 characters in the interface.
+- The console has no external dependencies, so it runs on a closed network.
+
+---
+
 ## [0.1.1] — 2026-08-25
 
 Hardening release. No protocol changes; the `nexus/v1` wire format is

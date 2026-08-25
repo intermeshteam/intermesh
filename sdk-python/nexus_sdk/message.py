@@ -21,10 +21,17 @@ class MessageType(str, Enum):
     TASK_ASSIGN = "task_assign"
     TASK_UPDATE = "task_update"
     
-    # NOUVEAU : Messages de Peering et Fédération Inter-Hubs
+    # Peering et Fédération Inter-Hubs
     PEER_CONNECT = "peer_connect"          # Hub A ➜ Hub B (Établissement du lien)
     PEER_CONNECTED = "peer_connected"      # Hub B ➜ Hub A (Validation du peering)
     FEDERATION_RELAY = "federation_relay"  # Hub A ➜ Hub B (Routage d'un message tiers)
+
+    # Console d'administration.
+    # ADMIN_REQUEST exige une identité authentifiée par clé d'API : les
+    # rôles auto-déclarés à l'enregistrement ne suffisent jamais.
+    ADMIN_REQUEST = "admin_request"        # Console ➜ Hub (commande)
+    ADMIN_RESULT = "admin_result"          # Hub ➜ Console (réponse)
+    TELEMETRY = "telemetry_event"          # Hub ➜ Observateurs (flux temps réel)
 
 
 class NexusMessage:

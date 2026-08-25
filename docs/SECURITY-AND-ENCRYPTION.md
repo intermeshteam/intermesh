@@ -160,7 +160,70 @@ tête — de quoi reconstruire une empreinte valide octet par octet.
 Une clé refusée n'est jamais écrite au journal d'audit : celui-ci est lisible
 par plus de monde que la clé elle-même.
 
-## 6. Limites connues
+## 6. Console d'administration
+
+### Le problème que résout le modèle d'autorisation
+
+À l'enregistrement, un agent sans clé d'API **choisit lui-même ses rôles** :
+
+```python
+roles = d.get("roles", ["standard"])
+```
+
+C'est acceptable pour un maillage où les agents s'échangent des messages.
+C'est inacceptable pour une console capable de révoquer des clés et de
+déconnecter des agents : n'importe qui pourrait se déclarer `admin`.
+
+### Double condition
+
+Toute commande `admin_request` exige :
+
+1. une identité **authentifiée par clé d'API** — jamais des rôles déclarés
+   par le client ;
+2. le rôle `admin`.
+
+La première condition repose sur le champ `auth_method` du JWT, **signé par
+le Hub** : un client ne peut ni le forger ni le modifier. Un token émis avant
+l'introduction de ce champ n'ouvre pas l'administration.
+
+### Commandes
+
+| Commande | Effet |
+|---|---|
+| `hub.info` | État global : agents, tâches, audit, fédération |
+| `agents.list` | Inventaire, **y compris les agents hors ligne** |
+| `agent.disconnect` | Ferme la connexion d'un agent |
+| `tasks.list` | Tâches filtrables par statut et exécutant |
+| `task.cancel` | Marque une tâche comme échouée |
+| `task.retry` | Repasse en attente et repousse à l'exécutant |
+| `audit.list` | Entrées du journal, avec état d'intégrité |
+| `audit.verify` | Revérifie la chaîne et localise une rupture |
+| `apikeys.list` | Inventaire des clés, **empreintes uniquement** |
+| `apikey.create` | Crée une clé ; valeur affichée une seule fois |
+| `apikey.revoke` | Révoque une clé par son empreinte |
+
+### Traçabilité
+
+Chaque mutation est journalisée en `ADMIN_ACTION` avec son auteur et ses
+paramètres. Chaque tentative refusée est journalisée en `ADMIN_DENIED`.
+La valeur d'une clé créée n'est jamais écrite au journal.
+
+### La console web
+
+`dashboard/` est une page statique sans aucune dépendance externe : elle
+fonctionne sur un réseau fermé, devant un Hub sans accès à Internet.
+
+La clé d'API saisie **n'est jamais écrite dans le navigateur** — ni
+`localStorage`, ni `sessionStorage`. Elle vit dans une variable, le temps de
+l'onglet. Un rechargement la redemande : un jeton d'administration qui
+survit dans le stockage du navigateur survit aussi à l'utilisateur qui
+s'éloigne de son poste.
+
+Les empreintes affichées sont tronquées à 12 caractères — assez pour
+identifier une clé, trop peu pour aider une attaque hors ligne si l'écran
+est capturé.
+
+## 7. Limites connues
 
 - **Un seul Hub par base** : SQLite convient à un Hub unique. Plusieurs Hubs
   partageant un état demanderont PostgreSQL.
@@ -171,5 +234,8 @@ par plus de monde que la clé elle-même.
   clair. Placez le Hub derrière une terminaison TLS en production.
 - **Pas de rotation de clé sans coupure** : changer `NEXUS_HUB_SECRET` éjecte
   toute la flotte.
-- **Pas de révocation de clé d'API à chaud** : retirer une clé exige de
-  recharger la configuration, donc de redémarrer le Hub.
+- **Pas de TLS sur la console** : elle transite par le même WebSocket que les
+  agents. Derrière une terminaison TLS (`wss://`) en production, sans quoi la
+  clé d'administration circule en clair sur le réseau.
+- **Pas d'expiration de session de console** : la page reste connectée tant
+  que l'onglet est ouvert.

@@ -15,3 +15,7 @@ build/
 *.db-wal
 *.db-shm
 .nexus/
+
+# Jetons de registre — ne doivent jamais être versionnés
+.npmrc
+.pypirc

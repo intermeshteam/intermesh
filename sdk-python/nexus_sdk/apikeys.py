@@ -25,6 +25,7 @@ import json
 import os
 import secrets
 import stat
+import time
 from pathlib import Path
 
 ENV_INLINE = "NEXUS_API_KEYS"
@@ -65,22 +66,115 @@ def generate_key(prefix: str = "nx_live") -> str:
 class ApiKeyStore:
     """Vérifie les clés d'API sans jamais conserver leur valeur en clair."""
 
-    def __init__(self, keys: dict[str, dict] | None = None, source: str = "aucune"):
+    def __init__(
+        self,
+        keys: dict[str, dict] | None = None,
+        source: str = "aucune",
+        path: Path | None = None,
+    ):
         """
         Args:
             keys:   Mapping clé_en_clair -> {org_id, roles, permissions}.
                     Seules les empreintes sont conservées.
             source: Description de la provenance, pour la bannière de démarrage.
+            path:   Fichier de sauvegarde, si les mutations sont autorisées.
         """
         self._by_hash: dict[str, dict] = {}
         self.source = source
+        self.path = path
 
         for raw_key, info in (keys or {}).items():
-            self._by_hash[hash_key(raw_key)] = {
+            self._by_hash[hash_key(raw_key)] = self._normalize(info)
+
+    @staticmethod
+    def _normalize(info: dict, label: str | None = None) -> dict:
+        entry = {
+            "org_id": info["org_id"],
+            "roles": list(info.get("roles", [])),
+            "permissions": list(info.get("permissions", [])),
+        }
+        if label or info.get("label"):
+            entry["label"] = label or info["label"]
+        if info.get("created_at"):
+            entry["created_at"] = info["created_at"]
+        return entry
+
+    # ------------------------------------------------------------------
+    # Mutations (console d'administration)
+    # ------------------------------------------------------------------
+
+    @property
+    def mutable(self) -> bool:
+        """Les mutations exigent un fichier : une config injectée par
+        l'environnement appartient à l'orchestrateur, pas au Hub."""
+        return self.path is not None
+
+    def describe(self) -> list[dict]:
+        """
+        Inventaire des clés, sans jamais exposer leur valeur.
+
+        L'empreinte est tronquée à 12 caractères : assez pour identifier
+        une clé dans une interface, trop peu pour aider une attaque hors
+        ligne si la page est capturée.
+        """
+        return [
+            {
+                "fingerprint": h[:12],
                 "org_id": info["org_id"],
-                "roles": list(info.get("roles", [])),
-                "permissions": list(info.get("permissions", [])),
+                "roles": info["roles"],
+                "permissions": info["permissions"],
+                "label": info.get("label", ""),
+                "created_at": info.get("created_at"),
             }
+            for h, info in sorted(self._by_hash.items())
+        ]
+
+    def _persist(self) -> None:
+        if not self.path:
+            raise PermissionError(
+                "Les clés proviennent de l'environnement et sont en lecture seule. "
+                f"Utilisez un fichier ({ENV_FILE} ou ~/.nexus/api_keys.json) "
+                "pour autoriser les mutations."
+            )
+        # Le fichier stocke déjà des empreintes : la valeur en clair n'a
+        # jamais existé côté Hub après création.
+        payload = {"__hashed__": True, "keys": self._by_hash}
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        tmp = self.path.with_suffix(".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, json.dumps(payload, indent=2).encode("utf-8"))
+        finally:
+            os.close(fd)
+        os.replace(tmp, self.path)   # remplacement atomique
+
+    def create(self, org_id: str, roles: list[str], permissions: list[str],
+               label: str = "") -> str:
+        """
+        Crée une clé et retourne sa valeur en clair — la seule et unique
+        fois où elle existe. Seule l'empreinte est conservée ensuite.
+        """
+        raw = generate_key()
+        self._by_hash[hash_key(raw)] = self._normalize(
+            {
+                "org_id": org_id,
+                "roles": roles,
+                "permissions": permissions,
+                "created_at": time.time(),
+            },
+            label=label,
+        )
+        self._persist()
+        return raw
+
+    def revoke(self, fingerprint_prefix: str) -> bool:
+        """Révoque une clé désignée par le préfixe de son empreinte."""
+        matches = [h for h in self._by_hash if h.startswith(fingerprint_prefix)]
+        if len(matches) != 1:
+            return False
+        del self._by_hash[matches[0]]
+        self._persist()
+        return True
 
     def __len__(self) -> int:
         return len(self._by_hash)
@@ -130,9 +224,21 @@ class ApiKeyStore:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path} n'est pas du JSON valide : {exc}") from exc
-            return cls(data, source=f"fichier {path}")
+
+            if data.get("__hashed__"):
+                # Format produit par la console : déjà haché, rien à recalculer.
+                store = cls({}, source=f"fichier {path}", path=path)
+                store._by_hash = {
+                    h: cls._normalize(info) for h, info in data.get("keys", {}).items()
+                }
+                return store
+
+            # Format historique : clés en clair, hachées au chargement.
+            return cls(data, source=f"fichier {path}", path=path)
 
         if dev_keys:
             return cls(DEV_API_KEYS, source="clés de DÉMONSTRATION (publiques)")
 
-        return cls({}, source="aucune — comptes de service désactivés")
+        # Aucun fichier : le chemin par défaut devient la cible d'écriture,
+        # pour qu'une première clé créée depuis la console soit persistée.
+        return cls({}, source="aucune — comptes de service désactivés", path=path)

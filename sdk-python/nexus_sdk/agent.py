@@ -120,7 +120,7 @@ class NexusAgent:
             async for raw in self.ws:
                 msg = NexusMessage.from_json(raw)
 
-                if msg.type in (MessageType.RESPONSE, MessageType.IDENTITY, MessageType.DISCOVER_RESULT) and msg.reply_to in self._pending_requests:
+                if msg.type in (MessageType.RESPONSE, MessageType.IDENTITY, MessageType.DISCOVER_RESULT, MessageType.ADMIN_RESULT) and msg.reply_to in self._pending_requests:
                     future = self._pending_requests.pop(msg.reply_to)
                     if not future.done():
                         content = msg.content
@@ -243,6 +243,43 @@ class NexusAgent:
         except asyncio.TimeoutError:
             self._pending_tasks.pop(task.task_id, None)
             raise TimeoutError(f"Tâche '{title}' expirée ({timeout}s).")
+
+    async def admin(self, command: str, timeout: float = 10.0, **params):
+        """
+        Exécute une commande d'administration sur le Hub.
+
+        Exige une identité authentifiée par clé d'API avec le rôle admin :
+        des rôles déclarés à la connexion sont refusés par le Hub.
+
+            agent = NexusAgent(name="console", api_key="nx_live_...")
+            await agent.connect()
+            info = await agent.admin("hub.info")
+
+        Raises:
+            PermissionError: administration refusée.
+            RuntimeError:    commande rejetée par le Hub.
+        """
+        msg = NexusMessage(
+            type=MessageType.ADMIN_REQUEST, sender=self.qualified_name,
+            content={"command": command, "params": params}, token=self.token,
+        )
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self._pending_requests[msg.id] = future
+        await self.ws.send(msg.to_json())
+
+        try:
+            reply = await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            self._pending_requests.pop(msg.id, None)
+            raise TimeoutError(f"Commande '{command}' expirée ({timeout}s).")
+
+        if not reply.get("ok"):
+            error = reply.get("error", "commande refusée")
+            if "ADMIN_DENIED" in error:
+                raise PermissionError(error)
+            raise RuntimeError(error)
+        return reply.get("result")
 
     async def who_is(self, agent_name: str, timeout: float = 5.0) -> dict:
         msg = NexusMessage(type=MessageType.WHO_IS, sender=self.qualified_name, content=agent_name, token=self.token)

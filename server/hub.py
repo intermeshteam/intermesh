@@ -15,6 +15,7 @@ from nexus_sdk.ratelimit import RateLimiter
 from nexus_sdk.secret import resolve_hub_secret
 from nexus_sdk.store import NexusStore
 from nexus_sdk.apikeys import ApiKeyStore
+from nexus_sdk.admin import AdminContext, AdminError, MUTATING, authorize, execute
 
 # Résolue au démarrage dans main(), pas à l'import : écrire un fichier de
 # clé comme effet de bord d'un import serait inattendu.
@@ -30,6 +31,9 @@ api_keys = ApiKeyStore()
 # C'est le seul registre qui ne doit pas survivre à un redémarrage.
 agents = {}
 peered_hubs = {}
+
+# Consoles et dashboards abonnés au flux temps réel.
+observers = set()
 
 # Rechargés depuis le magasin au démarrage, dans main().
 identity_registry = {}
@@ -54,12 +58,43 @@ def remember_task(task) -> None:
         store.save_task(task)
 
 
-def generate_token(agent_name: str, agent_id: str, roles: list) -> str:
+def generate_token(agent_name: str, agent_id: str, roles: list,
+                   auth_method: str = "self_declared") -> str:
+    """
+    `auth_method` distingue une identité prouvée par clé d'API d'une
+    identité simplement déclarée à l'enregistrement. Il est porté par le
+    JWT, donc signé par le Hub et infalsifiable par le client — c'est ce
+    qui permet de refuser l'administration à un agent qui s'est
+    lui-même attribué le rôle admin.
+    """
     payload = {
         "agent_name": agent_name, "agent_id": agent_id, "roles": roles,
+        "auth_method": auth_method,
         "issued_at": time.time(), "expires_at": time.time() + TOKEN_EXPIRY_SECONDS, "issuer": "nexus-hub"
     }
     return jwt.encode(payload, HUB_SECRET_KEY, algorithm="HS256")
+
+
+def decode_token(token: str) -> dict | None:
+    try:
+        return jwt.decode(token, HUB_SECRET_KEY, algorithms=["HS256"])
+    except Exception:
+        return None
+
+
+async def broadcast(event: str, data: dict) -> None:
+    """Diffuse un événement aux consoles abonnées, sans jamais bloquer le routage."""
+    if not observers:
+        return
+    payload = NexusMessage(
+        type=MessageType.TELEMETRY, sender="hub",
+        content={"event": event, "at": time.time(), **data},
+    ).to_json()
+    for ws in list(observers):
+        try:
+            await ws.send(payload)
+        except Exception:
+            observers.discard(ws)
 
 
 def verify_token(token: str, expected_agent: str) -> bool:
@@ -105,6 +140,27 @@ async def resume_unfinished_tasks(agent_name: str, websocket, token: str) -> Non
             type=MessageType.TASK_ASSIGN, sender="hub", to=agent_name,
             content=task.to_dict(), token=token,
         ).to_json())
+
+
+async def deliver_task(task) -> bool:
+    """Pousse une tâche à son exécutant s'il est connecté."""
+    ws = agents.get(task.assignee)
+    if ws is None:
+        return False
+    await ws.send(NexusMessage(
+        type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee,
+        content=task.to_dict()).to_json())
+    return True
+
+
+def admin_context(my_org: str) -> AdminContext:
+    return AdminContext(
+        agents=agents, identity_registry=identity_registry,
+        task_registry=task_registry, audit_log=audit_log,
+        api_keys=api_keys, peered_hubs=peered_hubs, store=store,
+        my_org=my_org, remember_task=remember_task,
+        send_to_agent=deliver_task,
+    )
 
 
 async def connect_to_peer(peer_org: str, peer_url: str, my_org: str):
@@ -185,6 +241,7 @@ async def handle_agent(websocket, my_org: str):
                 raw_name = msg.sender
                 
                 api_key = d.get("api_key")
+                auth_method = "api_key" if api_key else "self_declared"
                 if api_key:
                     key_info = api_keys.lookup(api_key)
                     if key_info is None:
@@ -211,7 +268,7 @@ async def handle_agent(websocket, my_org: str):
                 agent_name = identity.qualified_name
                 agents[agent_name] = websocket
                 remember_identity(identity)
-                token = generate_token(agent_name, identity.agent_id, identity.roles)
+                token = generate_token(agent_name, identity.agent_id, identity.roles, auth_method)
 
                 audit_log.log("AGENT_REGISTERED", agent_name, None, {"roles": identity.roles, "caps": identity.capabilities})
                 print(f"\033[32m[+] Agent connecté :\033[0m {agent_name} | Rôles: {identity.roles}")
@@ -223,7 +280,68 @@ async def handle_agent(websocket, my_org: str):
                     "token": token, "online_agents": list(agents.keys())
                 }).to_json())
 
+                # Une identité admin prouvée par clé d'API reçoit la
+                # télémétrie sans avoir à réclamer le rôle observer : les
+                # rôles viennent de la clé, pas de la déclaration du client.
+                if "observer" in identity.roles or (
+                    auth_method == "api_key" and "admin" in identity.roles
+                ):
+                    observers.add(websocket)
+
+                await broadcast("agent_connected", {
+                    "name": agent_name, "roles": identity.roles,
+                    "capabilities": identity.capabilities,
+                    "org_id": identity.org_id,
+                    "auth_method": auth_method,
+                })
+
                 await resume_unfinished_tasks(agent_name, websocket, token)
+
+            elif msg.type == MessageType.ADMIN_REQUEST:
+                payload = decode_token(msg.token or "")
+                content = msg.content or {}
+                command = content.get("command", "")
+
+                if payload is None or payload.get("agent_name") != msg.sender:
+                    audit_log.log("ADMIN_DENIED", msg.sender, None, {"reason": "BAD_TOKEN", "command": command})
+                    await websocket.send(NexusMessage(
+                        type=MessageType.ADMIN_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
+                        content={"ok": False, "error": "Token invalide."}).to_json())
+                    continue
+
+                try:
+                    authorize(payload)
+                except AdminError as exc:
+                    audit_log.log("ADMIN_DENIED", msg.sender, None,
+                                  {"reason": str(exc), "command": command})
+                    await broadcast("admin_denied", {"actor": msg.sender, "command": command})
+                    await websocket.send(NexusMessage(
+                        type=MessageType.ADMIN_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
+                        content={"ok": False, "error": str(exc)}).to_json())
+                    continue
+
+                try:
+                    result = await execute(command, content.get("params") or {}, admin_context(my_org))
+                    if command in MUTATING:
+                        # Toute mutation est tracée avec son auteur. La
+                        # valeur d'une clé créée n'est jamais journalisée.
+                        audit_log.log("ADMIN_ACTION", msg.sender, None,
+                                      {"command": command,
+                                       "params": {k: v for k, v in (content.get("params") or {}).items()
+                                                  if k not in ("key",)}})
+                        await broadcast("admin_action", {"actor": msg.sender, "command": command})
+                    await websocket.send(NexusMessage(
+                        type=MessageType.ADMIN_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
+                        content={"ok": True, "command": command, "result": result}).to_json())
+                except AdminError as exc:
+                    await websocket.send(NexusMessage(
+                        type=MessageType.ADMIN_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
+                        content={"ok": False, "error": str(exc)}).to_json())
+                except Exception as exc:
+                    audit_log.log("ADMIN_FAILED", msg.sender, None, {"command": command, "error": str(exc)})
+                    await websocket.send(NexusMessage(
+                        type=MessageType.ADMIN_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
+                        content={"ok": False, "error": f"Erreur interne : {exc}"}).to_json())
 
             elif msg.type in (MessageType.MESSAGE, MessageType.REQUEST, MessageType.RESPONSE, MessageType.TASK_SUBMIT, MessageType.TASK_UPDATE, MessageType.WHO_IS, MessageType.DISCOVER):
                 if not msg.token or not verify_token(msg.token, msg.sender):
@@ -260,6 +378,10 @@ async def handle_agent(websocket, my_org: str):
                             continue
 
                     remember_task(task)
+                    await broadcast("task_submitted", {
+                        "task_id": task.task_id, "title": task.title,
+                        "orchestrator": task.orchestrator, "assignee": task.assignee,
+                    })
                     if task.assignee in agents:
                         await agents[task.assignee].send(NexusMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee, reply_to=msg.id, content=task.to_dict(), token=msg.token).to_json())
                     else:
@@ -270,6 +392,11 @@ async def handle_agent(websocket, my_org: str):
                     tid = td.get("task_id")
                     if tid in task_registry: remember_task(NexusTask.from_dict(td))
                     audit_log.log("TASK_UPDATED", msg.sender, None, {"task_id": tid, "status": td.get("status")})
+                    await broadcast("task_updated", {
+                        "task_id": tid, "status": td.get("status"),
+                        "assignee": msg.sender, "title": td.get("title"),
+                        "error_message": td.get("error_message"),
+                    })
                     orch = td.get("orchestrator")
                     if orch in agents:
                         await agents[orch].send(NexusMessage(type=MessageType.TASK_UPDATE, sender="hub", to=orch, content=td, token=msg.token).to_json())
@@ -279,6 +406,9 @@ async def handle_agent(websocket, my_org: str):
                 elif msg.type in (MessageType.MESSAGE, MessageType.REQUEST, MessageType.RESPONSE):
                     target = msg.to
                     audit_log.log("MESSAGE_ROUTED", msg.sender, target, {"type": msg.type.value})
+                    await broadcast("message_routed", {
+                        "sender": msg.sender, "to": target, "type": msg.type.value,
+                    })
                     if target and "/" in target and target.split("/")[0] != my_org:
                         target_org = target.split("/")[0]
                         if target_org in peered_hubs:
@@ -292,9 +422,11 @@ async def handle_agent(websocket, my_org: str):
     except websockets.ConnectionClosed:
         pass
     finally:
+        observers.discard(websocket)
         if agent_name and agent_name in agents:
             del agents[agent_name]
             audit_log.log("AGENT_DISCONNECTED", agent_name)
+            asyncio.create_task(broadcast("agent_disconnected", {"name": agent_name}))
             print(f"\033[31m[-] Agent déconnecté :\033[0m {agent_name}")
 
 
