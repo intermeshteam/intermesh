@@ -71,13 +71,51 @@ agents doivent se reconnecter. Il n'existe pas encore de rotation sans coupure
 (deux clés acceptées pendant une fenêtre de transition) — c'est une évolution
 prévue.
 
-## 4. Limites connues
+## 4. Persistance de l'état
 
-- **Aucune persistance de l'état** : agents, tâches et journal d'audit sont
-  conservés en mémoire et disparaissent à l'arrêt du Hub. Le journal d'audit
-  Merkle garantit l'intégrité pendant la vie du processus, pas au-delà.
+Le Hub conserve son état dans une base SQLite (`~/.nexus/hub_state.db` par
+défaut, créée en `0600`) :
+
+| Donnée | Persistée | Raison |
+|---|---|---|
+| Registre d'identités | ✅ | `who_is` et `discover` restent utilisables pour un agent hors ligne |
+| Tâches et leur statut | ✅ | Une tâche en cours au moment de l'arrêt n'est pas perdue |
+| Journal d'audit | ✅ | Un journal qui disparaît ne prouve rien à un auditeur |
+| Connexions actives | ❌ | Être « en ligne » est une propriété du processus, pas un fait durable |
+| Peering fédéré | ❌ | Les liens inter-Hubs sont rétablis à la reconnexion |
+
+Chemin surchargeable par `--state-file`, répertoire parent par `NEXUS_HOME`.
+`--ephemeral-state` bascule sur une base en mémoire pour les tests.
+
+### Le journal d'audit protège désormais son propre fichier
+
+Le chaînage Merkle ne garantissait jusqu'ici l'intégrité que pendant la vie du
+processus. Le journal étant persisté, la vérification s'applique maintenant au
+fichier sur disque : le Hub recharge la chaîne au démarrage et la vérifie.
+
+Si quelqu'un modifie une entrée directement dans la base, la chaîne est rompue
+et le Hub l'annonce explicitement au démarrage :
+
+```
+🚨 ALERTE : la chaîne d'audit persistée est rompue.
+   Le journal a été modifié en dehors du Hub.
+```
+
+### Tâches interrompues
+
+Les tâches `pending` ou `running` au moment de l'arrêt sont rechargées et
+signalées au démarrage, mais **ne sont pas réassignées automatiquement**.
+Leurs exécutants doivent se reconnecter. Une reprise automatique reste à faire.
+
+## 5. Limites connues
+
+- **Un seul Hub par base** : SQLite convient à un Hub unique. Plusieurs Hubs
+  partageant un état demanderont PostgreSQL.
+- **Pas de reprise des tâches interrompues** (voir ci-dessus).
 - **Clés d'API entreprise en dur** dans `server/hub.py` — acceptable pour une
   démonstration, à remplacer par un magasin de secrets avant tout usage réel.
 - **Pas de TLS** sur le transport WebSocket par défaut : le chiffrement E2E
   protège le contenu, mais les métadonnées (qui parle à qui) transitent en
-  clair. Placez le Hub derrière un terminaison TLS en production.
+  clair. Placez le Hub derrière une terminaison TLS en production.
+- **Pas de rotation de clé sans coupure** : changer `NEXUS_HUB_SECRET` éjecte
+  toute la flotte.

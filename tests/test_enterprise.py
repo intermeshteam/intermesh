@@ -49,7 +49,8 @@ async def test_service_account_api_key_authentication():
     os.system("fuser -k 8765/tcp || true")
     await asyncio.sleep(0.5)
 
-    hub_proc = subprocess.Popen([sys.executable, "server/hub.py", "--port", "8765", "--org", "acme"])
+    hub_proc = subprocess.Popen([sys.executable, "server/hub.py", "--port", "8765", "--org", "acme",
+                                 "--ephemeral-state", "--ephemeral-secret"])
     await asyncio.sleep(1.0)
 
     try:

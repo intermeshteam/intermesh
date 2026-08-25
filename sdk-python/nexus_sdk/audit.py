@@ -56,6 +56,26 @@ class AuditEntry:
             "hash": self.hash
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "AuditEntry":
+        """
+        Reconstruit une entrée depuis sa forme sérialisée.
+
+        Le hash stocké est conservé tel quel, sans être recalculé : c'est
+        précisément l'écart entre le hash stocké et le hash recalculé qui
+        révèle une altération lors de verify_integrity().
+        """
+        return cls(
+            index=data["index"],
+            event_type=data["event_type"],
+            sender=data["sender"],
+            target=data.get("target"),
+            metadata=data.get("metadata", {}),
+            prev_hash=data["prev_hash"],
+            timestamp=data.get("timestamp"),
+            entry_hash=data.get("hash"),
+        )
+
 
 class ImmutableAuditLog:
     """
@@ -63,9 +83,21 @@ class ImmutableAuditLog:
     Permet d'ajouter des événements et de vérifier l'intégrité globale du journal.
     """
 
-    def __init__(self):
+    def __init__(self, entries: Optional[List[dict]] = None, on_append=None):
+        """
+        Args:
+            entries:   Chaîne existante à reprendre (forme sérialisée). Si elle
+                       est vide ou absente, un bloc genesis est créé.
+            on_append: Callback appelé avec chaque nouvelle AuditEntry, pour
+                       l'écrire dans un stockage durable.
+        """
         self.chain: List[AuditEntry] = []
-        self._create_genesis_block()
+        self._on_append = on_append
+
+        if entries:
+            self.chain = [AuditEntry.from_dict(e) for e in entries]
+        else:
+            self._create_genesis_block()
 
     def _create_genesis_block(self):
         """Crée le bloc racine (Genesis) de la chaîne d'audit."""
@@ -79,6 +111,8 @@ class ImmutableAuditLog:
             timestamp=time.time()
         )
         self.chain.append(genesis)
+        if self._on_append:
+            self._on_append(genesis)
 
     def log(self, event_type: str, sender: str, target: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> AuditEntry:
         """Ajoute un nouvel événement au journal et le scelle cryptographiquement."""
@@ -92,6 +126,8 @@ class ImmutableAuditLog:
             prev_hash=prev_entry.hash
         )
         self.chain.append(new_entry)
+        if self._on_append:
+            self._on_append(new_entry)
         return new_entry
 
     def verify_integrity(self) -> bool:

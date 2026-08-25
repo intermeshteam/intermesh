@@ -9,3 +9,9 @@ build/
 .env
 *.log
 .DS_Store
+
+# État local du Hub (base SQLite, clé de signature)
+*.db
+*.db-wal
+*.db-shm
+.nexus/

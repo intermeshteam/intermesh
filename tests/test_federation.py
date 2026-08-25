@@ -26,13 +26,15 @@ async def main():
 
     # 1. Démarrer Hub Globex (Port 8766)
     hub_globex = subprocess.Popen([
-        sys.executable, "server/hub.py", "--port", "8766", "--org", "globex"
+        sys.executable, "server/hub.py", "--port", "8766", "--org", "globex",
+        "--ephemeral-state", "--ephemeral-secret"
     ])
     await asyncio.sleep(1.0)
 
     # 2. Démarrer Hub Acme (Port 8765) peering vers Globex
     hub_acme = subprocess.Popen([
-        sys.executable, "server/hub.py", "--port", "8765", "--org", "acme", "--peer", "globex=ws://localhost:8766"
+        sys.executable, "server/hub.py", "--port", "8765", "--org", "acme", "--peer", "globex=ws://localhost:8766",
+        "--ephemeral-state", "--ephemeral-secret"
     ])
     await asyncio.sleep(1.5)
 

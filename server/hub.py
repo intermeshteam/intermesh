@@ -13,6 +13,7 @@ from nexus_sdk.task import NexusTask, TaskStatus
 from nexus_sdk.audit import ImmutableAuditLog
 from nexus_sdk.ratelimit import RateLimiter
 from nexus_sdk.secret import resolve_hub_secret
+from nexus_sdk.store import NexusStore
 
 # Résolue au démarrage dans main(), pas à l'import : écrire un fichier de
 # clé comme effet de bord d'un import serait inattendu.
@@ -28,13 +29,33 @@ ENTERPRISE_API_KEYS = {
     }
 }
 
+# `agents` mappe un nom vers une connexion WebSocket vivante : être « en
+# ligne » est une propriété du processus courant, jamais un fait durable.
+# C'est le seul registre qui ne doit pas survivre à un redémarrage.
 agents = {}
-identity_registry = {}
-task_registry = {}
 peered_hubs = {}
 
+# Rechargés depuis le magasin au démarrage, dans main().
+identity_registry = {}
+task_registry = {}
+store = None
 audit_log = ImmutableAuditLog()
+
 rate_limiter = RateLimiter(default_rate=15.0, default_burst=20.0)
+
+
+def remember_identity(identity) -> None:
+    """Enregistre une identité en mémoire et sur disque."""
+    identity_registry[identity.qualified_name] = identity
+    if store:
+        store.save_identity(identity)
+
+
+def remember_task(task) -> None:
+    """Enregistre une tâche en mémoire et sur disque."""
+    task_registry[task.task_id] = task
+    if store:
+        store.save_task(task)
 
 
 def generate_token(agent_name: str, agent_id: str, roles: list) -> str:
@@ -88,7 +109,7 @@ async def listen_peer(ws, peer_org: str, my_org: str):
 
                 elif inner_msg.type == MessageType.TASK_SUBMIT:
                     task = NexusTask.from_dict(inner_msg.content)
-                    task_registry[task.task_id] = task
+                    remember_task(task)
                     audit_log.log("TASK_RELAYED_IN", inner_msg.sender, task.assignee, {"task_id": task.task_id, "title": task.title})
                     if task.assignee in agents:
                         await agents[task.assignee].send(NexusMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee, reply_to=inner_msg.id, content=task.to_dict()).to_json())
@@ -96,7 +117,7 @@ async def listen_peer(ws, peer_org: str, my_org: str):
                 elif inner_msg.type == MessageType.TASK_UPDATE:
                     td = inner_msg.content
                     tid = td.get("task_id")
-                    if tid in task_registry: task_registry[tid] = NexusTask.from_dict(td)
+                    if tid in task_registry: remember_task(NexusTask.from_dict(td))
                     orch = td.get("orchestrator")
                     if orch in agents: await agents[orch].send(inner_msg.to_json())
 
@@ -154,7 +175,7 @@ async def handle_agent(websocket, my_org: str):
 
                 agent_name = identity.qualified_name
                 agents[agent_name] = websocket
-                identity_registry[agent_name] = identity
+                remember_identity(identity)
                 token = generate_token(agent_name, identity.agent_id, identity.roles)
 
                 audit_log.log("AGENT_REGISTERED", agent_name, None, {"roles": identity.roles, "caps": identity.capabilities})
@@ -197,11 +218,11 @@ async def handle_agent(websocket, my_org: str):
                     if target and "/" in target and target.split("/")[0] != my_org:
                         target_org = target.split("/")[0]
                         if target_org in peered_hubs:
-                            task_registry[task.task_id] = task
+                            remember_task(task)
                             await peered_hubs[target_org].send(NexusMessage(type=MessageType.FEDERATION_RELAY, sender=msg.sender, to=target, content=msg.to_dict()).to_json())
                             continue
 
-                    task_registry[task.task_id] = task
+                    remember_task(task)
                     if task.assignee in agents:
                         await agents[task.assignee].send(NexusMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee, reply_to=msg.id, content=task.to_dict(), token=msg.token).to_json())
                     else:
@@ -210,7 +231,7 @@ async def handle_agent(websocket, my_org: str):
                 elif msg.type == MessageType.TASK_UPDATE:
                     td = msg.content
                     tid = td.get("task_id")
-                    if tid in task_registry: task_registry[tid] = NexusTask.from_dict(td)
+                    if tid in task_registry: remember_task(NexusTask.from_dict(td))
                     audit_log.log("TASK_UPDATED", msg.sender, None, {"task_id": tid, "status": td.get("status")})
                     orch = td.get("orchestrator")
                     if orch in agents:
@@ -249,9 +270,13 @@ async def main():
                         help="Fichier de clé JWT (défaut: ~/.nexus/hub_secret)")
     parser.add_argument("--ephemeral-secret", action="store_true",
                         help="Clé jetable : tous les tokens meurent au redémarrage")
+    parser.add_argument("--state-file", type=str, default=None,
+                        help="Base d'état SQLite (défaut: ~/.nexus/hub_state.db)")
+    parser.add_argument("--ephemeral-state", action="store_true",
+                        help="État en mémoire : tout est perdu à l'arrêt")
     args = parser.parse_args()
 
-    global HUB_SECRET_KEY
+    global HUB_SECRET_KEY, store, identity_registry, task_registry, audit_log
     try:
         HUB_SECRET_KEY, secret_source = resolve_hub_secret(
             secret_file=args.secret_file,
@@ -261,19 +286,57 @@ async def main():
         print(f"\033[31m❌ Clé de signature invalide : {exc}\033[0m")
         sys.exit(1)
 
-    persistent = not secret_source.startswith("éphémère")
-    secret_status = (
-        f"\033[32mPERSISTANTE\033[0m" if persistent else f"\033[33mÉPHÉMÈRE\033[0m"
+    store = NexusStore(path=args.state_file, ephemeral=args.ephemeral_state)
+    identity_registry.update(store.load_identities())
+    task_registry.update(store.load_tasks())
+
+    # Le journal reprend la chaîne existante ; chaque nouvelle entrée est
+    # écrite immédiatement via le callback, sans quoi un arrêt brutal
+    # perdrait les derniers événements — exactement ceux qui comptent.
+    audit_log = ImmutableAuditLog(
+        entries=store.load_audit(),
+        on_append=store.append_audit,
     )
+
+    persistent = not secret_source.startswith("éphémère")
+    secret_status = "\033[32mPERSISTANTE\033[0m" if persistent else "\033[33mÉPHÉMÈRE\033[0m"
+    state_status = "\033[33mÉPHÉMÈRE\033[0m" if store.ephemeral else "\033[32mPERSISTANT\033[0m"
 
     print("=" * 60)
     print(f"  NEXUS HUB v1.4 — Enterprise Infrastructure")
     print(f"  Audit Cryptographique : \033[32mACTIF\033[0m | Rate Limiting : \033[32mACTIF\033[0m")
     print(f"  Clé de signature JWT  : {secret_status} — {secret_source}")
+    print(f"  État du Hub           : {state_status} — {store.description}")
     print("=" * 60)
 
     if not persistent:
         print("\033[33m⚠️  Les tokens émis seront invalidés au prochain redémarrage.\033[0m")
+    if store.ephemeral:
+        print("\033[33m⚠️  Identités, tâches et journal d'audit seront perdus à l'arrêt.\033[0m")
+
+    restored = len(identity_registry) or len(task_registry) or len(audit_log.chain) > 1
+    if restored:
+        counts = store.count_tasks_by_status()
+        pending = counts.get("pending", 0) + counts.get("running", 0)
+        print(
+            f"\033[36m↻ État restauré :\033[0m {len(identity_registry)} identité(s), "
+            f"{len(task_registry)} tâche(s) dont {pending} inachevée(s), "
+            f"{len(audit_log.chain)} entrée(s) d'audit"
+        )
+        if not audit_log.verify_integrity():
+            print(
+                "\033[31m🚨 ALERTE : la chaîne d'audit persistée est rompue.\033[0m\n"
+                "   Le journal a été modifié en dehors du Hub. "
+                "Traitez-le comme compromis et enquêtez avant de poursuivre."
+            )
+        elif len(audit_log.chain) > 1:
+            print("\033[32m✓ Intégrité de la chaîne d'audit vérifiée.\033[0m")
+        if pending:
+            print(
+                f"\033[33m⚠️  {pending} tâche(s) étaient en cours à l'arrêt. "
+                "Leurs exécutants doivent se reconnecter ; il n'y a pas encore "
+                "de reprise automatique.\033[0m"
+            )
 
     if args.peer:
         peer_org, peer_url = args.peer.split("=")

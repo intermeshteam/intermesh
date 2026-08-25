@@ -164,6 +164,7 @@ def run_hub(args):
     from nexus_sdk.task import NexusTask, TaskStatus
     import secrets, jwt
     from nexus_sdk.secret import resolve_hub_secret
+    from nexus_sdk.store import NexusStore
 
     try:
         HUB_SECRET_KEY, secret_source = resolve_hub_secret(
@@ -174,10 +175,22 @@ def run_hub(args):
         print(f"\033[31m❌ Clé de signature invalide : {exc}\033[0m")
         sys.exit(1)
 
+    store = NexusStore(
+        path=getattr(args, "state_file", None),
+        ephemeral=getattr(args, "ephemeral_state", False),
+    )
     agents = {}
-    identity_registry = {}
-    task_registry = {}
     dashboard_observers = set()
+    identity_registry = store.load_identities()
+    task_registry = store.load_tasks()
+
+    def remember_identity(identity):
+        identity_registry[identity.qualified_name] = identity
+        store.save_identity(identity)
+
+    def remember_task(task):
+        task_registry[task.task_id] = task
+        store.save_task(task)
 
     def generate_token(agent_name: str, agent_id: str, roles: list) -> str:
         return jwt.encode({"agent_name": agent_name, "agent_id": agent_id, "roles": roles, "issued_at": time.time(), "expires_at": time.time() + 3600}, HUB_SECRET_KEY, algorithm="HS256")
@@ -215,7 +228,7 @@ def run_hub(args):
                                 await websocket.send(json.dumps({"type": "telemetry_event", "content": {"event": "agent_connected", "agent": aident.to_dict()}}))
 
                     agents[agent_name] = websocket
-                    identity_registry[agent_name] = identity
+                    remember_identity(identity)
                     token = generate_token(agent_name, identity.agent_id, identity.roles)
                     print(f"\033[32m[+] Agent connecté :\033[0m {agent_name} | Rôles: {identity.roles}")
                     await websocket.send(NexusMessage(type=MessageType.REGISTERED, sender="hub", to=agent_name, content={"status": "ready", "agent_id": identity.agent_id, "fingerprint": identity.fingerprint, "token": token, "online_agents": list(agents.keys())}).to_json())
@@ -240,7 +253,7 @@ def run_hub(args):
 
                     elif msg.type == MessageType.TASK_SUBMIT:
                         task = NexusTask.from_dict(msg.content)
-                        task_registry[task.task_id] = task
+                        remember_task(task)
                         print(f"\033[36m[📝 TÂCHE]\033[0m {task.orchestrator} ➜ {task.assignee} | '{task.title}'")
                         await broadcast_telemetry("task_submitted", {"task_id": task.task_id, "title": task.title, "orchestrator": task.orchestrator, "assignee": task.assignee})
                         if task.assignee in agents:
@@ -252,7 +265,7 @@ def run_hub(args):
                         td = msg.content
                         tid = td.get("task_id")
                         if tid in task_registry:
-                            task_registry[tid] = NexusTask.from_dict(td)
+                            remember_task(NexusTask.from_dict(td))
                             if td.get("status") == "completed":
                                 await broadcast_telemetry("task_completed", {"task_id": tid})
                             orch = td.get("orchestrator")
@@ -287,6 +300,13 @@ def run_hub(args):
             print("  \033[33m⚠️  Les tokens seront invalidés au prochain redémarrage.\033[0m")
         else:
             print(f"  \033[32mClé JWT : PERSISTANTE\033[0m — {secret_source}")
+        if store.ephemeral:
+            print(f"  \033[33mÉtat : ÉPHÉMÈRE\033[0m — {store.description}")
+        else:
+            print(f"  \033[32mÉtat : PERSISTANT\033[0m — {store.description}")
+        if identity_registry or task_registry:
+            print(f"  \033[36m↻ Restauré :\033[0m {len(identity_registry)} identité(s), "
+                  f"{len(task_registry)} tâche(s)")
         print("  En attente de connexions... (Ctrl+C pour arrêter)\n")
         async with websockets.serve(handle_agent, "0.0.0.0", port):
             await asyncio.Future()
@@ -306,6 +326,10 @@ def main():
                             help="Fichier de clé JWT (défaut: ~/.nexus/hub_secret)")
     hub_parser.add_argument("--ephemeral-secret", action="store_true",
                             help="Clé jetable : tous les tokens meurent au redémarrage")
+    hub_parser.add_argument("--state-file", type=str, default=None,
+                            help="Base d'état SQLite (défaut: ~/.nexus/hub_state.db)")
+    hub_parser.add_argument("--ephemeral-state", action="store_true",
+                            help="État en mémoire : tout est perdu à l'arrêt")
 
     # Command: dashboard
     dash_parser = subparsers.add_parser("dashboard", help="Lancer l'interface Web Mission Control")
