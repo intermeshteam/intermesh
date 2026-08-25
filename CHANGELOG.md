@@ -40,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Key fingerprints are truncated to 12 characters in the interface.
 - The console has no external dependencies, so it runs on a closed network.
 
+### Changed
+
+- **Mission Control redesign.** Top navigation, KPI cards with hand-drawn SVG
+  sparklines, a terminal-style log stream with INFO/TASK/WARN/ERROR/ADMIN
+  levels and source tags, search and pagination on every table, and a status
+  bar carrying version, org, state backend, audit integrity, federation peers
+  and session. Still zero external dependencies — the sparklines are computed
+  and emitted as SVG rather than pulled from a charting library.
+- Sparkline series are sampled client-side, since the hub reports point-in-time
+  state and keeps no history; the curves therefore begin when the console opens.
+
 ---
 
 ## [0.1.1] — 2026-08-25
