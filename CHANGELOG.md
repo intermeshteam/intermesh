@@ -12,7 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 Hardening release. No protocol changes; the `nexus/v1` wire format is
 unchanged and 0.1.0 agents interoperate with a 0.1.1 hub.
 
-Python SDK only — the JavaScript SDK is unchanged and stays at `0.1.0`.
+All changes below are in the Python SDK and the hub. The JavaScript SDK
+carries no code changes; it is released as `0.1.1` so that both SDKs
+report the same version — a user seeing `nexus-mesh` at 0.1.1 on PyPI and
+0.1.0 on npm cannot tell whether the two are meant to work together.
 
 ### Security
 

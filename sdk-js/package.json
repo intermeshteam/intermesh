@@ -1,6 +1,6 @@
 {
   "name": "nexus-mesh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Universal coordination protocol for AI agents — E2E encrypted, cross-language, federated",
   "main": "src/index.js",
   "type": "module",
