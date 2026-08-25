@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Mise à jour de pip et outils de build
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Copie et installation du SDK
+COPY sdk-python/ /app/sdk-python/
+RUN pip install --no-cache-dir -e /app/sdk-python
+
+# Copie des exemples d'agents
+COPY examples/ /app/examples/
+
+ENV AGENT_SCRIPT="agent_b.py"
+ENV HUB_URL="ws://nexus-hub:8765"
+
+CMD python -u /app/examples/${AGENT_SCRIPT}

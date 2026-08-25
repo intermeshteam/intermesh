@@ -1,0 +1,60 @@
+services:
+  # 1. Le Hub Nexus (Cœur du Réseau)
+  nexus-hub:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.hub
+    container_name: nexus-hub
+    ports:
+      - "8765:8765"
+    networks:
+      - nexus-net
+    restart: unless-stopped
+
+  # 2. Le Dashboard Mission Control (Interface Web)
+  nexus-dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: nexus-dashboard
+    ports:
+      - "8080:8080"
+    networks:
+      - nexus-net
+    depends_on:
+      - nexus-hub
+    restart: unless-stopped
+
+  # 3. Agent Worker 1 (Calculateur)
+  agent-calculator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+    container_name: nexus-agent-calculator
+    environment:
+      - AGENT_SCRIPT=agent_b.py
+      - HUB_URL=ws://nexus-hub:8765
+    networks:
+      - nexus-net
+    depends_on:
+      - nexus-hub
+    restart: unless-stopped
+
+  # 4. Agent Worker 2 (Traducteur)
+  agent-translator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+    container_name: nexus-agent-translator
+    environment:
+      - AGENT_SCRIPT=agent_c.py
+      - HUB_URL=ws://nexus-hub:8765
+    networks:
+      - nexus-net
+    depends_on:
+      - nexus-hub
+    restart: unless-stopped
+
+networks:
+  nexus-net:
+    driver: bridge
