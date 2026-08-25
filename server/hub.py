@@ -105,6 +105,50 @@ def verify_token(token: str, expected_agent: str) -> bool:
         return False
 
 
+def discover_agents(query: dict) -> list[dict]:
+    """
+    Recherche d'agents par capacités, rôles, permissions ou métadonnées.
+
+    `online_only` vaut True par défaut, mais le registre étant désormais
+    persisté, une recherche avec online_only=False retrouve aussi les
+    agents connus actuellement déconnectés.
+    """
+    req_caps = set(query.get("capabilities") or [])
+    req_roles = set(query.get("roles") or [])
+    req_perms = set(query.get("permissions") or [])
+    req_meta = query.get("metadata") or {}
+    contains = (query.get("name_contains") or "").lower()
+    online_only = query.get("online_only", True)
+    limit = min(int(query.get("limit", 10)), 200)
+
+    results = []
+    for name, ident in identity_registry.items():
+        if online_only and name not in agents:
+            continue
+        if contains and contains not in name.lower():
+            continue
+        # Capacités et permissions : toutes requises. Rôles : au moins un.
+        if req_caps and not req_caps.issubset(set(ident.capabilities)):
+            continue
+        if req_perms and not req_perms.issubset(set(ident.permissions)):
+            continue
+        if req_roles and not req_roles.intersection(set(ident.roles)):
+            continue
+        if req_meta and any(ident.metadata.get(k) != v for k, v in req_meta.items()):
+            continue
+
+        results.append({
+            "name": ident.qualified_name, "agent_id": ident.agent_id,
+            "org_id": ident.org_id, "capabilities": ident.capabilities,
+            "roles": ident.roles, "permissions": ident.permissions,
+            "metadata": ident.metadata, "public_key": ident.public_key,
+            "online": name in agents,
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
 def unfinished_tasks_for(assignee: str) -> list:
     """Tâches confiées à cet agent et jamais menées à terme."""
     return [
@@ -352,6 +396,15 @@ async def handle_agent(websocket, my_org: str):
                 if not rate_limiter.is_allowed(msg.sender):
                     audit_log.log("RATE_LIMIT_EXCEEDED", msg.sender, msg.to)
                     await websocket.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id, content="RATE_LIMIT_EXCEEDED: Trop de requêtes par seconde.").to_json())
+                    continue
+
+                if msg.type == MessageType.DISCOVER:
+                    found = discover_agents(msg.content or {})
+                    await websocket.send(NexusMessage(
+                        type=MessageType.DISCOVER_RESULT, sender="hub", to=msg.sender,
+                        reply_to=msg.id, token=msg.token,
+                        content={"query": msg.content or {}, "count": len(found),
+                                 "agents": found}).to_json())
                     continue
 
                 if msg.type == MessageType.WHO_IS:

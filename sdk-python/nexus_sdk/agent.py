@@ -296,8 +296,35 @@ class NexusAgent:
             self._pending_requests.pop(msg.id, None)
             raise TimeoutError("Who_is timeout.")
 
-    async def discover(self, timeout: float = 5.0) -> dict:
-        msg = NexusMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content={}, token=self.token)
+    async def discover(
+        self,
+        capabilities: Optional[List[str]] = None,
+        roles: Optional[List[str]] = None,
+        permissions: Optional[List[str]] = None,
+        metadata: Optional[dict] = None,
+        name_contains: Optional[str] = None,
+        online_only: bool = True,
+        limit: int = 10,
+        timeout: float = 5.0,
+    ) -> dict:
+        """
+        Recherche des agents sur le réseau.
+
+            await agent.discover(capabilities=["translate"])
+            await agent.discover(roles=["worker"], metadata={"region": "africa"})
+
+        Capacités et permissions sont exigées toutes ensemble ; il suffit
+        d'un rôle correspondant. `online_only=False` retrouve aussi les
+        agents connus mais actuellement déconnectés.
+        """
+        query: dict = {"online_only": online_only, "limit": limit}
+        if capabilities:  query["capabilities"] = capabilities
+        if roles:         query["roles"] = roles
+        if permissions:   query["permissions"] = permissions
+        if metadata:      query["metadata"] = metadata
+        if name_contains: query["name_contains"] = name_contains
+
+        msg = NexusMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content=query, token=self.token)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_requests[msg.id] = future

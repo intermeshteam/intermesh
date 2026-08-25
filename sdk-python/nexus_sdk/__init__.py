@@ -7,6 +7,7 @@ from nexus_sdk.ratelimit import RateLimiter, TokenBucket
 from nexus_sdk.secret import resolve_hub_secret, default_secret_path
 from nexus_sdk.store import NexusStore, default_state_path
 from nexus_sdk.apikeys import ApiKeyStore, generate_key, hash_key
+from nexus_sdk.adapters import NexusAdapter, adapt
 
 __version__ = "0.1.1"
 __all__ = [
@@ -27,4 +28,6 @@ __all__ = [
     "ApiKeyStore",
     "generate_key",
     "hash_key",
+    "adapt",
+    "NexusAdapter",
 ]
