@@ -1,9 +1,34 @@
 {
-  "name": "nexus-sdk-js",
+  "name": "nexus-mesh",
   "version": "0.1.0",
-  "description": "JavaScript/TypeScript SDK for Nexus Protocol",
+  "description": "Universal coordination protocol for AI agents — E2E encrypted, cross-language, federated",
   "main": "src/index.js",
   "type": "module",
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "keywords": [
+    "ai",
+    "agents",
+    "multi-agent-systems",
+    "protocol",
+    "coordination",
+    "e2e-encryption",
+    "distributed-systems",
+    "llm"
+  ],
+  "author": "Nexus Protocol Authors",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/mrlomemba-cmd/nexus#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mrlomemba-cmd/nexus.git",
+    "directory": "sdk-js"
+  },
+  "bugs": {
+    "url": "https://github.com/mrlomemba-cmd/nexus/issues"
+  },
   "dependencies": {
     "ws": "^8.16.0"
   },

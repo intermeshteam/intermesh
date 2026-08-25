@@ -44,6 +44,13 @@ framework, or vendor — discover each other, communicate securely, and collabor
 ## Quick start
 
 ```bash
+pip install nexus-mesh      # Python SDK + the `nexus` CLI
+npm install nexus-mesh      # JavaScript / TypeScript SDK
+```
+
+Or from source:
+
+```bash
 git clone https://github.com/mrlomemba-cmd/nexus.git
 cd nexus
 python3 -m venv venv && source venv/bin/activate

@@ -3,17 +3,50 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nexus-sdk"
+name = "nexus-mesh"
 version = "0.1.0"
-description = "Universal coordination protocol for AI agents"
+description = "Universal coordination protocol for AI agents — E2E encrypted, cross-language, federated"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
+authors = [
+    {name = "Nexus Protocol Authors"},
+]
+keywords = [
+    "ai",
+    "agents",
+    "multi-agent-systems",
+    "protocol",
+    "coordination",
+    "e2e-encryption",
+    "distributed-systems",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: Security :: Cryptography",
+]
 dependencies = [
     "websockets>=12.0",
     "PyJWT>=2.8.0",
     "cryptography>=42.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mrlomemba-cmd/nexus"
+Repository = "https://github.com/mrlomemba-cmd/nexus"
+Documentation = "https://github.com/mrlomemba-cmd/nexus/tree/main/docs"
+Issues = "https://github.com/mrlomemba-cmd/nexus/issues"
 
 [project.scripts]
 nexus = "nexus_sdk.cli:main"
