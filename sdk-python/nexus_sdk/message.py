@@ -5,6 +5,11 @@ from enum import Enum
 from typing import Any, Optional
 
 
+class ValidationError(ValueError):
+    """Exception levee en cas de violation de schema ou de type sur un message."""
+    pass
+
+
 class MessageType(str, Enum):
     REGISTER = "register"
     REGISTERED = "registered"
@@ -21,17 +26,15 @@ class MessageType(str, Enum):
     TASK_ASSIGN = "task_assign"
     TASK_UPDATE = "task_update"
     
-    # Peering et Fédération Inter-Hubs
-    PEER_CONNECT = "peer_connect"          # Hub A ➜ Hub B (Établissement du lien)
-    PEER_CONNECTED = "peer_connected"      # Hub B ➜ Hub A (Validation du peering)
-    FEDERATION_RELAY = "federation_relay"  # Hub A ➜ Hub B (Routage d'un message tiers)
+    # Peering et Federation Inter-Hubs
+    PEER_CONNECT = "peer_connect"          # Hub A -> Hub B
+    PEER_CONNECTED = "peer_connected"      # Hub B -> Hub A
+    FEDERATION_RELAY = "federation_relay"  # Hub A -> Hub B
 
-    # Console d'administration.
-    # ADMIN_REQUEST exige une identité authentifiée par clé d'API : les
-    # rôles auto-déclarés à l'enregistrement ne suffisent jamais.
-    ADMIN_REQUEST = "admin_request"        # Console ➜ Hub (commande)
-    ADMIN_RESULT = "admin_result"          # Hub ➜ Console (réponse)
-    TELEMETRY = "telemetry_event"          # Hub ➜ Observateurs (flux temps réel)
+    # Console d'administration
+    ADMIN_REQUEST = "admin_request"        # Console -> Hub
+    ADMIN_RESULT = "admin_result"          # Hub -> Console
+    TELEMETRY = "telemetry_event"          # Hub -> Observateurs
 
 
 class NexusMessage:
@@ -77,18 +80,73 @@ class NexusMessage:
 
     @classmethod
     def from_dict(cls, data: dict) -> "NexusMessage":
+        if not isinstance(data, dict):
+            raise ValidationError("Le payload du message doit etre un dictionnaire JSON.")
+
+        # Verification des champs obligatoires
+        mandatory = ["type", "sender"]
+        for field in mandatory:
+            if field not in data:
+                raise ValidationError(f"Champ obligatoire absent : '{field}'")
+
+        # Validation de la version
+        version = data.get("version", "nexus/v1")
+        if version != "nexus/v1":
+            raise ValidationError(f"Version de protocole non supportee : '{version}'")
+
+        # Validation du type de message
+        type_raw = data["type"]
+        try:
+            msg_type = MessageType(type_raw)
+        except ValueError:
+            raise ValidationError(f"Type de message inconnu ou invalide : '{type_raw}'")
+
+        # Validation de l'identifiant
+        msg_id = data.get("id")
+        if msg_id is not None and not isinstance(msg_id, str):
+            raise ValidationError("Le champ 'id' doit etre une chaine de caracteres.")
+
+        # Validation de l'expediteur
+        sender = data["sender"]
+        if not isinstance(sender, str) or not sender.strip():
+            raise ValidationError("Le champ 'sender' doit etre une chaine de caracteres non vide.")
+
+        # Validation du destinataire optionnel
+        to = data.get("to")
+        if to is not None and not isinstance(to, str):
+            raise ValidationError("Le champ 'to' doit etre une chaine de caracteres.")
+
+        # Validation de la liaison de message
+        reply_to = data.get("reply_to")
+        if reply_to is not None and not isinstance(reply_to, str):
+            raise ValidationError("Le champ 'reply_to' doit etre une chaine de caracteres.")
+
+        # Validation du timestamp
+        timestamp = data.get("timestamp")
+        if timestamp is not None and not isinstance(timestamp, (int, float)):
+            raise ValidationError("Le champ 'timestamp' doit etre un timestamp numerique.")
+
+        # Validation du jeton de securite optionnel
+        token = data.get("token")
+        if token is not None and not isinstance(token, str):
+            raise ValidationError("Le champ 'token' doit etre une chaine de caracteres.")
+
         return cls(
-            msg_id=data.get("id"),
-            version=data.get("version", "nexus/v1"),
-            type=MessageType(data["type"]),
-            sender=data.get("sender", ""),
-            to=data.get("to"),
+            msg_id=msg_id,
+            version=version,
+            type=msg_type,
+            sender=sender,
+            to=to,
             content=data.get("content"),
-            reply_to=data.get("reply_to"),
-            timestamp=data.get("timestamp"),
-            token=data.get("token"),
+            reply_to=reply_to,
+            timestamp=timestamp,
+            token=token,
         )
 
     @classmethod
     def from_json(cls, raw_json: str) -> "NexusMessage":
-        return cls.from_dict(json.loads(raw_json))
+        try:
+            data = json.loads(raw_json)
+        except json.JSONDecodeError as e:
+            raise ValidationError(f"JSON invalide : {str(e)}")
+        return cls.from_dict(data)

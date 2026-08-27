@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import json
 import sys
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, Any
 
 import websockets
 
@@ -53,13 +53,24 @@ class NexusAgent:
         )
         self.qualified_name = self.identity.qualified_name
 
+    @classmethod
+    def from_callable(cls, fn: Callable[[Any], Any], name: str, capabilities: Optional[List[str]] = None, **kwargs):
+        """1-LINE INTEGRATION: Transforme n'importe quelle fonction Python en Agent Nexus."""
+        from nexus_sdk.adapters import from_callable as _from_callable
+        return _from_callable(fn=fn, name=name, capabilities=capabilities, **kwargs)
+
+    @classmethod
+    def from_langchain(cls, chain_or_runnable: Any, name: str, capabilities: Optional[List[str]] = None, **kwargs):
+        """1-LINE INTEGRATION: Transforme un Runnable LangChain / CrewAI en Agent Nexus."""
+        from nexus_sdk.adapters import from_langchain as _from_langchain
+        return _from_langchain(chain_or_runnable=chain_or_runnable, name=name, capabilities=capabilities, **kwargs)
+
     def on_message(self, handler: Callable): self._message_handler = handler
     def on_request(self, handler: Callable): self._request_handler = handler
     def on_task(self, handler: Callable): self._task_handler = handler
 
     async def connect(self):
         self.ws = await websockets.connect(self.hub_url)
-        
         reg_payload = self.identity.to_dict()
         if self.api_key:
             reg_payload["api_key"] = self.api_key
@@ -71,16 +82,11 @@ class NexusAgent:
         if res.type == MessageType.REGISTERED:
             self.token = res.content.get("token")
             self.qualified_name = res.content.get("qualified_name", self.name)
-            
-            # Synchronisation des privilèges certifiés par le Hub
-            if "roles" in res.content:
-                self.identity.roles = res.content["roles"]
-            if "permissions" in res.content:
-                self.identity.permissions = res.content["permissions"]
+            if "roles" in res.content: self.identity.roles = res.content["roles"]
+            if "permissions" in res.content: self.identity.permissions = res.content["permissions"]
             if "org_id" in res.content:
                 self.identity.org_id = res.content["org_id"]
                 self.org_id = res.content["org_id"]
-
             print(f"✅ [{self.qualified_name}] Connecté sur {self.hub_url} | E2E: {'🔒 ON' if self.encrypt else '🔓 OFF'}")
         elif res.type == MessageType.ERROR:
             print(f"❌ [{self.name}] Refusé : {res.content}")
@@ -120,7 +126,7 @@ class NexusAgent:
             async for raw in self.ws:
                 msg = NexusMessage.from_json(raw)
 
-                if msg.type in (MessageType.RESPONSE, MessageType.IDENTITY, MessageType.DISCOVER_RESULT, MessageType.ADMIN_RESULT) and msg.reply_to in self._pending_requests:
+                if msg.type in (MessageType.RESPONSE, MessageType.IDENTITY, MessageType.DISCOVER_RESULT) and msg.reply_to in self._pending_requests:
                     future = self._pending_requests.pop(msg.reply_to)
                     if not future.done():
                         content = msg.content
@@ -244,43 +250,6 @@ class NexusAgent:
             self._pending_tasks.pop(task.task_id, None)
             raise TimeoutError(f"Tâche '{title}' expirée ({timeout}s).")
 
-    async def admin(self, command: str, timeout: float = 10.0, **params):
-        """
-        Exécute une commande d'administration sur le Hub.
-
-        Exige une identité authentifiée par clé d'API avec le rôle admin :
-        des rôles déclarés à la connexion sont refusés par le Hub.
-
-            agent = NexusAgent(name="console", api_key="nx_live_...")
-            await agent.connect()
-            info = await agent.admin("hub.info")
-
-        Raises:
-            PermissionError: administration refusée.
-            RuntimeError:    commande rejetée par le Hub.
-        """
-        msg = NexusMessage(
-            type=MessageType.ADMIN_REQUEST, sender=self.qualified_name,
-            content={"command": command, "params": params}, token=self.token,
-        )
-        loop = asyncio.get_running_loop()
-        future = loop.create_future()
-        self._pending_requests[msg.id] = future
-        await self.ws.send(msg.to_json())
-
-        try:
-            reply = await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError:
-            self._pending_requests.pop(msg.id, None)
-            raise TimeoutError(f"Commande '{command}' expirée ({timeout}s).")
-
-        if not reply.get("ok"):
-            error = reply.get("error", "commande refusée")
-            if "ADMIN_DENIED" in error:
-                raise PermissionError(error)
-            raise RuntimeError(error)
-        return reply.get("result")
-
     async def who_is(self, agent_name: str, timeout: float = 5.0) -> dict:
         msg = NexusMessage(type=MessageType.WHO_IS, sender=self.qualified_name, content=agent_name, token=self.token)
         loop = asyncio.get_running_loop()
@@ -296,35 +265,8 @@ class NexusAgent:
             self._pending_requests.pop(msg.id, None)
             raise TimeoutError("Who_is timeout.")
 
-    async def discover(
-        self,
-        capabilities: Optional[List[str]] = None,
-        roles: Optional[List[str]] = None,
-        permissions: Optional[List[str]] = None,
-        metadata: Optional[dict] = None,
-        name_contains: Optional[str] = None,
-        online_only: bool = True,
-        limit: int = 10,
-        timeout: float = 5.0,
-    ) -> dict:
-        """
-        Recherche des agents sur le réseau.
-
-            await agent.discover(capabilities=["translate"])
-            await agent.discover(roles=["worker"], metadata={"region": "africa"})
-
-        Capacités et permissions sont exigées toutes ensemble ; il suffit
-        d'un rôle correspondant. `online_only=False` retrouve aussi les
-        agents connus mais actuellement déconnectés.
-        """
-        query: dict = {"online_only": online_only, "limit": limit}
-        if capabilities:  query["capabilities"] = capabilities
-        if roles:         query["roles"] = roles
-        if permissions:   query["permissions"] = permissions
-        if metadata:      query["metadata"] = metadata
-        if name_contains: query["name_contains"] = name_contains
-
-        msg = NexusMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content=query, token=self.token)
+    async def discover(self, timeout: float = 5.0) -> dict:
+        msg = NexusMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content={}, token=self.token)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_requests[msg.id] = future

@@ -13,7 +13,7 @@
 **Nexus is the neutral, open standard that lets AI agents — regardless of language,
 framework, or vendor — discover each other, communicate securely, and collaborate.**
 
-[RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Contributing](CONTRIBUTING.md)
+[Manifesto](docs/MANIFESTO.md) · [RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Agent integration](docs/AGENT-INTEGRATION.md) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -95,6 +95,8 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 | 🛡️ **RBAC** | Per-agent access policies enforced at the hub. |
 | 🔍 **Discovery** | Find agents by capability, role, metadata, or name. |
 | 📋 **Tasks & workflows** | Async distributed task lifecycle: `pending → running → completed/failed`. |
+| 🔌 **Framework adapters** | Bridge LangChain, CrewAI, AutoGen, LlamaIndex (Python) and LangChain.js, LlamaIndex.TS (JS) without changing a line of the wrapped agent. |
+| 🧵 **Orchestration helpers** | `NexusPipeline` chains steps across agents found by capability; `fan_out`/`fanOut` runs branches in parallel and aggregates results. |
 | 🌐 **Federation** | Hub-to-hub peering across organizations, E2E preserved end to end. |
 | 📜 **Immutable audit log** | Merkle-chained events; any retroactive edit breaks the chain. |
 | 🚦 **Rate limiting** | Token-bucket throttling per agent. |
@@ -108,12 +110,12 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 
 | Path | Purpose |
 |---|---|
-| `sdk-python/` | Official Python SDK (`nexus-sdk`) and the `nexus` CLI |
-| `sdk-js/` | Official JavaScript/TypeScript SDK |
+| `sdk-python/` | Official Python SDK (`nexus-sdk`) and the `nexus` CLI — adapters for LangChain, CrewAI, AutoGen, LlamaIndex |
+| `sdk-js/` | Official JavaScript/TypeScript SDK — adapters for LangChain.js, LlamaIndex.TS |
 | `server/` | The coordination hub |
 | `dashboard/` | Mission Control web UI |
 | `docs/` | RFC-001, security spec, API reference |
-| `examples/` | Runnable agents (Python and Node.js) |
+| `examples/` | Runnable agents (Python and Node.js); `examples/frameworks/` wraps real LangChain/LlamaIndex/CrewAI/AutoGen objects |
 | `tests/` | 18 unit + integration tests |
 | `docker/` | Container images for hub, agents, dashboard |
 

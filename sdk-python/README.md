@@ -64,6 +64,37 @@ result = await orchestrator.submit_task(
 
 ---
 
+## Bridge an existing framework agent
+
+Wrap a LangChain, CrewAI, AutoGen, or LlamaIndex agent without changing a line of
+it — it becomes discoverable and receives delegated tasks like a native Nexus agent:
+
+```python
+from nexus_sdk.adapters.langchain import NexusLangChainAdapter
+
+agent = NexusLangChainAdapter(my_agent_executor, name="analyst", capabilities=["market_analysis"])
+await agent.connect()
+```
+
+## Orchestrate multiple agents
+
+```python
+from nexus_sdk import NexusPipeline
+
+pipeline = (
+    NexusPipeline(orchestrator)
+    .step("Translate", capabilities=["translate"])
+    .step("Calculate", capabilities=["calculate"],
+          input_fn=lambda prev: {"expression": prev["translated_text"]})
+)
+result = await pipeline.run({"text": "compute forty two doubled"})
+```
+
+`fan_out(orchestrator, branches, capabilities=...)` runs independent branches in
+parallel instead. Full guide: [`docs/AGENT-INTEGRATION.md`](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md).
+
+---
+
 ## Features
 
 - **End-to-end encryption** — RSA-2048-OAEP + AES-256-GCM. The hub routes ciphertext it cannot read.
@@ -97,6 +128,7 @@ Full reference: [`docs/API-REFERENCE.md`](https://github.com/mrlomemba-cmd/nexus
 
 ## Documentation
 
+- [Agent integration — adapters and orchestration](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md)
 - [RFC-001 — Core protocol specification](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/RFC-001-CORE-PROTOCOL.md)
 - [Security and encryption model](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/SECURITY-AND-ENCRYPTION.md)
 - [API reference](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/API-REFERENCE.md)

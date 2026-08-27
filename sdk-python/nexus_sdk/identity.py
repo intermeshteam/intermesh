@@ -21,8 +21,8 @@ class AgentIdentity:
         self.agent_id = agent_id or str(uuid.uuid4())
         self.org_id = org_id
         self.name = name
-        # Nom qualifié complet : org/name (ex: acme/worker)
-        self.qualified_name = f"{org_id}/{name}" if org_id != "default" and "/" not in name else name
+        # Qualification systématique : org_id/name (ex: default/1line_worker)
+        self.qualified_name = f"{org_id}/{name}" if "/" not in name else name
         self.capabilities = capabilities or []
         self.roles = roles or ["standard"]
         self.permissions = permissions or []

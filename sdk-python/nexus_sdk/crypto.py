@@ -5,24 +5,43 @@ import os
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
 def generate_keypair():
+    """Génère une paire de clés RSA-2048."""
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
 def get_public_key_pem(private_key) -> str:
+    """Exporte la clé publique au format PEM."""
     return private_key.public_key().public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     ).decode("utf-8")
 
 
+def get_private_key_pem(private_key) -> str:
+    """Exporte la clé privée au format PEM."""
+    return private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    ).decode("utf-8")
+
+
 def load_public_key(pem_string: str):
+    """Charge une clé publique depuis un PEM."""
     return serialization.load_pem_public_key(pem_string.encode("utf-8"))
 
 
+def load_private_key(pem_string: str):
+    """Charge une clé privée depuis un PEM."""
+    return serialization.load_pem_private_key(pem_string.encode("utf-8"), password=None)
+
+
 def encrypt_for(recipient_public_key_pem: str, plaintext: str) -> str:
+    """Chiffrement hybride RSA-OAEP + AES-256-GCM."""
     plaintext_bytes = plaintext.encode("utf-8")
     aes_key = AESGCM.generate_key(bit_length=256)
     nonce = os.urandom(12)
@@ -42,6 +61,7 @@ def encrypt_for(recipient_public_key_pem: str, plaintext: str) -> str:
 
 
 def decrypt_with(private_key, encrypted_b64: str) -> str:
+    """Déchiffrement hybride RSA-OAEP + AES-256-GCM."""
     envelope = json.loads(base64.b64decode(encrypted_b64))
     aes_key = private_key.decrypt(
         base64.b64decode(envelope["ek"]),
@@ -49,3 +69,61 @@ def decrypt_with(private_key, encrypted_b64: str) -> str:
     )
     aesgcm = AESGCM(aes_key)
     return aesgcm.decrypt(base64.b64decode(envelope["n"]), base64.b64decode(envelope["ct"]), None).decode("utf-8")
+
+
+# --- NOUVEAU : COFFRE-FORT DE CLÉS LOCAL CHIFFRÉ (LOCAL KEY VAULT) ---
+
+def save_encrypted_vault(file_path: str, private_key_pem: str, passphrase: str):
+    """
+    Chiffre et sauvegarde la clé privée sur le disque avec PBKDF2 (100 000 itérations) + AES-256-GCM.
+    """
+    salt = os.urandom(16)
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100_000,
+    )
+    key = kdf.derive(passphrase.encode("utf-8"))
+    
+    nonce = os.urandom(12)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, private_key_pem.encode("utf-8"), None)
+    
+    vault_data = {
+        "salt": base64.b64encode(salt).decode("utf-8"),
+        "nonce": base64.b64encode(nonce).decode("utf-8"),
+        "ciphertext": base64.b64encode(ciphertext).decode("utf-8"),
+        "version": "nexus_vault_v1"
+    }
+    
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(vault_data, f, indent=2)
+    
+    # Restreindre les permissions du fichier sous Linux (600 = lecture/écriture propriétaire seul)
+    os.chmod(file_path, 0o600)
+
+
+def load_encrypted_vault(file_path: str, passphrase: str) -> str:
+    """
+    Déchiffre et charge la clé privée depuis le coffre-fort local.
+    """
+    with open(file_path, "r", encoding="utf-8") as f:
+        vault_data = json.load(f)
+        
+    salt = base64.b64decode(vault_data["salt"])
+    nonce = base64.b64decode(vault_data["nonce"])
+    ciphertext = base64.b64decode(vault_data["ciphertext"])
+    
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100_000,
+    )
+    key = kdf.derive(passphrase.encode("utf-8"))
+    
+    aesgcm = AESGCM(key)
+    plaintext_bytes = aesgcm.decrypt(nonce, ciphertext, None)
+    return plaintext_bytes.decode("utf-8")

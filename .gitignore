@@ -3,19 +3,16 @@ __pycache__/
 *.pyo
 venv/
 .venv/
+node_modules/
+**/node_modules/
+.next/
+**/.next/
 *.egg-info/
 dist/
 build/
 .env
 *.log
 .DS_Store
-
-# État local du Hub (base SQLite, clé de signature)
-*.db
-*.db-wal
-*.db-shm
-.nexus/
-
-# Jetons de registre — ne doivent jamais être versionnés
+*.node
 .npmrc
-.pypirc
+**/.npmrc

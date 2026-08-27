@@ -58,6 +58,83 @@ agent.onRequest(async (content, sender) => {
 
 ---
 
+## Adapters: bridge an existing framework agent
+
+Wrap an existing LangChain.js `Runnable` or LlamaIndex.TS query/chat engine without
+changing a line of it — it becomes discoverable and receives delegated tasks like a
+native Nexus agent:
+
+```javascript
+import { NexusLangChainAdapter } from 'nexus-mesh/adapters/langchain';
+
+const agent = new NexusLangChainAdapter(myRunnable, {
+  name: 'analyst',
+  capabilities: ['market_analysis'],
+});
+await agent.connect();
+```
+
+```javascript
+import { NexusLlamaIndexAdapter } from 'nexus-mesh/adapters/llamaindex';
+
+const agent = new NexusLlamaIndexAdapter(index.asQueryEngine(), {
+  name: 'knowledge_base',
+  capabilities: ['document_search', 'rag'],
+});
+await agent.connect();
+```
+
+Any other object exposing `invoke`, `run`, `call`, `query`, `chat`, `predict` — or a
+plain function — works with the generic `adapt()`:
+
+```javascript
+import { adapt } from 'nexus-mesh/adapters';
+
+const agent = adapt(myExistingAgent, { name: 'x', capabilities: ['c'] });
+```
+
+No framework is imported by these modules: the adapter detects the calling
+convention at runtime instead of depending on a specific package version. CrewAI and
+AutoGen have no established JS port, so only LangChain.js and LlamaIndex.TS have a
+dedicated bridge here — see `sdk-python/nexus_sdk/adapters/` for those two on the
+Python side.
+
+---
+
+## Orchestration: chain and parallelize agents
+
+`NexusPipeline` chains tasks across agents found by capability — the output of
+one step feeds the next:
+
+```javascript
+import { NexusPipeline } from 'nexus-mesh';
+
+const pipeline = new NexusPipeline(orchestrator)
+  .step('Translate', { capabilities: ['translate'] })
+  .step('Calculate', {
+    capabilities: ['calculate'],
+    inputFn: (prev) => ({ expression: prev.translated_text }),
+  });
+
+const result = await pipeline.run({ text: 'compute forty two doubled' });
+```
+
+`fanOut` runs independent branches concurrently and keys the results:
+
+```javascript
+import { fanOut } from 'nexus-mesh';
+
+const results = await fanOut(orchestrator, [
+  ['fr', { region: 'FR' }],
+  ['de', { region: 'DE' }],
+], { capabilities: { fr: ['market_analysis'], de: ['market_analysis'] } });
+```
+
+See [Agent integration](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md)
+for the full picture, including the Python-side equivalents.
+
+---
+
 ## Cryptographic interoperability
 
 The SDK implements the same hybrid scheme as the Python SDK, using Node's native
@@ -85,6 +162,7 @@ only ciphertext.
 
 ## Documentation
 
+- [Agent integration — adapters and orchestration](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md)
 - [RFC-001 — Core protocol specification](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/RFC-001-CORE-PROTOCOL.md)
 - [Security and encryption model](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/SECURITY-AND-ENCRYPTION.md)
 - [API reference](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/API-REFERENCE.md)

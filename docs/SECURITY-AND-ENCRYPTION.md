@@ -180,11 +180,38 @@ Toute commande `admin_request` exige :
 
 1. une identité **authentifiée par clé d'API** — jamais des rôles déclarés
    par le client ;
-2. le rôle `admin`.
+2. le rôle `admin` ou `org_admin`.
 
 La première condition repose sur le champ `auth_method` du JWT, **signé par
 le Hub** : un client ne peut ni le forger ni le modifier. Un token émis avant
 l'introduction de ce champ n'ouvre pas l'administration.
+
+### Cloisonnement par organisation (`org_admin`)
+
+`admin` administre tout le Hub, organisations confondues — c'est le rôle de
+l'opérateur qui héberge le Hub lui-même, inchangé depuis l'origine.
+
+`org_admin` est plus étroit : il ne voit et n'agit que sur l'organisation
+portée par `org_id` dans sa propre clé d'API — un champ signé dans le JWT,
+donc lui aussi infalsifiable par le client. C'est le rôle à distribuer
+lorsqu'un Hub sert plusieurs entreprises et qu'un portail web laisse chacune
+générer ses propres clés : sans ce cloisonnement, la clé admin d'une
+entreprise verrait les agents, les tâches et le journal d'audit de toutes
+les autres.
+
+Le cloisonnement s'applique à `agents.list`, `agent.disconnect`,
+`tasks.list`, `task.cancel`, `task.retry`, `audit.list`, `apikeys.list`,
+`apikey.create` (refuse un `org_id` différent du sien) et `apikey.revoke`
+(refuse une empreinte hors de son organisation). Les évènements purement
+hub-wide (`PEERING_ESTABLISHED`, `PEERING_ACCEPTED`, `GENESIS`) restent
+invisibles à `org_admin` même s'ils portaient par accident son `org_id`.
+
+Ce cloisonnement porte sur les **métadonnées** (qui a parlé à qui, statut
+d'une tâche, historique d'audit) : le contenu chiffré de bout en bout des
+tâches et des messages reste invisible à toute console, `admin` compris —
+voir « Chiffrement Hybride E2E » plus haut. Un portail qui doit afficher ce
+contenu doit détenir la clé privée de l'agent concerné et déchiffrer
+localement, pas lire l'audit du Hub.
 
 ### Commandes
 

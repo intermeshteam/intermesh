@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus — The coordination protocol for AI agents</title>
+<meta name="description" content="Open-source, end-to-end encrypted coordination protocol for AI agents. Cross-language, federated, framework-agnostic.">
+<meta property="og:title" content="Nexus — The coordination protocol for AI agents">
+<meta property="og:description" content="Your agents can think. They cannot yet work together. Nexus is the open protocol that lets them.">
+<meta property="og:type" content="website">
+<style>
+/* No CDN, no remote font, no framework. A protocol's own site should not
+   depend on three companies staying online. */
+:root{
+  --bg:#05070C; --bg2:#0A0E17; --card:#0D1220; --line:#1A2233; --line2:#141C2B;
+  --cyan:#22D3EE; --teal:#2DD4BF; --emerald:#10B981; --amber:#F59E0B;
+  --violet:#A78BFA; --red:#EF4444;
+  --fg:#F0F5FB; --muted:#95A1B6; --dim:#5D687C;
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:Inter,-apple-system,'Segoe UI',Roboto,Helvetica,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:16px;
+  line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+.mono{font-family:var(--mono)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 26px}
+
+/* ---------- nav ---------- */
+nav{position:sticky;top:0;z-index:40;background:rgba(5,7,12,.86);
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--line2)}
+nav .wrap{display:flex;align-items:center;height:62px;gap:30px}
+.brand{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.3em}
+nav .links{display:flex;gap:24px;font-size:14px;color:var(--muted)}
+nav .links a:hover{color:var(--fg)}
+nav .right{margin-left:auto;display:flex;gap:11px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:6px;
+  border:1px solid var(--line);font-size:13.5px;font-weight:500;
+  transition:border-color .15s,background .15s,color .15s;cursor:pointer;
+  background:transparent;color:var(--fg);font-family:inherit}
+.btn:hover{border-color:var(--dim);background:rgba(255,255,255,.03)}
+.btn-primary{border-color:var(--cyan);color:var(--cyan)}
+.btn-primary:hover{background:rgba(34,211,238,.1)}
+@media(max-width:860px){nav .links{display:none}}
+
+/* ---------- hero ---------- */
+header{padding:88px 0 72px;
+  background:radial-gradient(ellipse 900px 460px at 15% -8%,rgba(34,211,238,.09),transparent),
+             radial-gradient(ellipse 700px 400px at 88% 4%,rgba(167,139,250,.06),transparent)}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:52px;align-items:center}
+@media(max-width:1000px){.hero{grid-template-columns:1fr;gap:38px}}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.24em;color:var(--cyan);
+  text-transform:uppercase;margin-bottom:22px}
+h1{font-size:clamp(40px,5.6vw,66px);line-height:1.04;letter-spacing:-.03em;
+  font-weight:700;margin-bottom:24px}
+h1 .fade{color:var(--dim)}
+.lede{font-size:18px;color:var(--muted);max-width:520px;margin-bottom:32px;line-height:1.65}
+.cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.install{display:inline-flex;align-items:center;gap:12px;background:var(--card);
+  border:1px solid var(--line);border-radius:6px;padding:10px 14px;
+  font-family:var(--mono);font-size:13.5px}
+.install .p{color:var(--dim)}
+.install button{background:none;border:none;color:var(--dim);cursor:pointer;
+  font-size:12px;font-family:var(--mono);padding:2px 5px;border-radius:3px}
+.install button:hover{color:var(--cyan);background:rgba(34,211,238,.08)}
+
+/* ---------- code ---------- */
+.code{background:var(--card);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.code-head{display:flex;align-items:center;gap:3px;padding:9px 12px;
+  border-bottom:1px solid var(--line2);background:var(--bg2);overflow-x:auto}
+.code-head button{background:none;border:none;color:var(--dim);font-family:var(--mono);
+  font-size:11.5px;padding:5px 11px;border-radius:5px;cursor:pointer;white-space:nowrap}
+.code-head button:hover{color:var(--muted)}
+.code-head button.on{color:var(--cyan);background:rgba(34,211,238,.1)}
+.code-head .file{margin-left:auto;font-family:var(--mono);font-size:11px;
+  color:var(--dim);padding-left:14px}
+pre{padding:20px;overflow-x:auto;font-family:var(--mono);font-size:12.8px;line-height:1.75}
+code{font-family:inherit}
+.k{color:var(--violet)} .s{color:var(--emerald)} .f{color:var(--cyan)}
+.c{color:var(--dim);font-style:italic} .n{color:var(--amber)} .p{color:var(--muted)}
+
+/* ---------- sections ---------- */
+section{padding:76px 0;border-top:1px solid var(--line2)}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--cyan);
+  text-transform:uppercase;margin-bottom:16px}
+h2{font-size:clamp(27px,3.3vw,38px);line-height:1.16;letter-spacing:-.022em;
+  font-weight:600;margin-bottom:18px;max-width:760px}
+.sub{font-size:17px;color:var(--muted);max-width:680px;line-height:1.68}
+
+.problem{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));
+  gap:16px;margin-top:44px}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:22px}
+.pcard .no{font-family:var(--mono);font-size:11px;color:var(--red);margin-bottom:12px;
+  letter-spacing:.1em}
+.pcard h3{font-size:16px;font-weight:600;margin-bottom:9px}
+.pcard p{font-size:14px;color:var(--muted);line-height:1.65}
+
+.feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));
+  gap:16px;margin-top:44px}
+.feat{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:22px}
+.feat .ico{font-size:17px;margin-bottom:13px}
+.feat h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.feat p{font-size:13.8px;color:var(--muted);line-height:1.62}
+.feat .m{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-top:11px}
+
+.flow{background:var(--card);border:1px solid var(--line);border-radius:9px;
+  padding:26px;margin-top:40px;overflow-x:auto}
+.flow pre{padding:0;font-size:11.6px;line-height:1.85;color:var(--muted)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  gap:16px;margin-top:40px}
+.stat{border-left:2px solid var(--line);padding-left:16px}
+.stat .v{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--cyan);line-height:1.1}
+.stat .k2{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+.honest{background:var(--card);border:1px solid var(--line);border-left:2px solid var(--amber);
+  border-radius:8px;padding:24px;margin-top:40px;max-width:840px}
+.honest h3{font-size:15px;margin-bottom:14px;color:var(--amber)}
+.honest ul{list-style:none;font-size:14px;color:var(--muted);line-height:1.9}
+.honest li::before{content:'—';color:var(--dim);margin-right:9px}
+
+footer{border-top:1px solid var(--line2);padding:44px 0 34px}
+.fgrid{display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start}
+.fcol h4{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+  margin-bottom:13px;font-family:var(--mono)}
+.fcol a{display:block;font-size:13.5px;color:var(--muted);margin-bottom:8px}
+.fcol a:hover{color:var(--fg)}
+.fbottom{margin-top:36px;padding-top:22px;border-top:1px solid var(--line2);
+  display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="brand">NEXUS</div>
+  <div class="links">
+    <a href="#problem">Problem</a>
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#status">Status</a>
+  </div>
+  <div class="right">
+    <a class="btn" href="https://github.com/mrlomemba-cmd/nexus/blob/main/docs/RFC-001-CORE-PROTOCOL.md">RFC-001</a>
+    <a class="btn btn-primary" href="https://github.com/mrlomemba-cmd/nexus">GitHub →</a>
+  </div>
+</div></nav>
+
+<header><div class="wrap"><div class="hero">
+  <div>
+    <div class="eyebrow">Open coordination protocol</div>
+    <h1>Your agents can think.<br><span class="fade">They cannot work together.</span></h1>
+    <p class="lede">
+      Nexus is the open protocol that lets AI agents discover each other,
+      talk with end-to-end encryption, and hand off work — across languages,
+      frameworks and organisations. No vendor owns it.
+    </p>
+    <div class="cta">
+      <div class="install">
+        <span class="p">$</span><span id="cmd">pip install nexus-mesh</span>
+        <button id="copy">copy</button>
+      </div>
+      <a class="btn" href="https://github.com/mrlomemba-cmd/nexus">Read the source</a>
+    </div>
+  </div>
+
+  <div class="code">
+    <div class="code-head" id="tabs">
+      <button class="on" data-t="py">Python</button>
+      <button data-t="js">Node.js</button>
+      <button data-t="lc">Existing agent</button>
+      <span class="file" id="file">worker.py</span>
+    </div>
+    <pre id="panel"></pre>
+  </div>
+</div></div></header>
+
+<section id="problem"><div class="wrap">
+  <div class="tag">The problem</div>
+  <h2>Every multi-agent system reinvents the same broken plumbing.</h2>
+  <p class="sub">
+    Frameworks made single agents easy. The moment a second agent appears,
+    everyone rebuilds discovery, retries, identity and audit from scratch —
+    badly, and incompatibly with everyone else's version.
+  </p>
+
+  <div class="problem">
+    <div class="pcard"><div class="no">01</div>
+      <h3>Agents can't find each other</h3>
+      <p>Addresses get hardcoded. Move an agent and every caller breaks.
+         There is no way to ask "who here can translate?"</p></div>
+    <div class="pcard"><div class="no">02</div>
+      <h3>Work vanishes on restart</h3>
+      <p>State lives in memory. A deploy, a crash, an OOM kill — and every
+         in-flight task is gone, with nothing recording that it existed.</p></div>
+    <div class="pcard"><div class="no">03</div>
+      <h3>Nobody can prove what happened</h3>
+      <p>When an agent moves money or deletes data, the trail is a log file
+         anyone with disk access can rewrite.</p></div>
+    <div class="pcard"><div class="no">04</div>
+      <h3>The broker reads everything</h3>
+      <p>Route through a message bus and it sees every payload in clear.
+         Two companies will never agree to that.</p></div>
+    <div class="pcard"><div class="no">05</div>
+      <h3>Anyone can claim to be anyone</h3>
+      <p>Most agent buses take the client's word for its own identity and
+         privileges. That is not authentication.</p></div>
+    <div class="pcard"><div class="no">06</div>
+      <h3>Frameworks don't interoperate</h3>
+      <p>A LangChain agent and a CrewAI crew have no common language. Every
+         pairing is a bespoke integration.</p></div>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <div class="tag">How it works</div>
+  <h2>One protocol, sitting under whatever you already use.</h2>
+  <p class="sub">
+    Nexus is not another agent framework. It is the layer beneath them —
+    the part they all assume exists and none of them provides.
+  </p>
+
+  <div class="flow"><pre>   Python agent            Node.js agent           LangChain / CrewAI
+   (native SDK)            (native SDK)            (wrapped, unchanged)
+        │                       │                          │
+        └──── E2E encrypted ────┴──── RSA-2048 + AES-256-GCM ───┘
+                                │
+   ═════════════════════════════╪═════════════════════════════
+                     N E X U S   H U B
+     discovery · identity · JWT auth · RBAC · task lifecycle
+             Merkle audit log · rate limiting
+   ═════════════════════════════╪═════════════════════════════
+                                │
+                   hub-to-hub federation
+                                │
+                     Partner organisation
+     Payloads stay encrypted end to end. The hub routes ciphertext
+     it cannot read — including across the federation boundary.</pre></div>
+</div></section>
+
+<section id="features"><div class="wrap">
+  <div class="tag">What you get</div>
+  <h2>The parts you would otherwise build yourself.</h2>
+
+  <div class="feats">
+    <div class="feat"><div class="ico">🔍</div><h3>Discovery</h3>
+      <p>Find agents by capability, role, metadata or name. Stop hardcoding addresses.</p>
+      <div class="m">discover(capabilities=["translate"])</div></div>
+    <div class="feat"><div class="ico">🔐</div><h3>End-to-end encryption</h3>
+      <p>RSA-2048-OAEP wraps a per-message AES-256-GCM key. The hub routes ciphertext it cannot read.</p>
+      <div class="m">on by default</div></div>
+    <div class="feat"><div class="ico">🆔</div><h3>Verifiable identity</h3>
+      <p>SHA-256 fingerprints over roles, capabilities and permissions. Tampering is rejected at registration.</p>
+      <div class="m">fingerprint + JWT</div></div>
+    <div class="feat"><div class="ico">📋</div><h3>Tasks that survive</h3>
+      <p>Persisted lifecycle. An interrupted task is reassigned when its executor reconnects.</p>
+      <div class="m">pending → running → completed</div></div>
+    <div class="feat"><div class="ico">⛓️</div><h3>Tamper-evident audit</h3>
+      <p>Merkle-chained events. Edit one entry on disk and the chain breaks loudly at startup.</p>
+      <div class="m">verify_integrity()</div></div>
+    <div class="feat"><div class="ico">🌐</div><h3>Federation</h3>
+      <p>Hubs peer across organisations. Your agents delegate to a partner's without sharing infrastructure.</p>
+      <div class="m">--peer partner=wss://…</div></div>
+    <div class="feat"><div class="ico">🔌</div><h3>Framework adapters</h3>
+      <p>Wrap a LangChain chain, CrewAI crew, AutoGen agent or LlamaIndex engine. No rewrite, no new dependency.</p>
+      <div class="m">adapt(my_agent, name="analyst")</div></div>
+    <div class="feat"><div class="ico">🖥️</div><h3>Mission Control</h3>
+      <p>Live console for agents, tasks, audit and service accounts. Zero external dependencies.</p>
+      <div class="m">runs on a closed network</div></div>
+  </div>
+</div></section>
+
+<section id="status"><div class="wrap">
+  <div class="tag">Where it stands</div>
+  <h2>Early, working, and honest about it.</h2>
+
+  <div class="stats">
+    <div class="stat"><div class="v">80</div><div class="k2">tests passing</div></div>
+    <div class="stat"><div class="v">2</div><div class="k2">official SDKs</div></div>
+    <div class="stat"><div class="v">0</div><div class="k2">runtime dependencies added by adapters</div></div>
+    <div class="stat"><div class="v">Apache&nbsp;2.0</div><div class="k2">licence</div></div>
+  </div>
+
+  <div class="honest">
+    <h3>What is not done yet</h3>
+    <ul>
+      <li>No TLS by default — put the hub behind <span class="mono">wss://</span> in production. E2E protects payloads, not metadata.</li>
+      <li>One hub per state database. Multi-hub shared state needs PostgreSQL.</li>
+      <li>Key rotation ejects the fleet; there is no overlap window yet.</li>
+      <li>Executors must be idempotent — a resumed task can run twice.</li>
+      <li>The adapters have not been tested against the real frameworks yet, only against doubles reproducing their calling conventions.</li>
+    </ul>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <div class="fgrid">
+    <div class="fcol" style="flex:1;min-width:220px">
+      <div class="brand" style="margin-bottom:11px">NEXUS</div>
+      <p style="font-size:13.5px;color:var(--dim);max-width:290px;line-height:1.62">
+        The open coordination protocol for AI agents. Neutral by design —
+        a standard nobody owns is the only one everybody can adopt.</p>
+    </div>
+    <div class="fcol"><h4>Protocol</h4>
+      <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/docs/RFC-001-CORE-PROTOCOL.md">RFC-001</a>
+      <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/docs/SECURITY-AND-ENCRYPTION.md">Security model</a>
+      <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/docs/MANIFESTO.md">Manifesto</a></div>
+    <div class="fcol"><h4>Developers</h4>
+      <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/docs/API-REFERENCE.md">API reference</a>
+      <a href="https://pypi.org/project/nexus-mesh/">PyPI</a>
+      <a href="https://www.npmjs.com/package/nexus-mesh">npm</a></div>
+    <div class="fcol"><h4>Project</h4>
+      <a href="https://github.com/mrlomemba-cmd/nexus">Source</a>
+      <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/mrlomemba-cmd/nexus/issues">Issues</a></div>
+  </div>
+  <div class="fbottom">
+    <span>APACHE 2.0 · PROTOCOL nexus/v1</span>
+    <span>pip install nexus-mesh · npm install nexus-mesh</span>
+  </div>
+</div></footer>
+
+<script>
+/* Samples are the real API, verified against the shipped SDKs. A landing
+   page whose code does not run is worse than one with no code at all. */
+const SAMPLES = {
+  py: { file: 'worker.py', code:
+`<span class="k">from</span> nexus_sdk <span class="k">import</span> NexusAgent
+
+<span class="c"># An agent announces what it can do. Others find it by that.</span>
+agent = <span class="f">NexusAgent</span>(
+    name=<span class="s">"translator"</span>,
+    capabilities=[<span class="s">"translate"</span>],
+    roles=[<span class="s">"worker"</span>],
+)
+
+<span class="p">@</span>agent.<span class="f">on_task</span>
+<span class="k">async def</span> <span class="f">translate</span>(data, task):
+    <span class="k">return</span> {<span class="s">"text"</span>: my_model(data[<span class="s">"text"</span>])}
+
+<span class="k">await</span> agent.<span class="f">connect</span>()   <span class="c"># now discoverable, E2E encrypted</span>`},
+
+  js: { file: 'orchestrator.mjs', code:
+`<span class="k">import</span> { NexusAgent } <span class="k">from</span> <span class="s">'nexus-mesh'</span>;
+
+<span class="k">const</span> lead = <span class="k">new</span> <span class="f">NexusAgent</span>({
+  name: <span class="s">'orchestrator'</span>,
+  roles: [<span class="s">'admin'</span>],
+});
+<span class="k">await</span> lead.<span class="f">connect</span>();
+
+<span class="c">// Find a translator — without knowing its name or address.</span>
+<span class="k">const</span> found = <span class="k">await</span> lead.<span class="f">discover</span>({ capabilities: [<span class="s">'translate'</span>] });
+
+<span class="c">// Hand it work. It happens to be a Python agent. Nobody cares.</span>
+<span class="k">const</span> out = <span class="k">await</span> lead.<span class="f">submitTask</span>(
+  <span class="s">'Translate report'</span>, found.agents[<span class="n">0</span>].name,
+  { text: <span class="s">'Hello world'</span> }
+);`},
+
+  lc: { file: 'bridge.py', code:
+`<span class="k">from</span> nexus_sdk.adapters <span class="k">import</span> adapt
+
+<span class="c"># Whatever you already built — LangChain chain, CrewAI crew,</span>
+<span class="c"># AutoGen agent, LlamaIndex engine, or a plain function.</span>
+agent = <span class="f">adapt</span>(
+    my_existing_agent,
+    name=<span class="s">"analyst"</span>,
+    capabilities=[<span class="s">"market_analysis"</span>],
+)
+
+<span class="k">await</span> agent.<span class="f">connect</span>()
+
+<span class="c"># Not one line of your agent changed. No framework imported.</span>
+<span class="c"># It is now discoverable by anyone on the mesh.</span>`},
+};
+
+const panel = document.getElementById('panel');
+const file  = document.getElementById('file');
+function show(key){
+  panel.innerHTML = '<code>' + SAMPLES[key].code + '</code>';
+  file.textContent = SAMPLES[key].file;
+  document.querySelectorAll('#tabs button')
+    .forEach(b => b.classList.toggle('on', b.dataset.t === key));
+}
+document.getElementById('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-t]');
+  if (b) show(b.dataset.t);
+});
+show('py');
+
+document.getElementById('copy').onclick = async (e) => {
+  try {
+    await navigator.clipboard.writeText(document.getElementById('cmd').textContent);
+    e.target.textContent = 'copied';
+    setTimeout(() => { e.target.textContent = 'copy'; }, 1600);
+  } catch (_) { e.target.textContent = 'select it'; }
+};
+</script>
+</body>
+</html>

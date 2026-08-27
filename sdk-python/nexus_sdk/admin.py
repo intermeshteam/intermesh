@@ -18,15 +18,29 @@ déconnecter des agents. Toute commande d'administration exige donc :
   1. une identité authentifiée par CLÉ D'API — jamais des rôles déclarés
      par le client. La preuve est portée par le JWT signé par le Hub,
      donc infalsifiable ;
-  2. le rôle `admin`.
+  2. le rôle `admin` ou `org_admin`.
 
 Les deux conditions sont vérifiées ici, à un seul endroit.
+
+CLOISONNEMENT PAR ORGANISATION
+-------------------------------
+`admin` voit et administre tout le Hub, organisations confondues : c'est
+le rôle de l'opérateur du Hub lui-même, inchangé depuis la première
+version de cette console.
+
+`org_admin` est plus étroit : il ne voit et n'agit que sur l'organisation
+de sa propre clé d'API (`org_id`, porté par le JWT, donc lui aussi
+infalsifiable). C'est le rôle à distribuer à chaque entreprise qui
+partage un Hub avec d'autres — indispensable dès qu'un portail web laisse
+plusieurs organisations générer leurs propres clés sur la même instance :
+sans ce cloisonnement, la clé admin d'une entreprise verrait les agents,
+tâches et journaux d'audit de toutes les autres.
 """
 
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from nexus_sdk.task import NexusTask, TaskStatus
 
@@ -62,6 +76,8 @@ class AdminContext:
         remember_task: Callable,
         send_to_agent: Callable,
         hub_version: str = "1.5",
+        caller_org: str = "default",
+        scoped: bool = False,
     ):
         self.agents = agents
         self.identity_registry = identity_registry
@@ -74,6 +90,12 @@ class AdminContext:
         self.remember_task = remember_task
         self.send_to_agent = send_to_agent
         self.hub_version = hub_version
+        # Organisation du porteur du token, et `True` si son rôle est
+        # `org_admin` — auquel cas chaque commande doit filtrer sa vue et
+        # ses actions à cette seule organisation. `admin` laisse `scoped`
+        # à `False` : comportement hub-wide inchangé.
+        self.caller_org = caller_org
+        self.scoped = scoped
 
 
 def authorize(token_payload: dict) -> None:
@@ -82,15 +104,46 @@ def authorize(token_payload: dict) -> None:
 
     Raises:
         AdminError: si l'identité n'est pas issue d'une clé d'API, ou si
-                    le rôle admin manque.
+                    ni le rôle `admin` ni `org_admin` ne sont présents.
     """
     if token_payload.get("auth_method") != "api_key":
         raise AdminError(
             "ADMIN_DENIED: l'administration exige une identité authentifiée "
             "par clé d'API. Les rôles déclarés à l'enregistrement ne suffisent pas."
         )
-    if "admin" not in token_payload.get("roles", []):
-        raise AdminError("ADMIN_DENIED: rôle 'admin' requis.")
+    roles = token_payload.get("roles", [])
+    if "admin" not in roles and "org_admin" not in roles:
+        raise AdminError("ADMIN_DENIED: rôle 'admin' ou 'org_admin' requis.")
+
+
+def caller_scope(token_payload: dict) -> tuple[str, bool]:
+    """
+    (organisation du porteur du token, `True` s'il doit être cloisonné).
+
+    `admin` l'emporte sur `org_admin` si un token portait les deux : un
+    opérateur de Hub qui s'octroie aussi `org_admin` reste hub-wide.
+    """
+    roles = token_payload.get("roles", [])
+    scoped = "admin" not in roles and "org_admin" in roles
+    return token_payload.get("org_id", "default"), scoped
+
+
+def _org_of(qualified_name: Optional[str]) -> str:
+    """
+    Organisation porteuse d'un nom qualifié Nexus (`"acme/bot"` -> `"acme"`).
+
+    Un nom sans préfixe appartient à l'organisation par défaut du Hub —
+    la même convention que `AgentIdentity.qualified_name`.
+    """
+    if not qualified_name:
+        return "default"
+    return qualified_name.split("/")[0] if "/" in qualified_name else "default"
+
+
+# Évènements qui décrivent le Hub lui-même ou sa fédération, pas une
+# organisation en particulier : un `org_admin` ne doit jamais les voir,
+# même quand leur `sender`/`target` ressemble par accident à son org_id.
+_HUB_LEVEL_EVENTS = {"GENESIS", "PEERING_ESTABLISHED", "PEERING_ACCEPTED"}
 
 
 # ----------------------------------------------------------------------
@@ -98,23 +151,42 @@ def authorize(token_payload: dict) -> None:
 # ----------------------------------------------------------------------
 
 def _hub_info(ctx: AdminContext, params: dict) -> dict:
+    if ctx.scoped:
+        identities = [i for i in ctx.identity_registry.values() if i.org_id == ctx.caller_org]
+        tasks = [t for t in ctx.task_registry.values()
+                 if ctx.caller_org in (_org_of(t.orchestrator), _org_of(t.assignee))]
+        audit_entries = sum(
+            1 for e in ctx.audit_log.chain
+            if e.event_type not in _HUB_LEVEL_EVENTS
+            and ctx.caller_org in (_org_of(e.sender), _org_of(e.target))
+        )
+        api_keys_count = sum(1 for k in ctx.api_keys.describe() if k["org_id"] == ctx.caller_org)
+        federation_peers: list[str] = []  # information hub-wide, réservée à `admin`
+    else:
+        identities = list(ctx.identity_registry.values())
+        tasks = list(ctx.task_registry.values())
+        audit_entries = len(ctx.audit_log.chain)
+        api_keys_count = len(ctx.api_keys)
+        federation_peers = sorted(ctx.peered_hubs.keys())
+
     by_status: dict[str, int] = {}
-    for task in ctx.task_registry.values():
+    for task in tasks:
         by_status[task.status.value] = by_status.get(task.status.value, 0) + 1
+    agents_online = sum(1 for i in identities if i.qualified_name in ctx.agents)
 
     return {
-        "org": ctx.my_org,
+        "org": ctx.caller_org if ctx.scoped else ctx.my_org,
         "version": ctx.hub_version,
-        "agents_online": len(ctx.agents),
-        "agents_known": len(ctx.identity_registry),
-        "tasks_total": len(ctx.task_registry),
+        "agents_online": agents_online,
+        "agents_known": len(identities),
+        "tasks_total": len(tasks),
         "tasks_by_status": by_status,
-        "audit_entries": len(ctx.audit_log.chain),
+        "audit_entries": audit_entries,
         "audit_intact": ctx.audit_log.verify_integrity(),
-        "federation_peers": sorted(ctx.peered_hubs.keys()),
+        "federation_peers": federation_peers,
         "state_backend": getattr(ctx.store, "description", "inconnu"),
         "state_ephemeral": getattr(ctx.store, "ephemeral", True),
-        "api_keys": len(ctx.api_keys),
+        "api_keys": api_keys_count,
         "api_keys_source": ctx.api_keys.source,
         "api_keys_mutable": ctx.api_keys.mutable,
         "server_time": time.time(),
@@ -128,6 +200,8 @@ def _agents_list(ctx: AdminContext, params: dict) -> dict:
     """
     out = []
     for name, identity in sorted(ctx.identity_registry.items()):
+        if ctx.scoped and identity.org_id != ctx.caller_org:
+            continue
         pending = sum(
             1 for t in ctx.task_registry.values()
             if t.assignee == name and t.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
@@ -145,11 +219,16 @@ def _agents_list(ctx: AdminContext, params: dict) -> dict:
             "online": name in ctx.agents,
             "pending_tasks": pending,
         })
-    return {"agents": out, "online": len(ctx.agents), "known": len(out)}
+    online = sum(1 for a in out if a["online"])
+    return {"agents": out, "online": online, "known": len(out)}
 
 
 async def _agent_disconnect(ctx: AdminContext, params: dict) -> dict:
     name = params.get("name")
+    if ctx.scoped:
+        identity = ctx.identity_registry.get(name)
+        if identity is None or identity.org_id != ctx.caller_org:
+            raise AdminError(f"'{name}' est hors de votre organisation.")
     ws = ctx.agents.get(name)
     if ws is None:
         raise AdminError(f"'{name}' n'est pas connecté.")
@@ -163,6 +242,9 @@ def _tasks_list(ctx: AdminContext, params: dict) -> dict:
     limit = min(int(params.get("limit", 100)), 500)
 
     tasks = list(ctx.task_registry.values())
+    if ctx.scoped:
+        tasks = [t for t in tasks
+                 if ctx.caller_org in (_org_of(t.orchestrator), _org_of(t.assignee))]
     if status:
         tasks = [t for t in tasks if t.status.value == status]
     if assignee:
@@ -190,10 +272,16 @@ def _tasks_list(ctx: AdminContext, params: dict) -> dict:
     }
 
 
+def _check_task_in_scope(ctx: AdminContext, task) -> None:
+    if ctx.scoped and ctx.caller_org not in (_org_of(task.orchestrator), _org_of(task.assignee)):
+        raise AdminError("Cette tâche est hors de votre organisation.")
+
+
 def _task_cancel(ctx: AdminContext, params: dict) -> dict:
     task = ctx.task_registry.get(params.get("task_id"))
     if task is None:
         raise AdminError("Tâche inconnue.")
+    _check_task_in_scope(ctx, task)
     if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
         raise AdminError(f"Tâche déjà terminée ({task.status.value}).")
 
@@ -206,6 +294,7 @@ async def _task_retry(ctx: AdminContext, params: dict) -> dict:
     task = ctx.task_registry.get(params.get("task_id"))
     if task is None:
         raise AdminError("Tâche inconnue.")
+    _check_task_in_scope(ctx, task)
 
     task.update_status(TaskStatus.PENDING)
     ctx.remember_task(task)
@@ -227,6 +316,12 @@ def _audit_list(ctx: AdminContext, params: dict) -> dict:
 
     chain = ctx.audit_log.chain
     entries = [e.to_dict() for e in chain]
+    if ctx.scoped:
+        entries = [
+            e for e in entries
+            if e["event_type"] not in _HUB_LEVEL_EVENTS
+            and ctx.caller_org in (_org_of(e["sender"]), _org_of(e.get("target")))
+        ]
     if event_type:
         entries = [e for e in entries if e["event_type"] == event_type]
     entries.reverse()
@@ -259,8 +354,11 @@ def _audit_verify(ctx: AdminContext, params: dict) -> dict:
 
 
 def _apikeys_list(ctx: AdminContext, params: dict) -> dict:
+    keys = ctx.api_keys.describe()
+    if ctx.scoped:
+        keys = [k for k in keys if k["org_id"] == ctx.caller_org]
     return {
-        "keys": ctx.api_keys.describe(),
+        "keys": keys,
         "source": ctx.api_keys.source,
         "mutable": ctx.api_keys.mutable,
     }
@@ -268,7 +366,14 @@ def _apikeys_list(ctx: AdminContext, params: dict) -> dict:
 
 def _apikey_create(ctx: AdminContext, params: dict) -> dict:
     org_id = params.get("org_id")
-    if not org_id:
+    if ctx.scoped:
+        # Un `org_admin` ne crée que pour sa propre organisation : accepter
+        # un `org_id` différent laisserait une entreprise émettre des clés
+        # au nom d'une autre.
+        if org_id and org_id != ctx.caller_org:
+            raise AdminError("Un org_admin ne peut créer de clé que pour sa propre organisation.")
+        org_id = ctx.caller_org
+    elif not org_id:
         raise AdminError("org_id requis.")
     try:
         raw = ctx.api_keys.create(
@@ -289,6 +394,10 @@ def _apikey_revoke(ctx: AdminContext, params: dict) -> dict:
     fingerprint = params.get("fingerprint")
     if not fingerprint:
         raise AdminError("fingerprint requis.")
+    if ctx.scoped:
+        matches = [k for k in ctx.api_keys.describe() if k["fingerprint"].startswith(fingerprint)]
+        if len(matches) != 1 or matches[0]["org_id"] != ctx.caller_org:
+            raise AdminError("Empreinte inconnue ou hors de votre organisation.")
     try:
         ok = ctx.api_keys.revoke(fingerprint)
     except PermissionError as exc:
