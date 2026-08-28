@@ -119,7 +119,7 @@ infrastructure or trusting the other with more than the task requires.
 LangChain runnable; `from_callable` and the `@intermesh_service` decorator turn
 any Python function into a discoverable agent, which is how the CrewAI,
 AutoGen and LlamaIndex examples bridge their own frameworks. None of this
-imports the frameworks themselves, on purpose — installing Nexus never
+imports the frameworks themselves, on purpose — installing InterMesh never
 drags in a hundred transitive dependencies, and the bridge doesn't shatter
 every time one of them ships a breaking major version, which by their own
 release histories is often.
@@ -182,7 +182,7 @@ TCP/IP didn't win because it was owned by the biggest company. It won
 because it was owned by none of them, which meant everyone could build on
 it without betting their business on a competitor's goodwill.
 
-That's the bet here. Not that Nexus is the cleverest possible design — a
+That's the bet here. Not that InterMesh is the cleverest possible design — a
 reasonable critique of any part of it is welcome, and the RFC is public
 specifically so it can be argued with — but that the coordination layer for
 AI agents has to be something nobody owns, or it will end up being

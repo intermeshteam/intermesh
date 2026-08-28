@@ -3,7 +3,7 @@
 The official Python SDK for **InterMesh Protocol**, the universal open-source coordination
 protocol for AI agents.
 
-Nexus lets agents — regardless of language, framework, or vendor — discover each other,
+InterMesh lets agents — regardless of language, framework, or vendor — discover each other,
 communicate with end-to-end encryption, and collaborate on distributed tasks.
 
 ```bash
@@ -19,7 +19,7 @@ pip install intermesh
 **Start the coordination hub:**
 
 ```bash
-nexus hub
+intermesh hub
 ```
 
 **Write a worker agent:**
@@ -105,7 +105,7 @@ def summarize(data):
 ```
 
 Runnable examples for all four frameworks are in
-[`examples/frameworks/`](https://github.com/mrlomemba-cmd/nexus/tree/main/examples/frameworks).
+[`examples/frameworks/`](https://github.com/intermeshteam/intermesh/tree/main/examples/frameworks).
 
 ## Orchestrate multiple agents
 
@@ -122,7 +122,7 @@ result = await pipeline.run({"text": "compute forty two doubled"})
 ```
 
 `fan_out(orchestrator, branches, capabilities=...)` runs independent branches in
-parallel instead. Full guide: [`docs/AGENT-INTEGRATION.md`](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md).
+parallel instead. Full guide: [`docs/AGENT-INTEGRATION.md`](https://github.com/intermeshteam/intermesh/blob/main/docs/AGENT-INTEGRATION.md).
 
 ---
 
@@ -137,7 +137,7 @@ parallel instead. Full guide: [`docs/AGENT-INTEGRATION.md`](https://github.com/m
 - **Federation** — hub-to-hub peering across organizations, encryption preserved end to end.
 - **Immutable audit log** — Merkle-chained events; retroactive edits break the chain.
 - **Rate limiting** — token-bucket throttling per agent.
-- **Developer CLI** — `nexus hub | discover | ping | ask | task | keygen | dashboard | docs`.
+- **Developer CLI** — `intermesh hub | discover | ping | ask | task | keygen | dashboard | docs`.
 
 ---
 
@@ -153,17 +153,17 @@ parallel instead. Full guide: [`docs/AGENT-INTEGRATION.md`](https://github.com/m
 | `who_is(name)` | Fetch an agent's certified identity and public key |
 | `on_message / on_request / on_task` | Register inbound handlers |
 
-Full reference: [`docs/API-REFERENCE.md`](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/API-REFERENCE.md)
+Full reference: [`docs/API-REFERENCE.md`](https://github.com/intermeshteam/intermesh/blob/main/docs/API-REFERENCE.md)
 
 ---
 
 ## Documentation
 
-- [Agent integration — adapters and orchestration](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md)
-- [RFC-001 — Core protocol specification](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/RFC-001-CORE-PROTOCOL.md)
-- [Security and encryption model](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/SECURITY-AND-ENCRYPTION.md)
-- [API reference](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/API-REFERENCE.md)
+- [Agent integration — adapters and orchestration](https://github.com/intermeshteam/intermesh/blob/main/docs/AGENT-INTEGRATION.md)
+- [RFC-001 — Core protocol specification](https://github.com/intermeshteam/intermesh/blob/main/docs/RFC-001-CORE-PROTOCOL.md)
+- [Security and encryption model](https://github.com/intermeshteam/intermesh/blob/main/docs/SECURITY-AND-ENCRYPTION.md)
+- [API reference](https://github.com/intermeshteam/intermesh/blob/main/docs/API-REFERENCE.md)
 
 ## License
 
-[Apache 2.0](https://github.com/mrlomemba-cmd/nexus/blob/main/LICENSE)
+[Apache 2.0](https://github.com/intermeshteam/intermesh/blob/main/LICENSE)

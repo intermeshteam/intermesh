@@ -9,12 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.3.0]
 
-Python SDK only. The JavaScript SDK is unchanged and stays at `0.1.1`.
+**Renamed: Nexus is now InterMesh.** The `nexus` name was unavailable across
+most domains and already crowded on both registries, so the project moved
+before it had users to strand.
+
+Both SDKs ship as `0.3.0`. The JavaScript SDK jumps from `0.1.1` to keep the
+two languages on one number — under a brand-new package name, two different
+versions would say nothing about which pairs speak to which.
+
+### Changed — breaking
+
+- Python package and import are both `intermesh` (was `nexus-mesh` /
+  `nexus_sdk`); npm package is `intermesh` (was `nexus-mesh`).
+- Classes are prefixed `InterMesh` (`InterMeshAgent`, `InterMeshTask`,
+  `InterMeshStore`, …); the decorator is `@intermesh_service`.
+- CLI command is `intermesh` (was `nexus`).
+- Environment variables are `INTERMESH_*` (24 of them); the state directory
+  is `~/.intermesh/`.
+- **Wire protocol is `intermesh/v1`** (was `nexus/v1`). Agents built on 0.1.x
+  or 0.2.x cannot talk to a 0.3.0 hub. This break is deliberate and taken now,
+  while the protocol has no deployed users and the change costs nothing.
+- Prometheus metrics are `intermesh_*`; the snapshot format is
+  `intermesh-snapshot/1`.
+
+The old `nexus-mesh` packages remain on PyPI and npm for the published 0.1.x
+and 0.2.x versions. They are not maintained.
 
 ### Added
 
 - **Hub snapshots.** `snapshot.create`, `snapshot.restore` and `snapshot.list`
-  admin commands, plus a `nexus snapshot` CLI. A snapshot captures identities,
+  admin commands, plus a `intermesh snapshot` CLI. A snapshot captures identities,
   tasks, API key digests, escrow holds and guardrail policies.
 - **Encryption at rest for snapshots.** `encrypt_blob` / `decrypt_blob` derive
   a key with PBKDF2-HMAC (100 000 iterations, random salt) and seal it with
@@ -117,7 +141,7 @@ report the same version — a user seeing `intermesh` at 0.1.1 on PyPI and
   - A rejected key is never written to the audit log.
   - `--dev-api-keys` enables two deliberately public demo keys for tests, with
     a red warning on every startup.
-- **New `nexus apikey` command** to generate a service-account key and its
+- **New `intermesh apikey` command** to generate a service-account key and its
   configuration entry. The key is displayed once and cannot be recovered.
 - The state database and key files are created `0600`, via
   `os.open(..., 0o600)` so they never exist world-readable, even briefly.
@@ -180,5 +204,5 @@ First public release, on PyPI and npm as `intermesh`.
 - `nexus` developer CLI and Mission Control dashboard
 - Docker Compose stack
 
-[0.1.1]: https://github.com/mrlomemba-cmd/nexus/releases/tag/v0.1.1
-[0.1.0]: https://github.com/mrlomemba-cmd/nexus/releases/tag/v0.1.0
+[0.1.1]: https://github.com/intermeshteam/intermesh/releases/tag/v0.1.1
+[0.1.0]: https://github.com/intermeshteam/intermesh/releases/tag/v0.1.0

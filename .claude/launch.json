@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "nexus-portal",
+      "name": "intermesh-portal",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "portal", "run", "dev"],
       "port": 3000

@@ -12,7 +12,7 @@ A clear description of the missing use case.
 
 **Proposed solution**
 
-How this should be integrated into the Nexus protocol.
+How this should be integrated into the InterMesh protocol.
 
 **Impact on SDKs**
 

@@ -15,7 +15,7 @@ A clear and concise description of the unexpected behavior.
 - OS: [e.g. Ubuntu 24.04, macOS Sonoma, Windows 11]
 - Python version: [e.g. 3.12.0]
 - Node.js version: [e.g. 20.10.0]
-- Nexus version: [e.g. 0.1.0-alpha]
+- InterMesh version: [e.g. 0.1.0-alpha]
 
 **Steps to reproduce**
 

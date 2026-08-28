@@ -1,12 +1,12 @@
-# RFC 001 : Spécification du Protocole Nexus (v1)
+# RFC 001 : Spécification du Protocole InterMesh (v1)
 
 - **Statut** : Standard Proposé
 - **Version du Protocole** : intermesh/v1
-- **Auteurs** : Nexus Architecture Working Group
+- **Auteurs** : InterMesh Architecture Working Group
 - **Date** : 2026
 
 ## 1. Résumé (Abstract)
-Le protocole Nexus (intermesh/v1) est un standard de communication et de coordination sécurisé, asynchrone et chiffré de bout en bout (E2E), conçu pour l'interopérabilité universelle des agents IA.
+Le protocole InterMesh (intermesh/v1) est un standard de communication et de coordination sécurisé, asynchrone et chiffré de bout en bout (E2E), conçu pour l'interopérabilité universelle des agents IA.
 
 ## 2. Enveloppe du Message
 Chaque unité d'information transmise sur le réseau DOIT respecter la structure standard :

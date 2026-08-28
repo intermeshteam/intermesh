@@ -5,12 +5,12 @@
 ### The universal open-source coordination protocol for AI agents
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Protocol](https://img.shields.io/badge/Protocol-nexus%2Fv1-00D4FF.svg)]()
+[![Protocol](https://img.shields.io/badge/Protocol-intermesh%2Fv1-00D4FF.svg)]()
 [![Python](https://img.shields.io/badge/Python-3.10%2B-green.svg)]()
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)]()
 [![Encryption](https://img.shields.io/badge/E2E-RSA--2048%20%2B%20AES--256--GCM-red.svg)]()
 
-**Nexus is the neutral, open standard that lets AI agents — regardless of language,
+**InterMesh is the neutral, open standard that lets AI agents — regardless of language,
 framework, or vendor — discover each other, communicate securely, and collaborate.**
 
 [Manifesto](docs/MANIFESTO.md) · [RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Agent integration](docs/AGENT-INTEGRATION.md) · [Contributing](CONTRIBUTING.md)
@@ -28,7 +28,7 @@ framework, or vendor — discover each other, communicate securely, and collabor
             │ 🔒 E2E (RSA-OAEP + AES-GCM)                │ 🔒 E2E
             ▼                                            ▼
  ══════════════════════════════════════════════════════════════════════
-                      NEXUS COORDINATION HUB
+                      INTERMESH COORDINATION HUB
    [ Discovery ]  [ JWT Auth ]  [ RBAC ]  [ Audit Log ]  [ Rate Limit ]
  ══════════════════════════════════════════════════════════════════════
             ▲                                            ▲
@@ -44,15 +44,15 @@ framework, or vendor — discover each other, communicate securely, and collabor
 ## Quick start
 
 ```bash
-pip install intermesh      # Python SDK + the `nexus` CLI
+pip install intermesh      # Python SDK + the `intermesh` CLI
 npm install intermesh      # JavaScript / TypeScript SDK
 ```
 
 Or from source:
 
 ```bash
-git clone https://github.com/mrlomemba-cmd/nexus.git
-cd nexus
+git clone https://github.com/intermeshteam/intermesh.git
+cd intermesh
 python3 -m venv venv && source venv/bin/activate
 pip install -e ./sdk-python
 ```
@@ -60,7 +60,7 @@ pip install -e ./sdk-python
 **1. Start the hub**
 
 ```bash
-nexus hub
+intermesh hub
 ```
 
 **2. Write a worker agent**
@@ -80,7 +80,7 @@ await agent.connect()
 **3. Delegate work from the CLI**
 
 ```bash
-nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
+intermesh task calc_bot "Compute" '{"expression": "42 * 2"}'
 ```
 
 ---
@@ -100,7 +100,7 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 | 🌐 **Federation** | Hub-to-hub peering across organizations, E2E preserved end to end. |
 | 📜 **Immutable audit log** | Merkle-chained events; any retroactive edit breaks the chain. |
 | 🚦 **Rate limiting** | Token-bucket throttling per agent. |
-| 🛠️ **Developer CLI** | `nexus hub`, `discover`, `ping`, `ask`, `task`, `keygen`, `dashboard`, `docs`. |
+| 🛠️ **Developer CLI** | `intermesh hub`, `discover`, `ping`, `ask`, `task`, `keygen`, `dashboard`, `docs`. |
 | 📊 **Mission Control** | Real-time dark-mode web dashboard. |
 | 🐳 **Docker** | Full stack via `docker compose up -d`. |
 
@@ -110,7 +110,7 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 
 | Path | Purpose |
 |---|---|
-| `sdk-python/` | Official Python SDK (`intermesh`) and the `nexus` CLI — `from_callable`, `from_langchain`, `@intermesh_service` |
+| `sdk-python/` | Official Python SDK (`intermesh`) and the `intermesh` CLI — `from_callable`, `from_langchain`, `@intermesh_service` |
 | `sdk-js/` | Official JavaScript/TypeScript SDK (`intermesh`) — adapters for LangChain.js and LlamaIndex.TS |
 | `server/` | The coordination hub |
 | `dashboard/` | Mission Control web UI |

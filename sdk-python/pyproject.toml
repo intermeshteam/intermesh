@@ -43,10 +43,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mrlomemba-cmd/nexus"
-Repository = "https://github.com/mrlomemba-cmd/nexus"
-Documentation = "https://github.com/mrlomemba-cmd/nexus/tree/main/docs"
-Issues = "https://github.com/mrlomemba-cmd/nexus/issues"
+Homepage = "https://github.com/intermeshteam/intermesh"
+Repository = "https://github.com/intermeshteam/intermesh"
+Documentation = "https://github.com/intermeshteam/intermesh/tree/main/docs"
+Issues = "https://github.com/intermeshteam/intermesh/issues"
 
 [project.scripts]
 intermesh = "intermesh.cli:main"

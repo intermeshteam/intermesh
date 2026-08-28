@@ -1,4 +1,4 @@
-# Référence des Méthodes SDK Nexus (Python & Node.js)
+# Référence des Méthodes SDK InterMesh (Python & Node.js)
 
 - connect() : Établit la liaison WebSocket et récupère le token JWT.
 - send(to, content) : Envoie un message chiffré sans attendre de réponse.

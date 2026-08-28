@@ -29,14 +29,14 @@
   ],
   "author": "InterMesh Protocol Authors",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/mrlomemba-cmd/nexus#readme",
+  "homepage": "https://github.com/intermeshteam/intermesh#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mrlomemba-cmd/nexus.git",
+    "url": "git+https://github.com/intermeshteam/intermesh.git",
     "directory": "sdk-js"
   },
   "bugs": {
-    "url": "https://github.com/mrlomemba-cmd/nexus/issues"
+    "url": "https://github.com/intermeshteam/intermesh/issues"
   },
   "dependencies": {
     "ws": "^8.16.0"

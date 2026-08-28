@@ -4,7 +4,7 @@ Contrairement à `examples/agent_a.py`/`agent_b.py`/`agent_c.py` (des agents Int
 faits main qui simulent un LLM), les scripts de ce dossier enveloppent de vrais
 objets de framework — un `Runnable` LangChain, un moteur de requête LlamaIndex,
 un `Crew` CrewAI, un `ConversableAgent` AutoGen — via les adaptateurs de
-`intermesh.adapters`, sans une ligne de code Nexus dans leur définition.
+`intermesh.adapters`, sans une ligne de code InterMesh dans leur définition.
 
 | Script | Framework | Fonctionne sans clé API |
 |---|---|---|
@@ -18,7 +18,7 @@ LangChain et LlamaIndex fournissent chacun un LLM/embedding factice déterminist
 dans leur propre package (`FakeListChatModel`, `MockLLM`, `MockEmbedding`) : les
 deux premiers exemples tournent donc réellement, hors ligne, sans coût — seule
 la génération de texte est scriptée, tout le reste (le `Runnable`, l'index
-vectoriel, le pont Nexus, le chiffrement de bout en bout) est le code réel du
+vectoriel, le pont InterMesh, le chiffrement de bout en bout) est le code réel du
 framework. Fournissez `OPENAI_API_KEY` pour basculer sur un vrai LLM sans
 changer une ligne de l'exemple.
 
@@ -50,7 +50,7 @@ pip install pyautogen   # autogen_agent.py — nécessite OPENAI_API_KEY pour ex
 Dans quatre terminaux, à la racine du dépôt :
 
 ```bash
-nexus hub
+intermesh hub
 ```
 ```bash
 python examples/agent_b.py

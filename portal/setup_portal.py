@@ -88,7 +88,7 @@ response = await agent.ask(to="translator_french", content="Hello")`;
           <Link href="/dashboard" className="hover:text-white transition">Control Plane</Link>
           <Link href="/docs" className="hover:text-white transition">Docs (RFC-001)</Link>
           <Link href="/pricing" className="hover:text-white transition">Pricing</Link>
-          <a href="https://github.com/mrlomemba-cmd/nexus" target="_blank" className="hover:text-white transition">GitHub</a>
+          <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="hover:text-white transition">GitHub</a>
         </nav>
 
         <div className="flex items-center space-x-6 text-xs">

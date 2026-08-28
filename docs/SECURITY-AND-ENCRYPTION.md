@@ -1,4 +1,4 @@
-# Spécification Cryptographique et Modèle de Sécurité Nexus
+# Spécification Cryptographique et Modèle de Sécurité InterMesh
 
 ## 1. Chiffrement Hybride E2E
 - Asymétrique : RSA-2048 avec padding OAEP (SHA-256)
@@ -139,7 +139,7 @@ défaut devinable.
 ### Créer une clé
 
 ```bash
-nexus apikey --org acme --roles admin,service_account --permissions "admin:*"
+intermesh apikey --org acme --roles admin,service_account --permissions "admin:*"
 ```
 
 La commande affiche la clé une seule fois et l'entrée JSON à ajouter. Le Hub

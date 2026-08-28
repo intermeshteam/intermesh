@@ -1,6 +1,6 @@
 # Contributing to InterMesh Protocol
 
-Thanks for your interest in Nexus. We are building the open, neutral coordination
+Thanks for your interest in InterMesh. We are building the open, neutral coordination
 infrastructure for AI agents.
 
 ---
@@ -8,8 +8,8 @@ infrastructure for AI agents.
 ## Development setup
 
 ```bash
-git clone https://github.com/mrlomemba-cmd/nexus.git
-cd nexus
+git clone https://github.com/intermeshteam/intermesh.git
+cd intermesh
 
 python3 -m venv venv
 source venv/bin/activate

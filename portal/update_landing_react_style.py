@@ -80,7 +80,7 @@ await agent.connect()`
         </div>
 
         <div className="flex items-center space-x-4 text-sm font-medium">
-          <a href="https://github.com/mrlomemba-cmd/nexus" target="_blank" className="hidden md:block text-slate-300 hover:text-white transition">
+          <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="hidden md:block text-slate-300 hover:text-white transition">
             GitHub
           </a>
           <Link href="/auth" className="hidden sm:block text-slate-300 hover:text-white transition">
@@ -225,7 +225,7 @@ await agent.connect()`
           <div className="flex items-center space-x-6 mt-4 md:mt-0 font-medium">
             <Link href="/terms" className="hover:text-slate-300 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-white transition">Privacy</Link>
-            <a href="https://github.com/mrlomemba-cmd/nexus" target="_blank" className="hover:text-white transition">GitHub</a>
+            <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="hover:text-white transition">GitHub</a>
           </div>
         </div>
       </footer>

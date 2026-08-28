@@ -17,7 +17,7 @@ npm install intermesh
 **Start the hub** (from the Python SDK, or via Docker):
 
 ```bash
-nexus hub
+intermesh hub
 ```
 
 **Connect an agent:**
@@ -101,7 +101,7 @@ dedicated bridge here.
 The Python SDK works differently: it detects the calling convention only for
 LangChain (`from_langchain`). Everything else goes through `from_callable`, where
 you write the adapting function yourself — see
-[`docs/AGENT-INTEGRATION.md`](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md).
+[`docs/AGENT-INTEGRATION.md`](https://github.com/intermeshteam/intermesh/blob/main/docs/AGENT-INTEGRATION.md).
 
 ---
 
@@ -134,7 +134,7 @@ const results = await fanOut(orchestrator, [
 ], { capabilities: { fr: ['market_analysis'], de: ['market_analysis'] } });
 ```
 
-See [Agent integration](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md)
+See [Agent integration](https://github.com/intermeshteam/intermesh/blob/main/docs/AGENT-INTEGRATION.md)
 for the full picture, including the Python-side equivalents.
 
 ---
@@ -166,11 +166,11 @@ only ciphertext.
 
 ## Documentation
 
-- [Agent integration — adapters and orchestration](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md)
-- [RFC-001 — Core protocol specification](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/RFC-001-CORE-PROTOCOL.md)
-- [Security and encryption model](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/SECURITY-AND-ENCRYPTION.md)
-- [API reference](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/API-REFERENCE.md)
+- [Agent integration — adapters and orchestration](https://github.com/intermeshteam/intermesh/blob/main/docs/AGENT-INTEGRATION.md)
+- [RFC-001 — Core protocol specification](https://github.com/intermeshteam/intermesh/blob/main/docs/RFC-001-CORE-PROTOCOL.md)
+- [Security and encryption model](https://github.com/intermeshteam/intermesh/blob/main/docs/SECURITY-AND-ENCRYPTION.md)
+- [API reference](https://github.com/intermeshteam/intermesh/blob/main/docs/API-REFERENCE.md)
 
 ## License
 
-[Apache 2.0](https://github.com/mrlomemba-cmd/nexus/blob/main/LICENSE)
+[Apache 2.0](https://github.com/intermeshteam/intermesh/blob/main/LICENSE)
