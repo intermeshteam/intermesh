@@ -21,9 +21,9 @@ const SNIPPETS: Record<TabKey, SnippetData> = {
     filename: 'acme_247_intake_to_print.py',
     lines: [
       '# 24/7 INTRA-COMPANY AUTOMATION: Data Intake Agent -> Print Agent',
-      'from nexus_sdk import NexusAgent',
+      'from intermesh import InterMeshAgent',
       '',
-      'intake = NexusAgent(name="data_intake", org_id="acme")',
+      'intake = InterMeshAgent(name="data_intake", org_id="acme")',
       'await intake.connect()',
       '',
       '# Delegate PDF print job to sister fulfillment agent 24/7',
@@ -45,9 +45,9 @@ const SNIPPETS: Record<TabKey, SnippetData> = {
     filename: 'acme_cross_company.py',
     lines: [
       '# 1. COMPANY A (Acme Corp - Paris Hub)',
-      'from nexus_sdk import NexusAgent',
+      'from intermesh import InterMeshAgent',
       '',
-      'acme_agent = NexusAgent(name="audit_bot", org_id="acme", hub_url="ws://hub.acme.com")',
+      'acme_agent = InterMeshAgent(name="audit_bot", org_id="acme", hub_url="ws://hub.acme.com")',
       'await acme_agent.connect()',
       '',
       '# Delegate encrypted task to Company B (Globex Inc - New York)',
@@ -59,7 +59,7 @@ const SNIPPETS: Record<TabKey, SnippetData> = {
       'print(result)  # -> {"risk_score": 0.04, "status": "APPROVED"}'
     ],
     steps: [
-      { lineIndex: 1, log: { time: '0.05s', level: 'INFO', text: 'Importing nexus_sdk v0.1.0' } },
+      { lineIndex: 1, log: { time: '0.05s', level: 'INFO', text: 'Importing intermesh v0.1.0' } },
       { lineIndex: 3, log: { time: '0.12s', level: 'INFO', text: 'Generated RSA-2048 keypair & identity fingerprint' } },
       { lineIndex: 4, log: { time: '0.28s', level: 'INFO', text: 'Connected to ws://hub.acme.com (JWT Authenticated)' } },
       { lineIndex: 7, log: { time: '0.45s', level: 'INFO', text: 'Encrypting payload with Globex RSA public key...' } },
@@ -70,10 +70,10 @@ const SNIPPETS: Record<TabKey, SnippetData> = {
   callable: {
     filename: 'one_line_agent.py',
     lines: [
-      'from nexus_sdk import NexusAgent',
+      'from intermesh import InterMeshAgent',
       '',
-      '# 1-LINE INTEGRATION: Turn any Python function into a secure Nexus Agent',
-      'agent = NexusAgent.from_callable(',
+      '# 1-LINE INTEGRATION: Turn any Python function into a secure InterMesh Agent',
+      'agent = InterMeshAgent.from_callable(',
       '    fn=my_existing_llm_function,',
       '    name="analyzer_bot",',
       '    capabilities=["summarize", "extract"]',
@@ -83,7 +83,7 @@ const SNIPPETS: Record<TabKey, SnippetData> = {
       'await agent.connect()'
     ],
     steps: [
-      { lineIndex: 0, log: { time: '0.04s', level: 'INFO', text: 'Nexus SDK adapters initialized' } },
+      { lineIndex: 0, log: { time: '0.04s', level: 'INFO', text: 'InterMesh SDK adapters initialized' } },
       { lineIndex: 3, log: { time: '0.18s', level: 'INFO', text: 'Wrapped my_existing_llm_function into Agent(analyzer_bot)' } },
       { lineIndex: 10, log: { time: '0.42s', level: 'SUCCESS', text: 'Agent analyzer_bot live on ws://localhost:8765' } }
     ]
@@ -91,10 +91,10 @@ const SNIPPETS: Record<TabKey, SnippetData> = {
   langchain: {
     filename: 'langchain_adapter.py',
     lines: [
-      'from nexus_sdk import NexusAgent',
+      'from intermesh import InterMeshAgent',
       '',
       '# 1-LINE LANGCHAIN ADAPTER: Connect your existing chains to the mesh',
-      'agent = NexusAgent.from_langchain(',
+      'agent = InterMeshAgent.from_langchain(',
       '    chain_or_runnable=my_crewai_crew,',
       '    name="research_crew",',
       '    capabilities=["web_research", "synthesis"]',

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Github, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import NexusLogo from '@/components/NexusLogo';
+import InterMeshLogo from '@/components/InterMeshLogo';
 
 export default function AuthPage() {
   const [email, setEmail] = useState('');
@@ -43,10 +43,10 @@ export default function AuthPage() {
           <div className="text-center space-y-2">
             <div className="flex justify-center mb-6">
               <div className="w-12 h-12 rounded-xl bg-[#00D4FF]/10 border border-[#00D4FF]/40 flex items-center justify-center shadow-[0_0_15px_rgba(0,212,255,0.15)]">
-                <NexusLogo className="w-8 h-8" />
+                <InterMeshLogo className="w-8 h-8" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">Connectez-vous à Nexus</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Connectez-vous à InterMesh</h1>
             <p className="text-sm text-slate-400">
               Bienvenue. Saisissez vos identifiants pour accéder au plan de contrôle.
             </p>

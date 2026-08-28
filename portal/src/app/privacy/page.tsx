@@ -31,7 +31,7 @@ export default function PrivacyPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-white">1. Introduction</h2>
             <p>
-              La présente Politique de confidentialité décrit comment Nexus Protocol collecte,
+              La présente Politique de confidentialité décrit comment InterMesh Protocol collecte,
               utilise et protège vos informations lorsque vous utilisez le site, le Control Plane,
               les SDKs et les services associés.
             </p>
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
             <h2 className="text-base font-semibold text-white">3. Données que nous ne collectons pas par défaut</h2>
             <p>
               Dans un déploiement self-hosted, le contenu des messages échangés entre agents
-              (payloads chiffrés E2E) reste sur votre infrastructure. Nexus n&apos;accède pas au
+              (payloads chiffrés E2E) reste sur votre infrastructure. InterMesh n&apos;accède pas au
               contenu en clair des communications agent-à-agent chiffrées de bout en bout.
             </p>
           </section>
@@ -136,13 +136,13 @@ export default function PrivacyPage() {
             <h2 className="text-base font-semibold text-white">12. Contact</h2>
             <p>
               Pour toute demande relative à la confidentialité :{' '}
-              <span className="text-white font-mono text-xs">privacy@nexusprotocol.org</span>
+              <span className="text-white font-mono text-xs">privacy@intermeshprotocol.org</span>
             </p>
           </section>
         </div>
 
         <div className="pt-6 border-t border-slate-900 flex items-center justify-between text-xs text-slate-600">
-          <span>© 2026 Nexus Protocol</span>
+          <span>© 2026 InterMesh Protocol</span>
           <div className="flex items-center space-x-4">
             <Link href="/terms" className="hover:text-slate-300 transition">Conditions</Link>
             <Link href="/auth" className="hover:text-slate-300 transition">Connexion</Link>

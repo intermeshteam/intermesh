@@ -15,7 +15,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import DashboardTopbar from '@/components/DashboardTopbar';
-import NexusLogo from '@/components/NexusLogo';
+import InterMeshLogo from '@/components/InterMeshLogo';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-64 fixed top-0 left-0 bottom-0 bg-[#0C0D10] border-r border-white/10 flex flex-col justify-between p-4 z-30 shrink-0">
         <div className="space-y-6">
           <Link href="/" className="flex items-center space-x-3 px-2 py-1 hover:opacity-80 transition">
-            <NexusLogo className="w-6 h-6 shrink-0" />
+            <InterMeshLogo className="w-6 h-6 shrink-0" />
             <span className="font-extrabold tracking-widest text-white text-sm">N E X U S</span>
           </Link>
 

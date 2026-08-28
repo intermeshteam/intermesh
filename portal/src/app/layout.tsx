@@ -2,7 +2,7 @@ import './globals.css';
 import React from 'react';
 
 export const metadata = {
-  title: 'NEXUS — Control Plane',
+  title: 'INTERMESH — Control Plane',
   description: 'AI Developer Infrastructure Control Plane',
 };
 

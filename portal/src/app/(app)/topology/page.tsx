@@ -42,7 +42,7 @@ const W = 1100;
 const H = 720;
 
 const INFRA_NODES: TopoNode[] = [
-  { id: 'hub', label: 'Nexus Hub', sub: 'ws://localhost:8765', x: 550, y: 120, status: 'healthy', kind: 'hub', latency: 5, rps: 0 },
+  { id: 'hub', label: 'InterMesh Hub', sub: 'ws://localhost:8765', x: 550, y: 120, status: 'healthy', kind: 'hub', latency: 5, rps: 0 },
   { id: 'api', label: 'API Gateway', sub: 'control-plane', x: 250, y: 80, status: 'healthy', kind: 'infra', latency: 12, rps: 120 },
   { id: 'auth', label: 'Auth Service', sub: 'jwt/rbac', x: 400, y: 80, status: 'healthy', kind: 'infra', latency: 8, rps: 90 },
   { id: 'quota', label: 'Quota Enforcer', sub: 'limit-10', x: 700, y: 80, status: 'healthy', kind: 'infra', latency: 6, rps: 40 },
@@ -192,7 +192,7 @@ export default function TopologyPage() {
         ws.send(
           JSON.stringify({
             id: crypto.randomUUID(),
-            version: 'nexus/v1',
+            version: 'intermesh/v1',
             type: 'register',
             sender: `topology_observer_${Math.random().toString(36).slice(2, 7)}`,
             content: { name: 'topology_observer', roles: ['observer', 'admin'] },

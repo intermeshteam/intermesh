@@ -82,7 +82,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'docs',
     label: 'RFC-001 Documentation',
-    description: 'Spécification du protocole Nexus',
+    description: 'Spécification du protocole InterMesh',
     href: '/docs',
     icon: FileText,
     group: 'Resources',
@@ -245,7 +245,7 @@ export default function DashboardTopbar() {
                     <span className="flex items-center space-x-2"><FileText className="w-3.5 h-3.5" /><span>RFC-001 Spec</span></span>
                     <ExternalLink className="w-3 h-3 text-slate-600" />
                   </Link>
-                  <a href="https://github.com/mrlomemba-cmd/nexus" target="_blank" className="flex items-center justify-between px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition">
+                  <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="flex items-center justify-between px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition">
                     <span className="flex items-center space-x-2"><ExternalLink className="w-3.5 h-3.5" /><span>GitHub Repository</span></span>
                   </a>
                 </div>

@@ -26,10 +26,10 @@ import {
 } from 'lucide-react';
 import NetworkBackground from '@/components/NetworkBackground';
 import AnimatedCodeEditor from '@/components/AnimatedCodeEditor';
-import NexusLogo from '@/components/NexusLogo';
+import InterMeshLogo from '@/components/InterMeshLogo';
 
 export default function LandingPage() {
-  const installCommand = "pip install nexus-sdk";
+  const installCommand = "pip install intermesh-sdk";
 
   const handleCopyCmd = () => {
     navigator.clipboard.writeText(installCommand);
@@ -59,7 +59,7 @@ export default function LandingPage() {
             className="flex items-center space-x-3 text-xl font-extrabold tracking-widest hover:opacity-80 transition notranslate font-sans"
             translate="no"
           >
-            <NexusLogo className="w-6 h-6 shrink-0" />
+            <InterMeshLogo className="w-6 h-6 shrink-0" />
             <span>N E X U S</span>
           </Link>
 
@@ -67,7 +67,7 @@ export default function LandingPage() {
             <Link href="/dashboard" className="hover:text-white transition">Control Plane</Link>
             <Link href="/docs" className="hover:text-white transition">Docs (RFC-001)</Link>
             <Link href="/pricing" className="hover:text-white transition">Pricing</Link>
-            <a href="https://github.com/mrlomemba-cmd/nexus" target="_blank" className="hover:text-white transition">GitHub</a>
+            <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="hover:text-white transition">GitHub</a>
           </nav>
 
           <div className="flex items-center space-x-6 text-xs">
@@ -93,7 +93,7 @@ export default function LandingPage() {
             </h1>
 
             <p className="text-sm text-slate-200 max-w-md leading-relaxed">
-              NEXUS is the open protocol for AI infrastructure. Connect internal workers like <strong>Data Intake & Print Fulfillment agents</strong> to automate 24/7 workflows seamlessly.
+              INTERMESH is the open protocol for AI infrastructure. Connect internal workers like <strong>Data Intake & Print Fulfillment agents</strong> to automate 24/7 workflows seamlessly.
             </p>
 
             {/* QUICK INSTALL COMMAND BAR */}
@@ -162,10 +162,10 @@ export default function LandingPage() {
                   Captures incoming invoice documents 24/7 and delegates print fulfillment tasks.
                 </p>
                 <pre className="bg-[#050507] p-4 rounded-xl font-mono text-[11px] text-slate-300 border border-zinc-800/80 overflow-x-auto">
-{`from nexus_sdk import NexusAgent
+{`from intermesh import InterMeshAgent
 
 # 24/7 Data Intake Daemon
-intake_agent = NexusAgent(name="data_intake", org_id="acme")
+intake_agent = InterMeshAgent(name="data_intake", org_id="acme")
 await intake_agent.connect()
 
 # Delegate print task to Print Fulfillment Agent
@@ -192,9 +192,9 @@ print(result) # -> {"status": "PRINTED", "pages": 3}`}
                   Receives print tasks 24/7, generates PDF/A documents, and triggers physical/digital printing.
                 </p>
                 <pre className="bg-[#050507] p-4 rounded-xl font-mono text-[11px] text-slate-300 border border-zinc-800/80 overflow-x-auto">
-{`from nexus_sdk import NexusAgent
+{`from intermesh import InterMeshAgent
 
-print_agent = NexusAgent(name="print_fulfillment", org_id="acme")
+print_agent = InterMeshAgent(name="print_fulfillment", org_id="acme")
 
 @print_agent.on_task
 async def handle_print_task(input_data, task):
@@ -214,7 +214,7 @@ await print_agent.connect()`}
           </div>
         </section>
 
-        {/* WHY NEXUS EXISTS */}
+        {/* WHY INTERMESH EXISTS */}
         <section className="relative z-10 border-t border-zinc-900 bg-[#08080A] py-20 px-6">
           <div className="max-w-6xl mx-auto space-y-12">
             
@@ -254,7 +254,7 @@ await print_agent.connect()`}
                 <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
                   <CheckCircle2 className="w-5 h-5 stroke-[1.5]" />
                 </div>
-                <h3 className="text-base font-bold text-white font-sans">The Nexus Solution</h3>
+                <h3 className="text-base font-bold text-white font-sans">The InterMesh Solution</h3>
                 <p className="text-xs text-slate-400 leading-relaxed font-sans">
                   RFC-001 gives the world a neutral, open-source protocol. Agents self-discover, negotiate JWT authentication, and execute tasks with zero-trust E2E encryption.
                 </p>
@@ -365,14 +365,14 @@ await print_agent.connect()`}
         <footer className="relative z-10 border-t border-zinc-900 bg-[#08080A] py-12 px-6 font-sans">
           <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
             <div className="flex items-center space-x-2 font-semibold">
-              <NexusLogo className="w-4 h-4 shrink-0" />
-              <span>Nexus Protocol © 2026 • Apache 2.0 License</span>
+              <InterMeshLogo className="w-4 h-4 shrink-0" />
+              <span>InterMesh Protocol © 2026 • Apache 2.0 License</span>
             </div>
             <div className="flex items-center space-x-6 mt-4 md:mt-0 font-medium text-xs">
               <Link href="/terms" className="hover:text-slate-300 transition">Terms</Link>
               <Link href="/privacy" className="hover:text-white transition">Privacy</Link>
               <Link href="/docs" className="hover:text-white transition">Docs (RFC-001)</Link>
-              <a href="https://github.com/mrlomemba-cmd/nexus" target="_blank" className="hover:text-white transition">GitHub</a>
+              <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="hover:text-white transition">GitHub</a>
             </div>
           </div>
         </footer>

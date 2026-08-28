@@ -32,7 +32,7 @@ type Toast = {
   message: string;
 };
 
-const STORAGE_KEY = 'nexus_workspace_settings_v1';
+const STORAGE_KEY = 'intermesh_workspace_settings_v1';
 
 const DEFAULT_MEMBERS: Member[] = [
   { id: 'm1', name: 'M. Lomemba', email: 'mrlomemba@gmail.com', role: 'Owner', status: 'Active' },
@@ -44,8 +44,8 @@ export default function SettingsPage() {
   const [orgName, setOrgName] = useState('Acme Corp');
   const [orgSlug, setOrgSlug] = useState('acme_corp_main');
   const [region, setRegion] = useState('us-east-1');
-  const [webhookUrl, setWebhookUrl] = useState('https://api.acme.com/nexus/events');
-  const [webhookSecret, setWebhookSecret] = useState('whsec_nexus_99a8b7c6d5e4f3a2b109876543210fed');
+  const [webhookUrl, setWebhookUrl] = useState('https://api.acme.com/intermesh/events');
+  const [webhookSecret, setWebhookSecret] = useState('whsec_intermesh_99a8b7c6d5e4f3a2b109876543210fed');
   const [webhookEnabled, setWebhookEnabled] = useState(true);
   const [events, setEvents] = useState({
     agent_connected: true,
@@ -157,7 +157,7 @@ export default function SettingsPage() {
     const rand = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    const next = `whsec_nexus_${rand}`;
+    const next = `whsec_intermesh_${rand}`;
     setWebhookSecret(next);
     persist({ webhookSecret: next });
     showToast('success', 'Nouveau secret webhook généré.');
@@ -225,7 +225,7 @@ export default function SettingsPage() {
     const rand = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    const nextSecret = `whsec_nexus_${rand}`;
+    const nextSecret = `whsec_intermesh_${rand}`;
     setWebhookSecret(nextSecret);
     persist({ webhookSecret: nextSecret });
 
@@ -421,7 +421,7 @@ export default function SettingsPage() {
               type="url"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://api.acme.com/nexus/events"
+              placeholder="https://api.acme.com/intermesh/events"
               className="w-full bg-[#08080A] border border-slate-800 focus:border-white/40 rounded-lg px-3.5 py-2.5 text-slate-200 font-mono outline-none transition"
             />
           </div>

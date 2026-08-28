@@ -25,7 +25,7 @@ interface ApiKey {
   lastUsed: string;
 }
 
-const STORAGE_KEY = 'nexus_api_keys_v1';
+const STORAGE_KEY = 'intermesh_api_keys_v1';
 
 const INITIAL_KEYS: ApiKey[] = [
   {
@@ -178,7 +178,7 @@ export default function KeysPage() {
         <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 stroke-[1.5]" />
         <div>
           <span className="font-semibold text-white">Cryptographic Isolation: </span>
-          All API keys use HMAC-SHA256 signatures for authenticating against the Nexus Control Plane. Keep your keys secret.
+          All API keys use HMAC-SHA256 signatures for authenticating against the InterMesh Control Plane. Keep your keys secret.
         </div>
       </div>
 

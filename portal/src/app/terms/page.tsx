@@ -31,7 +31,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-white">1. Acceptation des conditions</h2>
             <p>
-              En accédant à Nexus Protocol, au Control Plane, aux SDKs, à la CLI ou à tout service associé
+              En accédant à InterMesh Protocol, au Control Plane, aux SDKs, à la CLI ou à tout service associé
               (ci-après « le Service »), vous acceptez les présentes Conditions d&apos;utilisation.
               Si vous n&apos;acceptez pas ces conditions, vous ne devez pas utiliser le Service.
             </p>
@@ -40,7 +40,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-white">2. Description du Service</h2>
             <p>
-              Nexus est un protocole open source et une infrastructure de coordination pour agents IA.
+              InterMesh est un protocole open source et une infrastructure de coordination pour agents IA.
               Le Service comprend notamment :
             </p>
             <ul className="list-disc pl-5 space-y-1 text-slate-400">
@@ -83,9 +83,9 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-white">6. Propriété intellectuelle</h2>
             <p>
-              Le code open source de Nexus est distribué sous licence Apache 2.0, sauf mention contraire.
+              Le code open source de InterMesh est distribué sous licence Apache 2.0, sauf mention contraire.
               Les composants propriétaires (Control Plane commercial, fonctionnalités Enterprise, marque)
-              restent la propriété de Nexus Protocol et de ses ayants droit.
+              restent la propriété de InterMesh Protocol et de ses ayants droit.
             </p>
           </section>
 
@@ -113,7 +113,7 @@ export default function TermsPage() {
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-white">9. Limitation de responsabilité</h2>
             <p>
-              Dans les limites autorisées par la loi, Nexus Protocol ne saurait être tenu responsable
+              Dans les limites autorisées par la loi, InterMesh Protocol ne saurait être tenu responsable
               des dommages indirects, pertes de données, pertes de profits ou interruptions d&apos;activité
               résultant de l&apos;utilisation ou de l&apos;impossibilité d&apos;utiliser le Service.
             </p>
@@ -140,13 +140,13 @@ export default function TermsPage() {
             <h2 className="text-base font-semibold text-white">12. Contact</h2>
             <p>
               Pour toute question relative aux présentes conditions :{' '}
-              <span className="text-white font-mono text-xs">legal@nexusprotocol.org</span>
+              <span className="text-white font-mono text-xs">legal@intermeshprotocol.org</span>
             </p>
           </section>
         </div>
 
         <div className="pt-6 border-t border-slate-900 flex items-center justify-between text-xs text-slate-600">
-          <span>© 2026 Nexus Protocol</span>
+          <span>© 2026 InterMesh Protocol</span>
           <div className="flex items-center space-x-4">
             <Link href="/privacy" className="hover:text-slate-300 transition">Confidentialité</Link>
             <Link href="/auth" className="hover:text-slate-300 transition">Connexion</Link>

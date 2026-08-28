@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-const SECRET_SIGNING_KEY = process.env.NEXUS_SECRET_KEY || 'nexus_master_enterprise_secret_key_2026';
+const SECRET_SIGNING_KEY = process.env.INTERMESH_LICENSE_SIGNING_KEY;
 
 export async function POST(request: Request) {
   try {
+    if (!SECRET_SIGNING_KEY) {
+      return NextResponse.json(
+        { success: false, error: 'INTERMESH_LICENSE_SIGNING_KEY is not configured on the server.' },
+        { status: 500 }
+      );
+    }
     const body = await request.json();
     const { org_name, plan = 'free', max_agents = 10 } = body;
 

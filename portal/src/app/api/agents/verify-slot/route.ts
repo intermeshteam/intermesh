@@ -13,7 +13,7 @@ export async function POST(request: Request) {
           allowed: false,
           error: 'AGENT_QUOTA_EXCEEDED',
           code: 403,
-          message: `Free tier limit reached (${current_active_agents}/${max_allowed} active agents). Upgrade to Pro at https://nexusprotocol.org/pricing to unlock up to 50 agents.`
+          message: `Free tier limit reached (${current_active_agents}/${max_allowed} active agents). Upgrade to Pro at https://intermeshprotocol.org/pricing to unlock up to 50 agents.`
         },
         { status: 403 }
       );
