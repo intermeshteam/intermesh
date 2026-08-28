@@ -22,16 +22,16 @@ Le Hub résout sa clé selon la première source disponible :
 
 | Priorité | Source | Usage visé |
 |---|---|---|
-| 1 | Variable d'environnement `NEXUS_HUB_SECRET` | Production, Docker, Kubernetes — la clé ne touche jamais le disque |
-| 2 | Fichier `~/.nexus/hub_secret` (créé en `0600` au premier démarrage) | Développement local, déploiement simple |
+| 1 | Variable d'environnement `INTERMESH_HUB_SECRET` | Production, Docker, Kubernetes — la clé ne touche jamais le disque |
+| 2 | Fichier `~/.intermesh/hub_secret` (créé en `0600` au premier démarrage) | Développement local, déploiement simple |
 | 3 | Clé éphémère, uniquement via `--ephemeral-secret` | Tests et CI |
 
 Le chemin du fichier est surchargeable par `--secret-file`, et son répertoire
-parent par la variable `NEXUS_HOME`.
+parent par la variable `INTERMESH_HOME`.
 
 ### Contraintes
 
-- Une clé fournie via `NEXUS_HUB_SECRET` doit faire **au moins 32 caractères**.
+- Une clé fournie via `INTERMESH_HUB_SECRET` doit faire **au moins 32 caractères**.
   En deçà, le Hub refuse de démarrer plutôt que de signer avec une clé faible.
 - Le fichier de clé est créé via `os.open(..., 0o600)` : il n'existe à aucun
   instant avec des permissions plus larges.
@@ -51,10 +51,10 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 ```bash
 # Production — clé injectée, rien sur disque
-export NEXUS_HUB_SECRET="<64 caractères hexadécimaux>"
+export INTERMESH_HUB_SECRET="<64 caractères hexadécimaux>"
 python3 server/hub.py --port 8765 --org acme
 
-# Développement — clé persistée automatiquement dans ~/.nexus/hub_secret
+# Développement — clé persistée automatiquement dans ~/.intermesh/hub_secret
 python3 server/hub.py --port 8765 --org acme
 
 # Tests — clé jetable, tokens perdus à l'arrêt
@@ -73,7 +73,7 @@ prévue.
 
 ## 4. Persistance de l'état
 
-Le Hub conserve son état dans une base SQLite (`~/.nexus/hub_state.db` par
+Le Hub conserve son état dans une base SQLite (`~/.intermesh/hub_state.db` par
 défaut, créée en `0600`) :
 
 | Donnée | Persistée | Raison |
@@ -84,7 +84,7 @@ défaut, créée en `0600`) :
 | Connexions actives | ❌ | Être « en ligne » est une propriété du processus, pas un fait durable |
 | Peering fédéré | ❌ | Les liens inter-Hubs sont rétablis à la reconnexion |
 
-Chemin surchargeable par `--state-file`, répertoire parent par `NEXUS_HOME`.
+Chemin surchargeable par `--state-file`, répertoire parent par `INTERMESH_HOME`.
 `--ephemeral-state` bascule sur une base en mémoire pour les tests.
 
 ### Le journal d'audit protège désormais son propre fichier
@@ -128,9 +128,9 @@ révéler — même si sa configuration fuit.
 
 | Priorité | Source | Usage visé |
 |---|---|---|
-| 1 | `NEXUS_API_KEYS` (JSON inline) | Kubernetes, CI |
-| 2 | `NEXUS_API_KEYS_FILE` | Chemin explicite |
-| 3 | `~/.nexus/api_keys.json` | Développement local |
+| 1 | `INTERMESH_API_KEYS` (JSON inline) | Kubernetes, CI |
+| 2 | `INTERMESH_API_KEYS_FILE` | Chemin explicite |
+| 3 | `~/.intermesh/api_keys.json` | Développement local |
 | 4 | aucune | Comptes de service **désactivés** |
 
 Sans configuration, aucune clé ne fonctionne. Il n'existe aucune valeur par
@@ -259,7 +259,7 @@ est capturé.
 - **Pas de TLS** sur le transport WebSocket par défaut : le chiffrement E2E
   protège le contenu, mais les métadonnées (qui parle à qui) transitent en
   clair. Placez le Hub derrière une terminaison TLS en production.
-- **Pas de rotation de clé sans coupure** : changer `NEXUS_HUB_SECRET` éjecte
+- **Pas de rotation de clé sans coupure** : changer `INTERMESH_HUB_SECRET` éjecte
   toute la flotte.
 - **Pas de TLS sur la console** : elle transite par le même WebSocket que les
   agents. Derrière une terminaison TLS (`wss://`) en production, sans quoi la

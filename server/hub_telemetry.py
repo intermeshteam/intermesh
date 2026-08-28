@@ -1,5 +1,5 @@
 """
-Nexus Hub v1.7 — Asimov Safety Guardrails + Telemetry + Merkle Audit Log + Remote Kill-Switch.
+InterMesh Hub v1.7 — Asimov Safety Guardrails + Telemetry + Merkle Audit Log + Remote Kill-Switch.
 """
 import argparse
 import asyncio
@@ -12,12 +12,12 @@ import time
 import websockets
 import jwt
 
-from nexus_sdk.message import MessageType, NexusMessage
-from nexus_sdk.identity import AgentIdentity
-from nexus_sdk.task import NexusTask
-from nexus_sdk.audit import ImmutableAuditLog
-from nexus_sdk.ratelimit import RateLimiter
-from nexus_sdk.guardrails import AsimovGuardrailEngine, PolicyViolationError
+from intermesh.message import MessageType, InterMeshMessage
+from intermesh.identity import AgentIdentity
+from intermesh.task import InterMeshTask
+from intermesh.audit import ImmutableAuditLog
+from intermesh.ratelimit import RateLimiter
+from intermesh.guardrails import AsimovGuardrailEngine, PolicyViolationError
 
 HUB_SECRET = secrets.token_hex(32)
 TOKEN_EXPIRY_SECONDS = 3600
@@ -29,7 +29,7 @@ is_quota_exhausted = False
 
 agents = {}                 # qualified_name -> websocket
 identity_registry = {}      # qualified_name -> identity dict
-task_registry = {}          # task_id -> NexusTask
+task_registry = {}          # task_id -> InterMeshTask
 peered_hubs = {}            # remote_org -> websocket
 observers = set()           # dashboard/topology/security_observer websockets
 agent_meta = {}             # qualified_name -> meta dict
@@ -128,7 +128,7 @@ async def deliver_or_relay(msg, my_org):
     org = _org_of_name(target, my_org)
     peer_ws = peered_hubs.get(org)
     if peer_ws is not None:
-        relay = NexusMessage(type=MessageType.FEDERATION_RELAY, sender=my_org, to=org, content=msg.to_dict())
+        relay = InterMeshMessage(type=MessageType.FEDERATION_RELAY, sender=my_org, to=org, content=msg.to_dict())
         try:
             await peer_ws.send(relay.to_json())
         except Exception:
@@ -156,7 +156,7 @@ def snapshot_agents():
     return out
 
 
-async def process_relayed(ws, my_org: str, msg: NexusMessage):
+async def process_relayed(ws, my_org: str, msg: InterMeshMessage):
     """
     Traite un message reçu d'un Hub pair (déjà déballé d'un
     FEDERATION_RELAY) exactement comme s'il venait d'un agent local :
@@ -168,14 +168,14 @@ async def process_relayed(ws, my_org: str, msg: NexusMessage):
     if msg.type == MessageType.WHO_IS:
         target_name = msg.content
         if target_name in identity_registry:
-            await ws.send(NexusMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender,
+            await ws.send(InterMeshMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender,
                                         reply_to=msg.id, content=identity_registry[target_name],
                                         token=msg.token).to_json())
 
     elif msg.type == MessageType.DISCOVER:
         query = msg.content or {}
         matched = discover_agents(query)
-        await ws.send(NexusMessage(type=MessageType.DISCOVER_RESULT, sender="hub", to=msg.sender,
+        await ws.send(InterMeshMessage(type=MessageType.DISCOVER_RESULT, sender="hub", to=msg.sender,
                                     reply_to=msg.id,
                                     content={"query": query, "count": len(matched), "agents": matched},
                                     token=msg.token).to_json())
@@ -186,11 +186,11 @@ async def process_relayed(ws, my_org: str, msg: NexusMessage):
         assignee = task_dict.get("assignee", "unknown")
         title = task_dict.get("title", "")
 
-        task_registry[task_id] = NexusTask.from_dict(task_dict)
+        task_registry[task_id] = InterMeshTask.from_dict(task_dict)
         entry = audit_log.log("TASK_SUBMITTED", msg.sender, assignee, {"task_id": task_id, "title": title})
         await broadcast("audit_entry", {"entry": entry.to_dict()})
 
-        assign_msg = NexusMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=assignee,
+        assign_msg = InterMeshMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=assignee,
                                    reply_to=msg.id, content=task_dict, token=msg.token)
         await deliver_or_relay(assign_msg, my_org)
 
@@ -204,7 +204,7 @@ async def process_relayed(ws, my_org: str, msg: NexusMessage):
             entry = audit_log.log("TASK_COMPLETED", msg.sender, orch, {"task_id": tid})
             await broadcast("audit_entry", {"entry": entry.to_dict()})
 
-        update_msg = NexusMessage(type=MessageType.TASK_UPDATE, sender=msg.sender, to=orch,
+        update_msg = InterMeshMessage(type=MessageType.TASK_UPDATE, sender=msg.sender, to=orch,
                                    content=td, token=msg.token)
         await deliver_or_relay(update_msg, my_org)
 
@@ -220,7 +220,7 @@ async def handle(ws, my_org: str):
     try:
         async for raw in ws:
             try:
-                msg = NexusMessage.from_json(raw)
+                msg = InterMeshMessage.from_json(raw)
             except Exception:
                 continue
 
@@ -248,13 +248,13 @@ async def handle(ws, my_org: str):
             if msg.type == MessageType.PEER_CONNECT:
                 remote_org = (msg.content or {}).get("org") or msg.sender
                 peered_hubs[remote_org] = ws
-                await ws.send(NexusMessage(type=MessageType.PEER_CONNECTED, sender=my_org, content={"org": my_org}).to_json())
+                await ws.send(InterMeshMessage(type=MessageType.PEER_CONNECTED, sender=my_org, content={"org": my_org}).to_json())
                 print(f"\033[36m[peering]\033[0m Pair accepté : {remote_org}")
                 continue
 
             if msg.type == MessageType.FEDERATION_RELAY:
                 try:
-                    inner = NexusMessage.from_dict(msg.content)
+                    inner = InterMeshMessage.from_dict(msg.content)
                 except Exception:
                     continue
                 await process_relayed(ws, my_org, inner)
@@ -291,14 +291,14 @@ async def handle(ws, my_org: str):
                             "server_time": time.time(),
                         }
                     }))
-                    await ws.send(NexusMessage(type=MessageType.REGISTERED, sender="hub", to=raw_name, content={"status": "ready", "token": "observer"}).to_json())
+                    await ws.send(InterMeshMessage(type=MessageType.REGISTERED, sender="hub", to=raw_name, content={"status": "ready", "token": "observer"}).to_json())
                     print(f"[observer] {raw_name} connected")
                     continue
 
                 # QUOTA (15 agents gratuits)
                 if len(agents) >= MAX_FREE_AGENTS:
                     err_msg = f"AGENT_QUOTA_EXCEEDED: Free tier limit reached ({len(agents)}/{MAX_FREE_AGENTS} agents)."
-                    await ws.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content=err_msg).to_json())
+                    await ws.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content=err_msg).to_json())
                     continue
 
                 identity = AgentIdentity.from_dict({
@@ -313,7 +313,7 @@ async def handle(ws, my_org: str):
 
                 # Vérification disjoncteur Asimov
                 if asimov_engine.circuit_breaker.is_tripped(qname):
-                    await ws.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=qname, content="ASIMOV_GUARDRAIL: Agent is isolated by circuit breaker.").to_json())
+                    await ws.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", to=qname, content="ASIMOV_GUARDRAIL: Agent is isolated by circuit breaker.").to_json())
                     await ws.close(1008, "Asimov Isolated")
                     continue
 
@@ -323,7 +323,7 @@ async def handle(ws, my_org: str):
                 token = make_token(qname, identity.agent_id, identity.roles)
 
                 entry = audit_log.log("AGENT_REGISTERED", qname, "hub", {"roles": identity.roles, "caps": identity.capabilities})
-                await ws.send(NexusMessage(type=MessageType.REGISTERED, sender="hub", to=qname, content={
+                await ws.send(InterMeshMessage(type=MessageType.REGISTERED, sender="hub", to=qname, content={
                     "status": "ready", "token": token, "qualified_name": qname,
                     "roles": identity.roles, "agent_id": identity.agent_id, "online_agents": list(agents.keys())
                 }).to_json())
@@ -336,7 +336,7 @@ async def handle(ws, my_org: str):
             elif msg.type == MessageType.DISCOVER:
                 query = msg.content or {}
                 matched = discover_agents(query)
-                await ws.send(NexusMessage(
+                await ws.send(InterMeshMessage(
                     type=MessageType.DISCOVER_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
                     content={"query": query, "count": len(matched), "agents": matched}, token=msg.token
                 ).to_json())
@@ -345,12 +345,12 @@ async def handle(ws, my_org: str):
             elif msg.type == MessageType.WHO_IS:
                 target_name = msg.content
                 if target_name in identity_registry:
-                    await ws.send(NexusMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender, reply_to=msg.id, content=identity_registry[target_name], token=msg.token).to_json())
+                    await ws.send(InterMeshMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender, reply_to=msg.id, content=identity_registry[target_name], token=msg.token).to_json())
                 else:
                     org = _org_of_name(target_name, my_org)
                     peer_ws = peered_hubs.get(org)
                     if peer_ws is not None:
-                        relay = NexusMessage(type=MessageType.FEDERATION_RELAY, sender=my_org, to=org, content=msg.to_dict())
+                        relay = InterMeshMessage(type=MessageType.FEDERATION_RELAY, sender=my_org, to=org, content=msg.to_dict())
                         try:
                             await peer_ws.send(relay.to_json())
                         except Exception:
@@ -380,15 +380,15 @@ async def handle(ws, my_org: str):
                     print(f"\033[31m[🛡️ ASIMOV GUARDRAIL VIOLATION]\033[0m {pve}")
                     entry = audit_log.log("ASIMOV_GUARDRAIL_VIOLATION", msg.sender, assignee, {"rule": pve.rule_name, "reason": str(pve), "task_id": task_id})
                     await broadcast("audit_entry", {"entry": entry.to_dict()})
-                    await ws.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id, content=str(pve), token=msg.token).to_json())
+                    await ws.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id, content=str(pve), token=msg.token).to_json())
                     continue
 
-                task_registry[task_id] = NexusTask.from_dict(task_dict)
+                task_registry[task_id] = InterMeshTask.from_dict(task_dict)
                 entry = audit_log.log("TASK_SUBMITTED", msg.sender, assignee, {"task_id": task_id, "title": title})
                 await broadcast("task_submitted", {"task_id": task_id, "title": title, "orchestrator": msg.sender, "assignee": assignee})
                 await broadcast("audit_entry", {"entry": entry.to_dict()})
 
-                assign_msg = NexusMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=assignee, reply_to=msg.id, content=task_dict, token=msg.token)
+                assign_msg = InterMeshMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=assignee, reply_to=msg.id, content=task_dict, token=msg.token)
                 await deliver_or_relay(assign_msg, my_org)
 
             # TASK_UPDATE
@@ -403,7 +403,7 @@ async def handle(ws, my_org: str):
                     await broadcast("task_completed", {"task_id": tid})
                     await broadcast("audit_entry", {"entry": entry.to_dict()})
 
-                update_msg = NexusMessage(type=MessageType.TASK_UPDATE, sender=msg.sender, to=orch, content=td, token=msg.token)
+                update_msg = InterMeshMessage(type=MessageType.TASK_UPDATE, sender=msg.sender, to=orch, content=td, token=msg.token)
                 await deliver_or_relay(update_msg, my_org)
 
             # ROUTING MESSAGES
@@ -435,9 +435,9 @@ async def connect_peer(remote_org: str, url: str, my_org: str):
     while True:
         try:
             async with websockets.connect(url) as ws:
-                await ws.send(NexusMessage(type=MessageType.PEER_CONNECT, sender=my_org,
+                await ws.send(InterMeshMessage(type=MessageType.PEER_CONNECT, sender=my_org,
                                             content={"org": my_org}).to_json())
-                reply = NexusMessage.from_json(await ws.recv())
+                reply = InterMeshMessage.from_json(await ws.recv())
                 if reply.type == MessageType.PEER_CONNECTED:
                     peered_hubs[remote_org] = ws
                     print(f"\033[36m[peering]\033[0m Connecté au pair '{remote_org}' ({url})")
@@ -451,7 +451,7 @@ async def connect_peer(remote_org: str, url: str, my_org: str):
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Nexus Hub Enterprise with Asimov Guardrails")
+    parser = argparse.ArgumentParser(description="InterMesh Hub Enterprise with Asimov Guardrails")
     parser.add_argument("--port", type=int, default=8765, help="Port d'écoute")
     parser.add_argument("--org", type=str, default="default", help="Nom organisation")
     parser.add_argument("--peer", action="append", default=[],
@@ -459,7 +459,7 @@ async def main():
     args, _ = parser.parse_known_args()
 
     print("=" * 60)
-    print("  NEXUS HUB v1.7 — Asimov Safety Guardrails Active")
+    print("  INTERMESH HUB v1.7 — Asimov Safety Guardrails Active")
     print(f"  Max Cascade Depth : 4 | Circuit Breaker Threshold : 3")
     print("=" * 60)
 

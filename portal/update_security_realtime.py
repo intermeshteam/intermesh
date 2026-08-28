@@ -46,7 +46,7 @@ export default function SecurityPage() {
         setHubConnected(true);
         ws.send(JSON.stringify({
           id: crypto.randomUUID(),
-          version: 'nexus/v1',
+          version: 'intermesh/v1',
           type: 'register',
           sender: `security_observer_${Math.random().toString(36).slice(2, 7)}`,
           content: { name: 'security_observer', roles: ['observer', 'admin'] }

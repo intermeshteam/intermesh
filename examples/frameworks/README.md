@@ -1,10 +1,10 @@
 # Exemples avec de vrais frameworks
 
-Contrairement à `examples/agent_a.py`/`agent_b.py`/`agent_c.py` (des agents Nexus
+Contrairement à `examples/agent_a.py`/`agent_b.py`/`agent_c.py` (des agents InterMesh
 faits main qui simulent un LLM), les scripts de ce dossier enveloppent de vrais
 objets de framework — un `Runnable` LangChain, un moteur de requête LlamaIndex,
 un `Crew` CrewAI, un `ConversableAgent` AutoGen — via les adaptateurs de
-`nexus_sdk.adapters`, sans une ligne de code Nexus dans leur définition.
+`intermesh.adapters`, sans une ligne de code Nexus dans leur définition.
 
 | Script | Framework | Fonctionne sans clé API |
 |---|---|---|
@@ -31,7 +31,7 @@ toute tâche déléguée échouera à l'appel du LLM.
 ## Installer les dépendances
 
 Chaque script n'importe son framework qu'à l'intérieur de sa fonction
-`build_...()` — voir `nexus_sdk/adapters/__init__.py` pour la raison. N'installez
+`build_...()` — voir `intermesh/adapters/__init__.py` pour la raison. N'installez
 que ce dont vous avez besoin :
 
 ```bash
@@ -62,7 +62,7 @@ python examples/frameworks/langchain_agent.py
 python examples/frameworks/orchestrator_demo.py
 ```
 
-Le dernier terminal affiche le résultat d'un `NexusPipeline` à deux étapes : la
+Le dernier terminal affiche le résultat d'un `InterMeshPipeline` à deux étapes : la
 première confiée au vrai `Runnable` LangChain (traduction), la seconde à l'agent
 natif `agent_b` (calcul) — le tout chiffré de bout en bout entre les trois
 processus, exactement comme documenté dans

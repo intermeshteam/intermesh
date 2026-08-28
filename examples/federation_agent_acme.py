@@ -1,10 +1,10 @@
 import asyncio
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 
 async def main():
     # Cet agent est connecté au Hub Privé d'Acme Corp (port 8765)
-    orchestrator = NexusAgent(
+    orchestrator = InterMeshAgent(
         name="lead_orchestrator",
         org_id="acme",
         capabilities=["cross_org_orchestration"],

@@ -5,7 +5,7 @@ import sys
 import websockets
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from protocol.message import MessageType, NexusMessage
+from protocol.message import MessageType, InterMeshMessage
 from protocol.identity import AgentIdentity
 
 
@@ -20,19 +20,19 @@ async def main():
         name="agent_b",  # Usurpation d'identité !
         capabilities=["hacking"]
     )
-    fake_reg = NexusMessage(
+    fake_reg = InterMeshMessage(
         type=MessageType.REGISTER,
         sender="agent_b",
         content=fake_identity.to_dict()
     )
     await ws.send(fake_reg.to_json())
-    res = NexusMessage.from_json(await ws.recv())
+    res = InterMeshMessage.from_json(await ws.recv())
     print(f"   Résultat : {res.type.value} → {res.content}")
 
     # Si l'enregistrement a réussi (nouveau token légitime pour "agent_b"),
     # essayons d'envoyer un message SANS token
     print("\n--- TENTATIVE 2 : Message sans token ---")
-    no_token_msg = NexusMessage(
+    no_token_msg = InterMeshMessage(
         type=MessageType.MESSAGE,
         sender="agent_b",
         to="agent_a",
@@ -40,12 +40,12 @@ async def main():
         # Pas de token !
     )
     await ws.send(no_token_msg.to_json())
-    res2 = NexusMessage.from_json(await ws.recv())
+    res2 = InterMeshMessage.from_json(await ws.recv())
     print(f"   Résultat : {res2.type.value} → {res2.content}")
 
     # --- TENTATIVE 3 : Message avec un token falsifié ---
     print("\n--- TENTATIVE 3 : Token falsifié ---")
-    forged_msg = NexusMessage(
+    forged_msg = InterMeshMessage(
         type=MessageType.MESSAGE,
         sender="agent_b",
         to="agent_a",
@@ -53,7 +53,7 @@ async def main():
         token="eyJhbGciOiJIUzI1NiJ9.faux_payload.fausse_signature"
     )
     await ws.send(forged_msg.to_json())
-    res3 = NexusMessage.from_json(await ws.recv())
+    res3 = InterMeshMessage.from_json(await ws.recv())
     print(f"   Résultat : {res3.type.value} → {res3.content}")
 
     print("\n😈 [agent_malveillant] Toutes les tentatives ont échoué. Le Hub est sécurisé.")

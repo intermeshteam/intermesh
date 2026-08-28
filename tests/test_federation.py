@@ -3,7 +3,7 @@ import os
 import sys
 import subprocess
 
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 
 async def compute_globex_handler(input_data, task):
@@ -40,7 +40,7 @@ async def main():
 
     try:
         # 3. Agent Globex sur Hub 8766
-        agent_globex = NexusAgent(
+        agent_globex = InterMeshAgent(
             name="financial_engine",
             org_id="globex",
             capabilities=["financial_compute"],
@@ -52,7 +52,7 @@ async def main():
         print("✓ Agent Globex connecté sur son Hub Privé (ws://localhost:8766)")
 
         # 4. Agent Acme sur Hub 8765
-        agent_acme = NexusAgent(
+        agent_acme = InterMeshAgent(
             name="lead_orchestrator",
             org_id="acme",
             capabilities=["orchestration"],

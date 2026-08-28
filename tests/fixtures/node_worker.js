@@ -1,9 +1,9 @@
-import { NexusAgent } from '../../sdk-js/src/index.js';
+import { InterMeshAgent } from '../../sdk-js/src/index.js';
 
-const hubPort = process.env.NEXUS_HUB_PORT || '8850';
+const hubPort = process.env.INTERMESH_HUB_PORT || '8850';
 const hubUrl = `ws://localhost:${hubPort}`;
 
-const agent = new NexusAgent({
+const agent = new InterMeshAgent({
   name: 'node_processor',
   orgId: 'default',
   capabilities: ['text_processing', 'international_format'],

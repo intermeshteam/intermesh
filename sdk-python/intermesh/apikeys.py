@@ -12,9 +12,9 @@ correspond à une empreinte connue.
 
 Sources, par ordre de priorité :
 
-  1. NEXUS_API_KEYS       — JSON inline (Kubernetes, CI)
-  2. NEXUS_API_KEYS_FILE  — chemin d'un fichier JSON
-  3. ~/.nexus/api_keys.json
+  1. INTERMESH_API_KEYS       — JSON inline (Kubernetes, CI)
+  2. INTERMESH_API_KEYS_FILE  — chemin d'un fichier JSON
+  3. ~/.intermesh/api_keys.json
   4. aucune — les comptes de service sont simplement désactivés
 """
 
@@ -28,8 +28,8 @@ import stat
 import time
 from pathlib import Path
 
-ENV_INLINE = "NEXUS_API_KEYS"
-ENV_FILE = "NEXUS_API_KEYS_FILE"
+ENV_INLINE = "INTERMESH_API_KEYS"
+ENV_FILE = "INTERMESH_API_KEYS_FILE"
 
 # Clés de démonstration, activées uniquement sur demande explicite
 # (--dev-api-keys). Elles sont publiques par construction : ne jamais
@@ -49,8 +49,8 @@ DEV_API_KEYS = {
 
 
 def default_keys_path() -> Path:
-    base = os.environ.get("NEXUS_HOME")
-    return (Path(base) if base else Path.home() / ".nexus") / "api_keys.json"
+    base = os.environ.get("INTERMESH_HOME")
+    return (Path(base) if base else Path.home() / ".intermesh") / "api_keys.json"
 
 
 def hash_key(raw_key: str) -> str:
@@ -133,7 +133,7 @@ class ApiKeyStore:
         if not self.path:
             raise PermissionError(
                 "Les clés proviennent de l'environnement et sont en lecture seule. "
-                f"Utilisez un fichier ({ENV_FILE} ou ~/.nexus/api_keys.json) "
+                f"Utilisez un fichier ({ENV_FILE} ou ~/.intermesh/api_keys.json) "
                 "pour autoriser les mutations."
             )
         # Le fichier stocke déjà des empreintes : la valeur en clair n'a

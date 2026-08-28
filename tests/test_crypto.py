@@ -1,6 +1,6 @@
 import json
 import pytest
-from nexus_sdk.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
+from intermesh.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
 
 
 def test_keypair_generation():

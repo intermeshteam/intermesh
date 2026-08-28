@@ -2,7 +2,7 @@ import time
 from typing import Dict, Any
 
 
-class NexusMetricsCollector:
+class InterMeshMetricsCollector:
     """
     Collecteur de metriques standardise compatible Prometheus / OpenMetrics.
     """
@@ -10,8 +10,8 @@ class NexusMetricsCollector:
     def __init__(self):
         self.start_time = time.time()
         self.counters: Dict[str, int] = {
-            "nexus_messages_routed_total": 0,
-            "nexus_tasks_submitted_total": 0,
+            "intermesh_messages_routed_total": 0,
+            "intermesh_tasks_submitted_total": 0,
             "nexus_tasks_completed_total": 0,
             "nexus_tasks_failed_total": 0,
             "nexus_auth_failures_total": 0,
@@ -28,9 +28,9 @@ class NexusMetricsCollector:
         Genere une sortie textuelle conforme a la specification OpenMetrics.
         """
         lines = []
-        lines.append("# HELP nexus_uptime_seconds Duree de fonctionnement du Hub en secondes.")
-        lines.append("# TYPE nexus_uptime_seconds gauge")
-        lines.append(f"nexus_uptime_seconds {time.time() - self.start_time:.2f}")
+        lines.append("# HELP intermesh_uptime_seconds Duree de fonctionnement du Hub en secondes.")
+        lines.append("# TYPE intermesh_uptime_seconds gauge")
+        lines.append(f"intermesh_uptime_seconds {time.time() - self.start_time:.2f}")
 
         # Ingestion des jauges dynamiques fournies par le Hub
         for gauge_name, gauge_val in live_gauges.items():
@@ -46,4 +46,4 @@ class NexusMetricsCollector:
 
         return "\n".join(lines) + "\n"
 
-metrics = NexusMetricsCollector()
+metrics = InterMeshMetricsCollector()

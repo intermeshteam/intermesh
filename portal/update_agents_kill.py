@@ -47,7 +47,7 @@ export default function AgentsDirectoryPage() {
         setHubConnected(true);
         ws.send(JSON.stringify({
           id: crypto.randomUUID(),
-          version: 'nexus/v1',
+          version: 'intermesh/v1',
           type: 'register',
           sender: `agents_dir_observer_${Math.random().toString(36).slice(2, 7)}`,
           content: { name: 'agents_dir_observer', roles: ['observer', 'admin'] }
@@ -141,7 +141,7 @@ export default function AgentsDirectoryPage() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         id: crypto.randomUUID(),
-        version: 'nexus/v1',
+        version: 'intermesh/v1',
         type: 'disconnect_agent',
         sender: 'agents_dir_observer',
         to: agentName,

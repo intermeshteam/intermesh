@@ -54,11 +54,11 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from nexus_sdk.crypto import decrypt_blob, encrypt_blob
-from nexus_sdk.identity import AgentIdentity
-from nexus_sdk.task import NexusTask
+from intermesh.crypto import decrypt_blob, encrypt_blob
+from intermesh.identity import AgentIdentity
+from intermesh.task import InterMeshTask
 
-FORMAT = "nexus-snapshot/1"
+FORMAT = "intermesh-snapshot/1"
 SUFFIX = ".nxsnap"
 
 # Un nom d'instantané devient un nom de fichier : tout ce qui pourrait
@@ -71,9 +71,9 @@ class SnapshotError(Exception):
 
 
 def default_snapshot_dir() -> Path:
-    """Dossier des instantanés, aligné sur NEXUS_HOME comme le reste du SDK."""
-    base = os.environ.get("NEXUS_HOME")
-    return (Path(base) if base else Path.home() / ".nexus") / "snapshots"
+    """Dossier des instantanés, aligné sur INTERMESH_HOME comme le reste du SDK."""
+    base = os.environ.get("INTERMESH_HOME")
+    return (Path(base) if base else Path.home() / ".intermesh") / "snapshots"
 
 
 def _validate_name(name: str) -> str:
@@ -148,7 +148,7 @@ def apply_state(
         for name, raw in (state.get("identities") or {}).items()
     }
     tasks = {
-        tid: NexusTask.from_dict(raw)
+        tid: InterMeshTask.from_dict(raw)
         for tid, raw in (state.get("tasks") or {}).items()
     }
 

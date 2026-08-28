@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 
 class AuditEntry:
     """
-    Une entrée immuable dans le journal d'audit Nexus.
+    Une entrée immuable dans le journal d'audit InterMesh.
     Chaque entrée est scellée par son empreinte SHA-256 incluant le hash de l'entrée précédente.
     """
 
@@ -104,9 +104,9 @@ class ImmutableAuditLog:
         genesis = AuditEntry(
             index=0,
             event_type="GENESIS",
-            sender="nexus_system",
+            sender="intermesh_system",
             target=None,
-            metadata={"system": "Nexus Protocol Immutable Audit Log Initialized"},
+            metadata={"system": "InterMesh Protocol Immutable Audit Log Initialized"},
             prev_hash="0" * 64,
             timestamp=time.time()
         )

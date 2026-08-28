@@ -1,6 +1,6 @@
 # Security Policy
 
-Cryptographic confidentiality is core to the mission of Nexus Protocol.
+Cryptographic confidentiality is core to the mission of InterMesh Protocol.
 
 ## Supported versions
 

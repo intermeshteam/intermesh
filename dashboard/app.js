@@ -1,7 +1,7 @@
 /**
- * Nexus — Mission Control.
+ * InterMesh — Mission Control.
  *
- * Parle le protocole nexus/v1 directement en WebSocket : la console est un
+ * Parle le protocole intermesh/v1 directement en WebSocket : la console est un
  * agent comme un autre, simplement porteur d'une clé d'API admin.
  *
  * La clé n'est jamais écrite dans localStorage ni sessionStorage. Elle vit
@@ -94,7 +94,7 @@ function connect(url, key) {
     }, 8000);
 
     ws.onopen = () => ws.send(JSON.stringify({
-      id: uuid(), version: 'nexus/v1', type: 'register', sender: 'admin_console',
+      id: uuid(), version: 'intermesh/v1', type: 'register', sender: 'admin_console',
       content: {
         name: 'admin_console', api_key: key,
         roles: ['admin', 'observer'], capabilities: ['administration'],
@@ -141,7 +141,7 @@ function admin(command, params = {}) {
       if (S.pending.has(id)) { S.pending.delete(id); reject(new Error('Délai dépassé.')); }
     }, 12000);
     S.ws.send(JSON.stringify({
-      id, version: 'nexus/v1', type: 'admin_request',
+      id, version: 'intermesh/v1', type: 'admin_request',
       sender: S.name, content: { command, params }, token: S.token,
     }));
   });

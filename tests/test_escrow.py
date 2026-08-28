@@ -1,4 +1,4 @@
-"""Tests du séquestre inter-agents Nexus Escrow (protocole — pas de vrai paiement)."""
+"""Tests du séquestre inter-agents InterMesh Escrow (protocole — pas de vrai paiement)."""
 
 import asyncio
 import json
@@ -10,8 +10,8 @@ import time
 
 import pytest
 
-from nexus_sdk import NexusAgent
-from nexus_sdk.escrow import EscrowError, EscrowManager, InsufficientFundsError, SimulatedLedger
+from intermesh import InterMeshAgent
+from intermesh.escrow import EscrowError, EscrowManager, InsufficientFundsError, SimulatedLedger
 
 PORT = 8880
 
@@ -109,7 +109,7 @@ def hub():
     os.chmod(os.path.join(work, "api_keys.json"), 0o600)
 
     os.system(f"fuser -k {PORT}/tcp 2>/dev/null")
-    env = {**os.environ, "NEXUS_API_KEYS_FILE": os.path.join(work, "api_keys.json")}
+    env = {**os.environ, "INTERMESH_API_KEYS_FILE": os.path.join(work, "api_keys.json")}
     proc = subprocess.Popen(
         [sys.executable, "-u", "server/hub.py", "--port", str(PORT), "--org", "acme",
          "--ephemeral-state", "--ephemeral-secret"],
@@ -125,7 +125,7 @@ def hub():
 
 
 async def _connect(name, org_id="acme", api_key=None, roles=None, encrypt=False):
-    agent = NexusAgent(name=name, org_id=org_id, hub_url=f"ws://localhost:{PORT}",
+    agent = InterMeshAgent(name=name, org_id=org_id, hub_url=f"ws://localhost:{PORT}",
                        api_key=api_key, roles=roles, encrypt=encrypt)
     await agent.connect()
     return agent

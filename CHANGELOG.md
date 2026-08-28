@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Nexus Protocol are documented here.
+All notable changes to InterMesh Protocol are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
@@ -22,7 +22,7 @@ Python SDK only. The JavaScript SDK is unchanged and stays at `0.1.1`.
   argument — `ps` and shell history would otherwise expose it to every user on
   the machine.
 - State export/import across the SDK: `ApiKeyStore.export_hashed` /
-  `import_hashed`, `NexusStore.replace_identities` / `replace_tasks`,
+  `import_hashed`, `InterMeshStore.replace_identities` / `replace_tasks`,
   `EscrowManager.export_state` / `import_state`,
   `AsimovGuardrailEngine.export_policies` / `import_policies`.
 - Health probes (`/healthz`, `/readyz`, `/metrics`) served on the hub's
@@ -41,7 +41,7 @@ Python SDK only. The JavaScript SDK is unchanged and stays at `0.1.1`.
 ### Fixed
 
 - Documentation aligned with the real adapter API. The `examples/frameworks/`
-  files imported `nexus_sdk.adapters.crewai` and siblings — modules removed when
+  files imported `intermesh.adapters.crewai` and siblings — modules removed when
   the adapters package was flattened — and raised `ModuleNotFoundError` on the
   first line. See the notes below for the blocking-call caveat that came with
   the rewrite.
@@ -64,7 +64,7 @@ Python SDK only. The JavaScript SDK is unchanged and stays at `0.1.1`.
 - **API keys can be created and revoked at runtime**, persisted as SHA-256
   digests only. The plaintext value exists once, in the response, and is
   never written to disk or to the audit log.
-- `NexusAgent.admin()` for scripting administration from Python.
+- `InterMeshAgent.admin()` for scripting administration from Python.
 
 ### Security
 
@@ -96,20 +96,20 @@ Python SDK only. The JavaScript SDK is unchanged and stays at `0.1.1`.
 
 ## [0.1.1] — 2026-08-25
 
-Hardening release. No protocol changes; the `nexus/v1` wire format is
+Hardening release. No protocol changes; the `intermesh/v1` wire format is
 unchanged and 0.1.0 agents interoperate with a 0.1.1 hub.
 
 All changes below are in the Python SDK and the hub. The JavaScript SDK
 carries no code changes; it is released as `0.1.1` so that both SDKs
-report the same version — a user seeing `nexus-mesh` at 0.1.1 on PyPI and
+report the same version — a user seeing `intermesh` at 0.1.1 on PyPI and
 0.1.0 on npm cannot tell whether the two are meant to work together.
 
 ### Security
 
 - **API keys are no longer hardcoded in the hub.** Two service-account keys
   were written in plain text in `server/hub.py` and therefore published with
-  the repository. Keys now load from `NEXUS_API_KEYS`, `NEXUS_API_KEYS_FILE`,
-  or `~/.nexus/api_keys.json`, and the hub retains only their SHA-256 digest —
+  the repository. Keys now load from `INTERMESH_API_KEYS`, `INTERMESH_API_KEYS_FILE`,
+  or `~/.intermesh/api_keys.json`, and the hub retains only their SHA-256 digest —
   it can verify a key, never reveal one. With no configuration, service
   accounts are disabled; there is no guessable default.
   - Verification uses `secrets.compare_digest`; comparing digests with `==`
@@ -127,7 +127,7 @@ report the same version — a user seeing `nexus-mesh` at 0.1.1 on PyPI and
 - **The JWT signing key survives restarts.** The hub called
   `secrets.token_hex(32)` at import time, so every restart invalidated every
   token already issued and ejected the entire agent fleet. The key now
-  resolves from `NEXUS_HUB_SECRET`, else a persistent `~/.nexus/hub_secret`.
+  resolves from `INTERMESH_HUB_SECRET`, else a persistent `~/.intermesh/hub_secret`.
   Keys shorter than 32 characters are refused at startup. Two hubs starting
   concurrently on the same file converge on one key instead of signing
   differently and rejecting each other's agents.
@@ -135,7 +135,7 @@ report the same version — a user seeing `nexus-mesh` at 0.1.1 on PyPI and
 ### Added
 
 - **State persistence.** Identities, tasks, and the audit log are stored in
-  SQLite at `~/.nexus/hub_state.db`. Live connections are deliberately not
+  SQLite at `~/.intermesh/hub_state.db`. Live connections are deliberately not
   persisted — being "online" is a property of the running process.
 - **The Merkle audit chain now protects its own file.** The chain is reloaded
   and verified at startup; editing an entry directly in the database is
@@ -148,7 +148,7 @@ report the same version — a user seeing `nexus-mesh` at 0.1.1 on PyPI and
   idempotent**. Each resumption is audited as `TASK_RESUMED`.
 - New flags on both `server/hub.py` and `nexus hub`: `--secret-file`,
   `--ephemeral-secret`, `--state-file`, `--ephemeral-state`, `--dev-api-keys`.
-- `NEXUS_HOME` relocates the key, state database, and API key file together.
+- `INTERMESH_HOME` relocates the key, state database, and API key file together.
 - The startup banner reports whether the signing key and state are persistent
   or ephemeral, and what was restored.
 - `docker-compose` mounts a `nexus-hub-data` volume so a
@@ -164,11 +164,11 @@ report the same version — a user seeing `nexus-mesh` at 0.1.1 on PyPI and
 
 ## [0.1.0] — 2026-08-25
 
-First public release, on PyPI and npm as `nexus-mesh`.
+First public release, on PyPI and npm as `intermesh`.
 
 ### Added
 
-- RFC-001 core protocol (`nexus/v1` envelope)
+- RFC-001 core protocol (`intermesh/v1` envelope)
 - End-to-end encryption: RSA-2048-OAEP + AES-256-GCM
 - Verifiable agent identity with SHA-256 fingerprints
 - JWT authentication and role-based access control

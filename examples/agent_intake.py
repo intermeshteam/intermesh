@@ -1,14 +1,14 @@
 import asyncio
 import os
 import time
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
 
 async def main():
     # Agent de saisie automatique 24/7
-    intake_agent = NexusAgent(
+    intake_agent = InterMeshAgent(
         name="data_intake",
         org_id="acme",
         capabilities=["data_entry", "invoice_parsing"],

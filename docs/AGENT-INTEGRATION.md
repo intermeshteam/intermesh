@@ -2,7 +2,7 @@
 
 Ce guide couvre les deux mécanismes qui servent à faire travailler ensemble des
 agents écrits dans des frameworks différents : les **adaptateurs**, qui exposent
-un agent existant sur le réseau Nexus sans en changer une ligne, et les
+un agent existant sur le réseau InterMesh sans en changer une ligne, et les
 **helpers d'orchestration**, qui composent plusieurs agents déjà connectés en
 workflows. Les deux existent en Python et en JavaScript/TypeScript, avec la même
 sémantique.
@@ -26,15 +26,15 @@ connaître avant de lire la suite :
 
 ### Python
 
-Trois fonctions, toutes exportées depuis `nexus_sdk`. Chacune renvoie un
-`NexusAgent` prêt à `connect()`.
+Trois fonctions, toutes exportées depuis `intermesh`. Chacune renvoie un
+`InterMeshAgent` prêt à `connect()`.
 
 **`from_langchain`** — pour un `Runnable`/chaîne LangChain. Il essaie
 `ainvoke`, puis `invoke`, puis `run`, puis l'objet lui-même s'il est appelable,
-et renvoie `{"output": <résultat>, "adapter": "langchain_nexus_v1"}` :
+et renvoie `{"output": <résultat>, "adapter": "langchain_intermesh_v1"}` :
 
 ```python
-from nexus_sdk import from_langchain
+from intermesh import from_langchain
 
 agent = from_langchain(ma_chaine, name="analyste", capabilities=["market_analysis"])
 await agent.connect()
@@ -46,7 +46,7 @@ tâche tel quel ; c'est à elle d'adapter la convention du framework :
 
 ```python
 import asyncio
-from nexus_sdk import from_callable
+from intermesh import from_callable
 
 async def run_crew(data):
     result = await asyncio.to_thread(lambda: mon_crew.kickoff(inputs=data))
@@ -55,21 +55,21 @@ async def run_crew(data):
 agent = from_callable(run_crew, name="recherche", capabilities=["research"])
 ```
 
-**`@nexus_service`** — le même mécanisme sous forme de décorateur. Attention :
+**`@intermesh_service`** — le même mécanisme sous forme de décorateur. Attention :
 il **remplace** la fonction par l'agent, `mon_service` n'est plus appelable
 comme une fonction ordinaire ensuite :
 
 ```python
-from nexus_sdk import nexus_service
+from intermesh import intermesh_service
 
-@nexus_service(name="resumeur", capabilities=["summarize"])
+@intermesh_service(name="resumeur", capabilities=["summarize"])
 def mon_service(data):
     return {"summary": mon_modele(data["text"])}
 
 await mon_service.connect()
 ```
 
-`NexusAgent.from_callable(...)` et `NexusAgent.from_langchain(...)` existent
+`InterMeshAgent.from_callable(...)` et `InterMeshAgent.from_langchain(...)` existent
 aussi comme méthodes de classe — même comportement, autre point d'entrée.
 
 ⚠️ **Appels bloquants.** `from_callable` exécute votre fonction telle quelle :
@@ -85,9 +85,9 @@ Frameworks couverts : **LangChain.js**, **LlamaIndex.TS**. CrewAI et AutoGen
 n'ont pas de port JS établi — pour ces deux-là, restez côté Python.
 
 ```javascript
-import { NexusLangChainAdapter } from 'nexus-mesh/adapters/langchain';
+import { InterMeshLangChainAdapter } from 'intermesh/adapters/langchain';
 
-const agent = new NexusLangChainAdapter(monRunnable, {
+const agent = new InterMeshLangChainAdapter(monRunnable, {
   name: 'analyste',
   capabilities: ['market_analysis'],
 });
@@ -95,9 +95,9 @@ await agent.connect();
 ```
 
 ```javascript
-import { NexusLlamaIndexAdapter } from 'nexus-mesh/adapters/llamaindex';
+import { InterMeshLlamaIndexAdapter } from 'intermesh/adapters/llamaindex';
 
-const agent = new NexusLlamaIndexAdapter(index.asQueryEngine(), {
+const agent = new InterMeshLlamaIndexAdapter(index.asQueryEngine(), {
   name: 'base_documentaire',
   capabilities: ['document_search', 'rag'],
 });
@@ -108,14 +108,14 @@ d'invocation de l'objet (côté JS uniquement — l'équivalent Python est
 `from_callable`, avec une fonction que vous écrivez vous-même) :
 
 ```javascript
-import { adapt } from 'nexus-mesh/adapters';
+import { adapt } from 'intermesh/adapters';
 
 const agent = adapt(monAgentExistant, { name: 'x', capabilities: ['c'] });
 ```
 
 Différence à connaître : l'API JS de LlamaIndex.TS attend un objet
 (`query({ query: "..." })`), pas une chaîne brute comme la version Python
-(`query(str)`). `NexusLlamaIndexAdapter` reconditionne automatiquement l'entrée
+(`query(str)`). `InterMeshLlamaIndexAdapter` reconditionne automatiquement l'entrée
 extraite dans la forme attendue ; ce détail ne concerne que qui écrit un pont
 personnalisé pour un autre framework JS.
 
@@ -131,10 +131,10 @@ mécanisme de délégation à un thread aussi direct que côté Python.
 
 `discover()` et `submit_task()`/`submitTask()` suffisent à écrire un workflow à
 la main — chercher un agent, soumettre, lire le résultat, recommencer (voir
-`examples/agent_a.py`). `NexusPipeline` et `fan_out`/`fanOut` capturent ce
+`examples/agent_a.py`). `InterMeshPipeline` et `fan_out`/`fanOut` capturent ce
 patron pour ne plus le réécrire à chaque fois.
 
-### Enchaîner des étapes : `NexusPipeline`
+### Enchaîner des étapes : `InterMeshPipeline`
 
 Chaque étape peut nommer un agent explicitement, ou le rechercher par capacité —
 la recherche a lieu à l'exécution, pas à la déclaration, donc un agent qui
@@ -143,10 +143,10 @@ rejoint le réseau entre-temps compte.
 **Python**
 
 ```python
-from nexus_sdk import NexusPipeline
+from intermesh import InterMeshPipeline
 
 pipeline = (
-    NexusPipeline(orchestrateur)
+    InterMeshPipeline(orchestrateur)
     .step("Traduire", capabilities=["translate"])
     .step("Calculer", capabilities=["calculate"],
           input_fn=lambda prev: {"expression": prev["translated_text"]})
@@ -159,9 +159,9 @@ result.history   # [StepResult(title, agent, output), ...]
 **JavaScript**
 
 ```javascript
-import { NexusPipeline } from 'nexus-mesh';
+import { InterMeshPipeline } from 'intermesh';
 
-const pipeline = new NexusPipeline(orchestrateur)
+const pipeline = new InterMeshPipeline(orchestrateur)
   .step('Traduire', { capabilities: ['translate'] })
   .step('Calculer', {
     capabilities: ['calculate'],
@@ -183,7 +183,7 @@ sous une clé de votre choix.
 **Python**
 
 ```python
-from nexus_sdk import fan_out
+from intermesh import fan_out
 
 results = await fan_out(
     orchestrateur,
@@ -196,7 +196,7 @@ results["fr"]  # sortie de la branche, ou l'exception levée
 **JavaScript**
 
 ```javascript
-import { fanOut } from 'nexus-mesh';
+import { fanOut } from 'intermesh';
 
 const results = await fanOut(orchestrateur, [
   ['fr', { region: 'FR' }],
@@ -215,7 +215,7 @@ branche.
 
 `examples/frameworks/` contient des démos qui enveloppent de vrais objets de
 framework (un `Runnable` LangChain, un moteur LlamaIndex, un `Crew` CrewAI, un
-`ConversableAgent` AutoGen) plutôt que des agents Nexus faits main — voir
+`ConversableAgent` AutoGen) plutôt que des agents InterMesh faits main — voir
 [`examples/frameworks/README.md`](../examples/frameworks/README.md) pour les
 dépendances à installer et l'ordre de lancement.
 

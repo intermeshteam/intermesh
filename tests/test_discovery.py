@@ -17,7 +17,7 @@ import tempfile
 
 import pytest
 
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 PORT = 8811
 
@@ -42,7 +42,7 @@ def hub():
 
 
 async def _agent(name, **kw):
-    a = NexusAgent(name=name, hub_url=f"ws://localhost:{PORT}", encrypt=False, **kw)
+    a = InterMeshAgent(name=name, hub_url=f"ws://localhost:{PORT}", encrypt=False, **kw)
     await a.connect()
     return a
 

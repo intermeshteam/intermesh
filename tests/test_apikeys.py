@@ -5,7 +5,7 @@ import stat
 
 import pytest
 
-from nexus_sdk.apikeys import (
+from intermesh.apikeys import (
     DEV_API_KEYS,
     ENV_FILE,
     ENV_INLINE,
@@ -27,8 +27,8 @@ SAMPLE = {
 def clean_env(monkeypatch, tmp_path):
     monkeypatch.delenv(ENV_INLINE, raising=False)
     monkeypatch.delenv(ENV_FILE, raising=False)
-    # Empêche de retomber sur le ~/.nexus/api_keys.json réel du poste
-    monkeypatch.setenv("NEXUS_HOME", str(tmp_path / "home"))
+    # Empêche de retomber sur le ~/.intermesh/api_keys.json réel du poste
+    monkeypatch.setenv("INTERMESH_HOME", str(tmp_path / "home"))
 
 
 def test_valid_key_grants_declared_privileges():

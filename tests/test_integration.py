@@ -5,13 +5,13 @@ import pytest
 import websockets
 import jwt
 
-from nexus_sdk import NexusAgent, NexusMessage, MessageType, NexusTask, TaskStatus
-from nexus_sdk.identity import AgentIdentity
+from intermesh import InterMeshAgent, InterMeshMessage, MessageType, InterMeshTask, TaskStatus
+from intermesh.identity import AgentIdentity
 
 
 @pytest.fixture
 async def local_hub():
-    """Démarre un Hub Nexus éphémère en mémoire pour le test."""
+    """Démarre un Hub InterMesh éphémère en mémoire pour le test."""
     port = 8769
     hub_secret = secrets.token_hex(32)
     agents = {}
@@ -32,7 +32,7 @@ async def local_hub():
         agent_name = None
         try:
             async for raw in websocket:
-                msg = NexusMessage.from_json(raw)
+                msg = InterMeshMessage.from_json(raw)
                 if msg.type == MessageType.REGISTER:
                     agent_name = msg.sender
                     d = msg.content or {}
@@ -45,35 +45,35 @@ async def local_hub():
                     agents[agent_name] = websocket
                     identity_registry[agent_name] = ident
                     token = generate_token(agent_name, ident.agent_id, ident.roles)
-                    await websocket.send(NexusMessage(type=MessageType.REGISTERED, sender="hub", to=agent_name, content={"status": "ready", "token": token, "online_agents": list(agents.keys())}).to_json())
+                    await websocket.send(InterMeshMessage(type=MessageType.REGISTERED, sender="hub", to=agent_name, content={"status": "ready", "token": token, "online_agents": list(agents.keys())}).to_json())
 
                 elif msg.type in (MessageType.MESSAGE, MessageType.REQUEST, MessageType.RESPONSE, MessageType.WHO_IS, MessageType.TASK_SUBMIT, MessageType.TASK_UPDATE):
                     if not msg.token or not verify_token(msg.token, msg.sender):
                         continue
 
                     if msg.type == MessageType.TASK_SUBMIT:
-                        t = NexusTask.from_dict(msg.content)
+                        t = InterMeshTask.from_dict(msg.content)
                         task_registry[t.task_id] = t
                         if t.assignee in agents:
-                            await agents[t.assignee].send(NexusMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=t.assignee, reply_to=msg.id, content=t.to_dict(), token=msg.token).to_json())
+                            await agents[t.assignee].send(InterMeshMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=t.assignee, reply_to=msg.id, content=t.to_dict(), token=msg.token).to_json())
 
                     elif msg.type == MessageType.TASK_UPDATE:
                         td = msg.content
                         tid = td.get("task_id")
                         if tid in task_registry:
-                            task_registry[tid] = NexusTask.from_dict(td)
+                            task_registry[tid] = InterMeshTask.from_dict(td)
                             orch = td.get("orchestrator")
                             if orch in agents:
-                                await agents[orch].send(NexusMessage(type=MessageType.TASK_UPDATE, sender="hub", to=orch, content=td, token=msg.token).to_json())
+                                await agents[orch].send(InterMeshMessage(type=MessageType.TASK_UPDATE, sender="hub", to=orch, content=td, token=msg.token).to_json())
 
                     elif msg.type in (MessageType.MESSAGE, MessageType.REQUEST, MessageType.RESPONSE):
                         if msg.to in agents:
                             await agents[msg.to].send(msg.to_json())
-                            await websocket.send(NexusMessage(type=MessageType.ACK, sender="hub", to=msg.sender, reply_to=msg.id, content={"status": "delivered"}, token=msg.token).to_json())
+                            await websocket.send(InterMeshMessage(type=MessageType.ACK, sender="hub", to=msg.sender, reply_to=msg.id, content={"status": "delivered"}, token=msg.token).to_json())
 
                     elif msg.type == MessageType.WHO_IS:
                         if msg.content in identity_registry:
-                            await websocket.send(NexusMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender, reply_to=msg.id, content=identity_registry[msg.content].to_dict(), token=msg.token).to_json())
+                            await websocket.send(InterMeshMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender, reply_to=msg.id, content=identity_registry[msg.content].to_dict(), token=msg.token).to_json())
         except Exception:
             pass
         finally:
@@ -92,7 +92,7 @@ async def test_full_agent_to_agent_encrypted_workflow(local_hub):
     hub_url = local_hub
 
     # 1. Création de l'agent Worker (Calculateur)
-    worker = NexusAgent(name="test_worker_calc", capabilities=["calculate"], roles=["worker"], hub_url=hub_url)
+    worker = InterMeshAgent(name="test_worker_calc", capabilities=["calculate"], roles=["worker"], hub_url=hub_url)
     
     @worker.on_task
     async def handle_task(input_data, task):
@@ -101,7 +101,7 @@ async def test_full_agent_to_agent_encrypted_workflow(local_hub):
     await worker.connect()
 
     # 2. Création de l'agent Orchestrator
-    orchestrator = NexusAgent(name="test_orchestrator", capabilities=["orchestration"], roles=["admin"], hub_url=hub_url)
+    orchestrator = InterMeshAgent(name="test_orchestrator", capabilities=["orchestration"], roles=["admin"], hub_url=hub_url)
     await orchestrator.connect()
     
     await asyncio.sleep(0.5)

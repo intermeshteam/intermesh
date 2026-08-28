@@ -4,8 +4,8 @@ import sys
 import subprocess
 import pytest
 
-from nexus_sdk.hardware import get_machine_fingerprint, verify_machine_fingerprint
-from nexus_sdk import NexusAgent
+from intermesh.hardware import get_machine_fingerprint, verify_machine_fingerprint
+from intermesh import InterMeshAgent
 
 
 def test_hardware_fingerprint_generation():
@@ -33,14 +33,14 @@ async def test_quota_15_agents_enforcement():
     try:
         # 1. Connecter 15 agents autorisés
         for i in range(15):
-            agent = NexusAgent(name=f"worker_bot_{i}", hub_url="ws://localhost:8765")
+            agent = InterMeshAgent(name=f"worker_bot_{i}", hub_url="ws://localhost:8765")
             await agent.connect()
             connected_agents.append(agent)
 
         print("✓ 15 agents connectés simultanément (Plafond atteint)")
 
         # 2. Le 16ème agent DOIT être rejeté avec AGENT_QUOTA_EXCEEDED
-        agent_16 = NexusAgent(name="illegal_worker_16", hub_url="ws://localhost:8765")
+        agent_16 = InterMeshAgent(name="illegal_worker_16", hub_url="ws://localhost:8765")
         
         with pytest.raises(PermissionError) as exc_info:
             await agent_16.connect()

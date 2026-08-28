@@ -1,4 +1,4 @@
-import { NexusAgent } from '../sdk-js/src/index.js';
+import { InterMeshAgent } from '../sdk-js/src/index.js';
 
 async function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -8,7 +8,7 @@ async function main() {
   console.log("🚀 Lancement de l'agent Node.js...");
 
   // Création de l'agent Node.js avec des rôles et capacités
-  const agent = new NexusAgent({
+  const agent = new InterMeshAgent({
     name: "node_orchestrator",
     capabilities: ["js_orchestration"],
     roles: ["admin"]

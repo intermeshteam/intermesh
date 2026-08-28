@@ -7,7 +7,7 @@ import time
 import jwt
 import pytest
 
-from nexus_sdk.secret import ENV_VAR, default_secret_path, resolve_hub_secret
+from intermesh.secret import ENV_VAR, default_secret_path, resolve_hub_secret
 
 
 @pytest.fixture(autouse=True)
@@ -101,14 +101,14 @@ def test_ephemeral_secret_is_never_persisted(tmp_path):
     print("✓ Le mode éphémère n'écrit rien")
 
 
-def test_default_path_follows_nexus_home(monkeypatch, tmp_path):
-    """NEXUS_HOME permet de relocaliser la clé (conteneurs, volumes montés)."""
-    monkeypatch.setenv("NEXUS_HOME", str(tmp_path / "custom"))
+def test_default_path_follows_intermesh_home(monkeypatch, tmp_path):
+    """INTERMESH_HOME permet de relocaliser la clé (conteneurs, volumes montés)."""
+    monkeypatch.setenv("INTERMESH_HOME", str(tmp_path / "custom"))
     assert default_secret_path() == tmp_path / "custom" / "hub_secret"
 
-    monkeypatch.delenv("NEXUS_HOME")
-    assert default_secret_path().parent.name == ".nexus"
-    print("✓ NEXUS_HOME respecté")
+    monkeypatch.delenv("INTERMESH_HOME")
+    assert default_secret_path().parent.name == ".intermesh"
+    print("✓ INTERMESH_HOME respecté")
 
 
 def test_concurrent_hubs_converge_on_same_secret(tmp_path):

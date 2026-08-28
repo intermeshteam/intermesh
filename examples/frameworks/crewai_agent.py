@@ -1,6 +1,6 @@
 """
 Une vraie équipe CrewAI (un `Agent` et une `Task` réels, orchestrés par un
-`Crew`), exposée sur le réseau Nexus via `from_callable`.
+`Crew`), exposée sur le réseau InterMesh via `from_callable`.
 
 Contrairement aux exemples LangChain/LlamaIndex de ce dossier, CrewAI n'a
 pas de mode hors ligne déterministe intégré : un `Agent` appelle toujours
@@ -12,7 +12,7 @@ quel, mais toute tâche déléguée échouera à l'appel du LLM.
     export OPENAI_API_KEY=sk-...
     python examples/frameworks/crewai_agent.py
 
-Le dict d'entrée d'une tâche Nexus alimente directement les `{placeholders}`
+Le dict d'entrée d'une tâche InterMesh alimente directement les `{placeholders}`
 de la description CrewAI : `submit_task(..., {"sujet": "..."})` remplit
 `{sujet}`, car la fonction passée à `from_callable` transmet le dict tel
 quel à `kickoff(inputs=...)`.
@@ -22,7 +22,7 @@ import asyncio
 import os
 import sys
 
-from nexus_sdk import from_callable
+from intermesh import from_callable
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -66,7 +66,7 @@ async def main():
     # refuse. On l'aplatit en son texte via `.raw`.
     #
     # `kickoff()` est synchrone et bloque plusieurs secondes (appels LLM).
-    # `asyncio.to_thread` l'écarte de la boucle : sans cela, l'agent Nexus
+    # `asyncio.to_thread` l'écarte de la boucle : sans cela, l'agent InterMesh
     # serait gelé pendant toute la durée de l'appel — plus aucune tâche
     # reçue, plus aucun message routé.
     async def run_crew(input_data):

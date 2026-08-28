@@ -1,5 +1,5 @@
 {
-  "name": "nexus-mesh",
+  "name": "intermesh",
   "version": "0.1.1",
   "description": "Universal coordination protocol for AI agents — E2E encrypted, cross-language, federated",
   "main": "src/index.js",
@@ -27,7 +27,7 @@
     "distributed-systems",
     "llm"
   ],
-  "author": "Nexus Protocol Authors",
+  "author": "InterMesh Protocol Authors",
   "license": "Apache-2.0",
   "homepage": "https://github.com/mrlomemba-cmd/nexus#readme",
   "repository": {

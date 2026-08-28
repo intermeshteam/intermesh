@@ -4,13 +4,13 @@ Orchestration déclarative de plusieurs agents.
 `discover()` et `submit_task()` suffisent à composer un workflow, comme le
 montre `examples/agent_a.py` : mais chaque enchaînement y est réécrit à la
 main — chercher l'agent, soumettre, extraire le résultat, recommencer.
-`NexusPipeline` capture ce patron une fois pour toutes, et `fan_out`
+`InterMeshPipeline` capture ce patron une fois pour toutes, et `fan_out`
 capture le cas symétrique : plusieurs agents interrogés en parallèle.
 
-    from nexus_sdk import NexusPipeline
+    from intermesh import InterMeshPipeline
 
     pipeline = (
-        NexusPipeline(orchestrator)
+        InterMeshPipeline(orchestrator)
         .step("Traduire", capabilities=["translate"],
               input_fn=lambda _: {"text": "Compute forty two", "target_lang": "fr"})
         .step("Calculer", capabilities=["calculate"],
@@ -19,7 +19,7 @@ capture le cas symétrique : plusieurs agents interrogés en parallèle.
     result = await pipeline.run()
     print(result.output)
 
-Ni `NexusPipeline` ni `fan_out` ne parlent au Hub directement : ils
+Ni `InterMeshPipeline` ni `fan_out` ne parlent au Hub directement : ils
 délèguent à l'agent orchestrateur qui les instancie, donc à la même
 identité, au même jeton, au même chiffrement que le reste du SDK.
 """
@@ -76,7 +76,7 @@ class _Step:
         self.timeout = timeout
 
 
-class NexusPipeline:
+class InterMeshPipeline:
     """
     Enchaîne des tâches sur plusieurs agents, chacun trouvé par capacité
     ou nommé explicitement. La sortie d'une étape est l'entrée de la
@@ -97,12 +97,12 @@ class NexusPipeline:
         metadata: Optional[dict] = None,
         input_fn: Optional[Callable[[Any], Any]] = None,
         timeout: float = 15.0,
-    ) -> "NexusPipeline":
+    ) -> "InterMeshPipeline":
         """
         Ajoute une étape et retourne le pipeline, pour enchaîner les appels.
 
         Args:
-            title:        Titre de la tâche Nexus, visible dans le dashboard.
+            title:        Titre de la tâche InterMesh, visible dans le dashboard.
             agent:        Nom exact de l'agent visé. Omis, l'agent est
                           recherché par `capabilities`/`roles` au moment de
                           l'exécution — pas à la déclaration, donc un
@@ -173,7 +173,7 @@ async def fan_out(
     """
     Soumet plusieurs tâches en parallèle et attend toutes les réponses.
 
-    Le pendant du pipeline séquentiel : là où `NexusPipeline` enchaîne,
+    Le pendant du pipeline séquentiel : là où `InterMeshPipeline` enchaîne,
     `fan_out` interroge plusieurs agents à la fois — utile pour agréger
     plusieurs avis avant de trancher, ou pour paralléliser un travail
     indépendant par nature.

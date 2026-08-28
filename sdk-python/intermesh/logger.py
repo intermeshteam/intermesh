@@ -49,7 +49,7 @@ class StandardFormatter(logging.Formatter):
         return base
 
 
-class NexusLoggerAdapter(logging.LoggerAdapter):
+class InterMeshLoggerAdapter(logging.LoggerAdapter):
     """Adaptateur permettant d'attacher dynamiquement des donnees de contexte."""
 
     def process(self, msg: Any, kwargs: Any) -> tuple[Any, Any]:
@@ -62,12 +62,12 @@ class NexusLoggerAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 
-def get_logger(name: str = "nexus", **default_context: Any) -> NexusLoggerAdapter:
+def get_logger(name: str = "intermesh", **default_context: Any) -> InterMeshLoggerAdapter:
     """
     Retourne une instance de logger configuree selon les parametres systeme.
     """
-    log_level_str = os.environ.get("NEXUS_LOG_LEVEL", "INFO").upper()
-    log_format = os.environ.get("NEXUS_LOG_FORMAT", "text").lower()
+    log_level_str = os.environ.get("INTERMESH_LOG_LEVEL", "INFO").upper()
+    log_format = os.environ.get("INTERMESH_LOG_FORMAT", "text").lower()
 
     level = getattr(logging, log_level_str, logging.INFO)
 
@@ -87,4 +87,4 @@ def get_logger(name: str = "nexus", **default_context: Any) -> NexusLoggerAdapte
         raw_logger.addHandler(handler)
         raw_logger.propagate = False
 
-    return NexusLoggerAdapter(raw_logger, default_context)
+    return InterMeshLoggerAdapter(raw_logger, default_context)

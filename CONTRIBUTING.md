@@ -1,4 +1,4 @@
-# Contributing to Nexus Protocol
+# Contributing to InterMesh Protocol
 
 Thanks for your interest in Nexus. We are building the open, neutral coordination
 infrastructure for AI agents.

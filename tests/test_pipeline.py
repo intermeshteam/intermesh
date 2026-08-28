@@ -1,5 +1,5 @@
 """
-`NexusPipeline` et `fan_out` composent `discover()`/`submit_task()` sans
+`InterMeshPipeline` et `fan_out` composent `discover()`/`submit_task()` sans
 toucher au fil : les tests unitaires se contentent donc d'un orchestrateur
 factice qui les reproduit. Le dernier test seul passe par un vrai Hub,
 pour vérifier que la composition tient aussi en conditions réelles.
@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from nexus_sdk.pipeline import NexusPipeline, PipelineError, fan_out
+from intermesh.pipeline import InterMeshPipeline, PipelineError, fan_out
 
 
 class FakeOrchestrator:
@@ -43,7 +43,7 @@ class FakeOrchestrator:
 
 
 # ----------------------------------------------------------------------
-# NexusPipeline
+# InterMeshPipeline
 # ----------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -56,7 +56,7 @@ async def test_pipeline_chains_output_into_next_input():
         },
     )
     pipeline = (
-        NexusPipeline(orch)
+        InterMeshPipeline(orch)
         .step("Traduire", capabilities=["translate"])
         .step("Calculer", capabilities=["calculate"],
               input_fn=lambda prev: {"expression": prev["translated_text"]})
@@ -73,7 +73,7 @@ async def test_pipeline_chains_output_into_next_input():
 async def test_pipeline_resolves_agent_at_run_time_not_declaration_time():
     """L'agent devient disponible après la déclaration, avant l'exécution."""
     orch = FakeOrchestrator(agents_by_capability={}, outputs_by_title={"Étape": "ok"})
-    pipeline = NexusPipeline(orch).step("Étape", capabilities=["x"])
+    pipeline = InterMeshPipeline(orch).step("Étape", capabilities=["x"])
 
     orch.agents_by_capability["x"] = "venu_en_retard"
     out = await pipeline.run()
@@ -86,7 +86,7 @@ async def test_pipeline_resolves_agent_at_run_time_not_declaration_time():
 @pytest.mark.asyncio
 async def test_pipeline_explicit_agent_skips_discovery():
     orch = FakeOrchestrator(agents_by_capability={}, outputs_by_title={"Étape": "ok"})
-    pipeline = NexusPipeline(orch).step("Étape", agent="nommé_directement")
+    pipeline = InterMeshPipeline(orch).step("Étape", agent="nommé_directement")
     out = await pipeline.run()
 
     assert orch.calls[0][1] == "nommé_directement"
@@ -96,7 +96,7 @@ async def test_pipeline_explicit_agent_skips_discovery():
 @pytest.mark.asyncio
 async def test_pipeline_raises_when_no_agent_found():
     orch = FakeOrchestrator(agents_by_capability={}, outputs_by_title={})
-    pipeline = NexusPipeline(orch).step("Étape", capabilities=["introuvable"])
+    pipeline = InterMeshPipeline(orch).step("Étape", capabilities=["introuvable"])
 
     with pytest.raises(PipelineError, match="introuvable"):
         await pipeline.run()
@@ -110,7 +110,7 @@ async def test_pipeline_stops_at_first_failing_step():
         outputs_by_title={"A": RuntimeError("échec distant")},
     )
     pipeline = (
-        NexusPipeline(orch)
+        InterMeshPipeline(orch)
         .step("A", capabilities=["a"])
         .step("B", capabilities=["b"])
     )
@@ -123,14 +123,14 @@ async def test_pipeline_stops_at_first_failing_step():
 
 def test_pipeline_requires_at_least_a_target():
     with pytest.raises(PipelineError):
-        NexusPipeline(FakeOrchestrator({}, {})).step("Étape")
+        InterMeshPipeline(FakeOrchestrator({}, {})).step("Étape")
     print("✓ Une étape sans agent ni critère est rejetée à la déclaration")
 
 
 @pytest.mark.asyncio
 async def test_empty_pipeline_raises():
     with pytest.raises(PipelineError):
-        await NexusPipeline(FakeOrchestrator({}, {})).run()
+        await InterMeshPipeline(FakeOrchestrator({}, {})).run()
     print("✓ Pipeline vide rejeté")
 
 
@@ -192,7 +192,7 @@ async def test_fan_out_discovers_by_capability_per_branch():
 @pytest.mark.asyncio
 async def test_pipeline_end_to_end_over_a_real_hub():
     import os, subprocess, sys, tempfile
-    from nexus_sdk import NexusAgent
+    from intermesh import InterMeshAgent
 
     port = 8811
     tempfile.mkdtemp()
@@ -206,14 +206,14 @@ async def test_pipeline_end_to_end_over_a_real_hub():
     await asyncio.sleep(2)
 
     try:
-        translator = NexusAgent(name="traducteur", capabilities=["translate"],
+        translator = InterMeshAgent(name="traducteur", capabilities=["translate"],
                                 hub_url=f"ws://localhost:{port}", encrypt=False)
 
         @translator.on_task
         async def _translate(input_data, task):
             return {"translated_text": input_data["expression"].replace("double de ", "") + " * 2"}
 
-        calculator = NexusAgent(name="calculateur", capabilities=["calculate"],
+        calculator = InterMeshAgent(name="calculateur", capabilities=["calculate"],
                                 hub_url=f"ws://localhost:{port}", encrypt=False)
 
         @calculator.on_task
@@ -224,13 +224,13 @@ async def test_pipeline_end_to_end_over_a_real_hub():
         await calculator.connect()
         await asyncio.sleep(0.6)
 
-        lead = NexusAgent(name="lead", roles=["admin"],
+        lead = InterMeshAgent(name="lead", roles=["admin"],
                           hub_url=f"ws://localhost:{port}", encrypt=False)
         await lead.connect()
         await asyncio.sleep(0.3)
 
         pipeline = (
-            NexusPipeline(lead)
+            InterMeshPipeline(lead)
             .step("Traduire", capabilities=["translate"])
             .step("Calculer", capabilities=["calculate"],
                   input_fn=lambda prev: {"expression": prev["translated_text"]})

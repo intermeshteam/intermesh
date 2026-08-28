@@ -3,12 +3,12 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from sdk.nexus_agent import NexusAgent
+from sdk.nexus_agent import InterMeshAgent
 
 
 async def main():
     # Cet agent n'a que le rôle 'guest' -> Accès refusé par Agent B
-    agent = NexusAgent(
+    agent = InterMeshAgent(
         name="guest_bot",
         capabilities=["public_browsing"],
         roles=["guest"],
@@ -25,7 +25,7 @@ async def main():
         )
         print(f"⚠️ [guest_bot] ANOMALIE : Réponse reçue alors qu'elle aurait dû être bloquée : {response}")
     except PermissionError as e:
-        print(f"🛡️ [guest_bot] SUCCÈS DU TEST : Requête bloquée par Nexus RBAC comme prévu !")
+        print(f"🛡️ [guest_bot] SUCCÈS DU TEST : Requête bloquée par InterMesh RBAC comme prévu !")
         print(f"   Détail : {e}")
     except Exception as e:
         print(f"🛡️ [guest_bot] Bloqué : {e}")

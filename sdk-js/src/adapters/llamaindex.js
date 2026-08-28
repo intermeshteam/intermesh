@@ -1,9 +1,9 @@
 /**
- * Pont LlamaIndex.TS → Nexus.
+ * Pont LlamaIndex.TS → InterMesh.
  *
- *   import { NexusLlamaIndexAdapter } from 'nexus-mesh/adapters/llamaindex';
+ *   import { InterMeshLlamaIndexAdapter } from 'intermesh/adapters/llamaindex';
  *
- *   const agent = new NexusLlamaIndexAdapter(index.asQueryEngine(), {
+ *   const agent = new InterMeshLlamaIndexAdapter(index.asQueryEngine(), {
  *     name: 'base_documentaire', capabilities: ['document_search', 'rag'],
  *   });
  *   await agent.connect();
@@ -11,16 +11,16 @@
  * Un moteur de requête attend un objet `{ query: "..." }`, pas une chaîne
  * brute : contrairement à l'API Python (`query(str)`), LlamaIndex.TS
  * exige la forme objet. `inputKey` vaut `'query'` par défaut, de sorte
- * qu'une tâche Nexus `{ query: "..." }` est extraite puis reconditionnée
+ * qu'une tâche InterMesh `{ query: "..." }` est extraite puis reconditionnée
  * dans la même forme avant l'appel. Pour un moteur de chat
  * (`chat({ message })`), passez `inputKey: 'message'`.
  *
  * Ce module n'importe pas `llamaindex` : voir `adapters/base.js`.
  */
 
-import { NexusAdapter } from './base.js';
+import { InterMeshAdapter } from './base.js';
 
-export class NexusLlamaIndexAdapter extends NexusAdapter {
+export class InterMeshLlamaIndexAdapter extends InterMeshAdapter {
   /**
    * @param {*} engine Résultat de `index.asQueryEngine()`,
    *   `index.asChatEngine()`, ou un agent LlamaIndex.TS.

@@ -14,10 +14,10 @@ export default function LandingPage() {
   const [activeTab, setActiveTab] = useState<'callable' | 'decorator' | 'langchain'>('callable');
 
   const snippets = {
-    callable: `from nexus_sdk import NexusAgent
+    callable: `from intermesh import InterMeshAgent
 
-# Turn any Python function into a secure Nexus Agent
-agent = NexusAgent.from_callable(
+# Turn any Python function into a secure InterMesh Agent
+agent = InterMeshAgent.from_callable(
     fn=my_existing_llm_function,
     name="analyzer_bot",
     capabilities=["summarize", "extract"]
@@ -26,19 +26,19 @@ agent = NexusAgent.from_callable(
 # Auto-connects, negotiates JWT auth & E2E encryption
 await agent.connect()`,
 
-    decorator: `from nexus_sdk import nexus_service
+    decorator: `from intermesh import intermesh_service
 
-# Publish any function as an E2E encrypted Nexus Agent
-@nexus_service(name="translator_service", capabilities=["translate"])
+# Publish any function as an E2E encrypted InterMesh Agent
+@intermesh_service(name="translator_service", capabilities=["translate"])
 def translate_tool(input_data):
     return {"translated_text": "Bonjour le monde"}
 
 # Automatically registered & discoverable worldwide`,
 
-    langchain: `from nexus_sdk import NexusAgent
+    langchain: `from intermesh import InterMeshAgent
 
 # Connect your existing LangChain or CrewAI chains to the mesh
-agent = NexusAgent.from_langchain(
+agent = InterMeshAgent.from_langchain(
     chain_or_runnable=my_crewai_crew,
     name="research_crew",
     capabilities=["web_research", "synthesis"]
@@ -109,7 +109,7 @@ await agent.connect()`
         </h1>
 
         <p className="text-lg md:text-xl text-slate-400 max-w-2xl font-normal leading-relaxed">
-          Nexus is the open-source coordination protocol. Connect agents, models, and workflows into a unified, E2E encrypted network across any language or cloud.
+          InterMesh is the open-source coordination protocol. Connect agents, models, and workflows into a unified, E2E encrypted network across any language or cloud.
         </p>
 
         {/* PILL BUTTONS */}
@@ -188,7 +188,7 @@ await agent.connect()`
             </div>
             <h3 className="text-lg font-bold text-white">End-to-End Encryption</h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Hybrid RSA-2048-OAEP & AES-256-GCM client-side encryption. The Nexus Hub routes messages without ever reading plaintext payloads.
+              Hybrid RSA-2048-OAEP & AES-256-GCM client-side encryption. The InterMesh Hub routes messages without ever reading plaintext payloads.
             </p>
           </div>
 
@@ -220,7 +220,7 @@ await agent.connect()`
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
           <div className="flex items-center space-x-2 font-semibold">
             <div className="w-5 h-5 rounded-full bg-slate-700 text-black flex items-center justify-center text-[8px] font-mono">⬡</div>
-            <span>Nexus Protocol © 2026</span>
+            <span>InterMesh Protocol © 2026</span>
           </div>
           <div className="flex items-center space-x-6 mt-4 md:mt-0 font-medium">
             <Link href="/terms" className="hover:text-slate-300 transition">Terms</Link>

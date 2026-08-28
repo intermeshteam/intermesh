@@ -6,7 +6,7 @@ déjà distribués : chaque redémarrage force la reconnexion de la totalité
 de la flotte d'agents. Ce module résout la clé de manière stable, par
 ordre de priorité :
 
-  1. Variable d'environnement NEXUS_HUB_SECRET (déploiements 12-factor,
+  1. Variable d'environnement INTERMESH_HUB_SECRET (déploiements 12-factor,
      Docker, Kubernetes — la clé ne touche jamais le disque)
   2. Fichier de clé persistant, créé en 0600 au premier démarrage
   3. Clé éphémère, uniquement sur demande explicite (tests, CI)
@@ -19,14 +19,14 @@ import secrets
 import stat
 from pathlib import Path
 
-ENV_VAR = "NEXUS_HUB_SECRET"
+ENV_VAR = "INTERMESH_HUB_SECRET"
 MIN_SECRET_LENGTH = 32
 
 
 def default_secret_path() -> Path:
-    """Emplacement par défaut du fichier de clé, surchargeable via NEXUS_HOME."""
-    base = os.environ.get("NEXUS_HOME")
-    return (Path(base) if base else Path.home() / ".nexus") / "hub_secret"
+    """Emplacement par défaut du fichier de clé, surchargeable via INTERMESH_HOME."""
+    base = os.environ.get("INTERMESH_HOME")
+    return (Path(base) if base else Path.home() / ".intermesh") / "hub_secret"
 
 
 def _read_secret_file(path: Path) -> str | None:
@@ -66,7 +66,7 @@ def resolve_hub_secret(
     Retourne (clé, description_de_la_source).
 
     Args:
-        secret_file: Chemin du fichier de clé. Par défaut ~/.nexus/hub_secret.
+        secret_file: Chemin du fichier de clé. Par défaut ~/.intermesh/hub_secret.
         ephemeral:   Génère une clé jetable sans rien écrire sur disque.
                      Tous les tokens émis meurent avec le processus.
 

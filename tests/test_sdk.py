@@ -1,6 +1,6 @@
-"""Tests basiques du SDK Nexus — exécutables sans Hub."""
-from nexus_sdk import NexusAgent, NexusMessage, MessageType, AgentIdentity, NexusTask, TaskStatus
-from nexus_sdk.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
+"""Tests basiques du SDK InterMesh — exécutables sans Hub."""
+from intermesh import InterMeshAgent, InterMeshMessage, MessageType, AgentIdentity, InterMeshTask, TaskStatus
+from intermesh.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
 
 
 def test_identity_fingerprint():
@@ -13,8 +13,8 @@ def test_identity_fingerprint():
 
 def test_message_serialization():
     """Un message sérialisé puis désérialisé doit être identique."""
-    msg = NexusMessage(type=MessageType.MESSAGE, sender="a", to="b", content="hello")
-    restored = NexusMessage.from_json(msg.to_json())
+    msg = InterMeshMessage(type=MessageType.MESSAGE, sender="a", to="b", content="hello")
+    restored = InterMeshMessage.from_json(msg.to_json())
     assert restored.sender == "a"
     assert restored.to == "b"
     assert restored.content == "hello"
@@ -24,7 +24,7 @@ def test_message_serialization():
 
 def test_task_lifecycle():
     """Le cycle de vie d'une tâche doit suivre les états corrects."""
-    task = NexusTask(title="Test", orchestrator="a", assignee="b", input_data={"x": 1})
+    task = InterMeshTask(title="Test", orchestrator="a", assignee="b", input_data={"x": 1})
     assert task.status == TaskStatus.PENDING
     task.update_status(TaskStatus.RUNNING)
     assert task.status == TaskStatus.RUNNING
@@ -48,7 +48,7 @@ def test_e2e_encryption():
 
 def test_agent_creation():
     """Un agent doit se créer avec une identité et des clés."""
-    agent = NexusAgent(name="test_agent", capabilities=["search"], roles=["worker"])
+    agent = InterMeshAgent(name="test_agent", capabilities=["search"], roles=["worker"])
     assert agent.identity.name == "test_agent"
     assert agent.identity.verify_fingerprint()
     assert agent._public_key_pem.startswith("-----BEGIN PUBLIC KEY-----")
@@ -61,4 +61,4 @@ if __name__ == "__main__":
     test_task_lifecycle()
     test_e2e_encryption()
     test_agent_creation()
-    print("\n🎉 Tous les tests du SDK Nexus sont validés !")
+    print("\n🎉 Tous les tests du SDK InterMesh sont validés !")

@@ -1,4 +1,4 @@
-"""Tests de la traduction de schémas Nexus (déterministe, pas de modèle IA)."""
+"""Tests de la traduction de schémas InterMesh (déterministe, pas de modèle IA)."""
 
 import os
 import subprocess
@@ -8,8 +8,8 @@ import time
 
 import pytest
 
-from nexus_sdk import NexusAgent
-from nexus_sdk.schema import SchemaError, SchemaRegistry, default_registry, translate_payload
+from intermesh import InterMeshAgent
+from intermesh.schema import SchemaError, SchemaRegistry, default_registry, translate_payload
 
 PORT = 8895
 
@@ -88,7 +88,7 @@ async def test_orchestrator_and_worker_never_have_to_agree_on_a_wire_format(hub)
     deux sens (requête et réponse), pilotée par le schéma que chacun déclare
     à l'enregistrement.
     """
-    worker = NexusAgent(name="worker", org_id="acme", hub_url=f"ws://localhost:{PORT}",
+    worker = InterMeshAgent(name="worker", org_id="acme", hub_url=f"ws://localhost:{PORT}",
                         schema="claude_style", encrypt=False)
 
     @worker.on_task
@@ -98,7 +98,7 @@ async def test_orchestrator_and_worker_never_have_to_agree_on_a_wire_format(hub)
 
     await worker.connect()
 
-    lead = NexusAgent(name="lead", org_id="acme", hub_url=f"ws://localhost:{PORT}",
+    lead = InterMeshAgent(name="lead", org_id="acme", hub_url=f"ws://localhost:{PORT}",
                       schema="llama_style", roles=["admin"], encrypt=False)
     await lead.connect()
 
@@ -115,7 +115,7 @@ async def test_orchestrator_and_worker_never_have_to_agree_on_a_wire_format(hub)
 @pytest.mark.asyncio
 async def test_same_schema_on_both_sides_is_left_untouched(hub):
     """Aucune traduction quand les deux agents partagent déjà le même schéma."""
-    worker = NexusAgent(name="worker2", org_id="acme", hub_url=f"ws://localhost:{PORT}",
+    worker = InterMeshAgent(name="worker2", org_id="acme", hub_url=f"ws://localhost:{PORT}",
                         schema="claude_style", encrypt=False)
 
     @worker.on_task
@@ -124,7 +124,7 @@ async def test_same_schema_on_both_sides_is_left_untouched(hub):
 
     await worker.connect()
 
-    lead = NexusAgent(name="lead2", org_id="acme", hub_url=f"ws://localhost:{PORT}",
+    lead = InterMeshAgent(name="lead2", org_id="acme", hub_url=f"ws://localhost:{PORT}",
                       schema="claude_style", roles=["admin"], encrypt=False)
     await lead.connect()
 

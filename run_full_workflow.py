@@ -6,7 +6,7 @@ import subprocess
 
 async def run_all():
     print("=" * 60)
-    print("   LANCEMENT DU WORKFLOW COMPLET NEXUS PROTOCOL")
+    print("   LANCEMENT DU WORKFLOW COMPLET INTERMESH PROTOCOL")
     print("=" * 60)
 
     # 1. Libérer le port 8765

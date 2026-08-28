@@ -5,7 +5,7 @@ import subprocess
 import sys
 import pytest
 
-from nexus_sdk.agent import NexusAgent
+from intermesh.agent import InterMeshAgent
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ async def test_python_to_nodejs_e2e_encrypted_workflow():
 
     # 2. Démarrage de l'agent Node.js en sous-processus
     node_env = os.environ.copy()
-    node_env["NEXUS_HUB_PORT"] = str(port)
+    node_env["INTERMESH_HUB_PORT"] = str(port)
 
     node_proc = subprocess.Popen(
         ["node", "tests/fixtures/node_worker.js"],
@@ -40,7 +40,7 @@ async def test_python_to_nodejs_e2e_encrypted_workflow():
 
     try:
         # 3. Démarrage de l'orchestrateur Python avec chiffrement E2E activé
-        orchestrator = NexusAgent(
+        orchestrator = InterMeshAgent(
             name="py_orchestrator",
             hub_url=f"ws://localhost:{port}",
             roles=["admin"],
@@ -63,7 +63,7 @@ async def test_python_to_nodejs_e2e_encrypted_workflow():
 
         # 6. Délégation d'une tâche chiffrée avec charge utile internationale UTF-8
         test_payload = {
-            "text": "Nexus Mesh: Interopérabilité Internationale 🌍 — 日本語, Español, Français !"
+            "text": "InterMesh: Interopérabilité Internationale 🌍 — 日本語, Español, Français !"
         }
         task_result = await orchestrator.submit_task(
             title="Traitement International Multi-Langages",

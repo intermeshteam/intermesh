@@ -4,7 +4,7 @@ import sys
 import subprocess
 import pytest
 
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 
 # ============================================================================
@@ -93,7 +93,7 @@ async def acme_legal_handler(input_data, task):
 @pytest.mark.asyncio
 async def test_full_b2b_6_agents_negotiation():
     print("\n==========================================================================")
-    print("   NEXUS PROTOCOL — SIMULATION DE NÉGOCIATION B2B (6 AGENTS / 2 HUBS)")
+    print("   INTERMESH PROTOCOL — SIMULATION DE NÉGOCIATION B2B (6 AGENTS / 2 HUBS)")
     print("==========================================================================\n")
 
     # 1. Libérer les ports et démarrer les 2 Hubs en Peering
@@ -108,27 +108,27 @@ async def test_full_b2b_6_agents_negotiation():
 
     try:
         # --- CONNEXION DES 3 AGENTS DE GLOBEX (NEW YORK - HUB 8766) ---
-        sales_director = NexusAgent(name="sales_director", org_id="globex", roles=["admin"], hub_url="ws://localhost:8766")
+        sales_director = InterMeshAgent(name="sales_director", org_id="globex", roles=["admin"], hub_url="ws://localhost:8766")
         sales_director.on_request(globex_sales_request_handler)
         await sales_director.connect()
 
-        pricing_engine = NexusAgent(name="pricing_engine", org_id="globex", capabilities=["pricing"], roles=["worker"], hub_url="ws://localhost:8766")
+        pricing_engine = InterMeshAgent(name="pricing_engine", org_id="globex", capabilities=["pricing"], roles=["worker"], hub_url="ws://localhost:8766")
         pricing_engine.on_task(globex_pricing_handler)
         await pricing_engine.connect()
 
-        contract_signer = NexusAgent(name="contract_signer", org_id="globex", capabilities=["signing"], roles=["worker"], hub_url="ws://localhost:8766")
+        contract_signer = InterMeshAgent(name="contract_signer", org_id="globex", capabilities=["signing"], roles=["worker"], hub_url="ws://localhost:8766")
         contract_signer.on_task(globex_signer_handler)
         await contract_signer.connect()
 
         # --- CONNEXION DES 3 AGENTS DE ACME (PARIS - HUB 8765) ---
-        procurement_lead = NexusAgent(name="procurement_lead", org_id="acme", roles=["admin"], hub_url="ws://localhost:8765")
+        procurement_lead = InterMeshAgent(name="procurement_lead", org_id="acme", roles=["admin"], hub_url="ws://localhost:8765")
         await procurement_lead.connect()
 
-        finance_approver = NexusAgent(name="finance_approver", org_id="acme", capabilities=["finance_approval"], roles=["worker"], hub_url="ws://localhost:8765")
+        finance_approver = InterMeshAgent(name="finance_approver", org_id="acme", capabilities=["finance_approval"], roles=["worker"], hub_url="ws://localhost:8765")
         finance_approver.on_task(acme_finance_handler)
         await finance_approver.connect()
 
-        legal_auditor = NexusAgent(name="legal_auditor", org_id="acme", capabilities=["legal_audit"], roles=["worker"], hub_url="ws://localhost:8765")
+        legal_auditor = InterMeshAgent(name="legal_auditor", org_id="acme", capabilities=["legal_audit"], roles=["worker"], hub_url="ws://localhost:8765")
         legal_auditor.on_task(acme_legal_handler)
         await legal_auditor.connect()
 

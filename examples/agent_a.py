@@ -1,9 +1,9 @@
 import asyncio
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 
 async def main():
-    orchestrator = NexusAgent(name="agent_a", capabilities=["orchestration"], roles=["admin"])
+    orchestrator = InterMeshAgent(name="agent_a", capabilities=["orchestration"], roles=["admin"])
     await orchestrator.connect()
     await asyncio.sleep(2)
 

@@ -5,31 +5,31 @@ import subprocess
 import sys
 import urllib.request
 import pytest
-from nexus_sdk.metrics import NexusMetricsCollector
-from nexus_sdk.health import HealthCheckHandler
+from intermesh.metrics import InterMeshMetricsCollector
+from intermesh.health import HealthCheckHandler
 
 
 def test_metrics_collector_prometheus_format():
-    collector = NexusMetricsCollector()
-    collector.increment("nexus_messages_routed_total", 5)
-    collector.increment("nexus_tasks_submitted_total", 2)
+    collector = InterMeshMetricsCollector()
+    collector.increment("intermesh_messages_routed_total", 5)
+    collector.increment("intermesh_tasks_submitted_total", 2)
 
     output = collector.generate_prometheus_output({
-        "nexus_connected_agents": 3,
-        "nexus_registered_identities": 10
+        "intermesh_connected_agents": 3,
+        "intermesh_registered_identities": 10
     })
 
-    assert "nexus_uptime_seconds" in output
-    assert "nexus_connected_agents 3" in output
-    assert "nexus_registered_identities 10" in output
-    assert "nexus_messages_routed_total 5" in output
-    assert "nexus_tasks_submitted_total 2" in output
+    assert "intermesh_uptime_seconds" in output
+    assert "intermesh_connected_agents 3" in output
+    assert "intermesh_registered_identities 10" in output
+    assert "intermesh_messages_routed_total 5" in output
+    assert "intermesh_tasks_submitted_total 2" in output
 
 
 def test_health_handler_endpoints():
     handler = HealthCheckHandler(
         readiness_evaluator=lambda: True,
-        state_metrics_provider=lambda: {"nexus_connected_agents": 1}
+        state_metrics_provider=lambda: {"intermesh_connected_agents": 1}
     )
 
     # 1. Test /healthz
@@ -51,7 +51,7 @@ def test_health_handler_endpoints():
     # 4. Test /metrics
     status, headers, body = handler.handle_request("/metrics")
     assert status == 200
-    assert "nexus_connected_agents 1" in body.decode("utf-8")
+    assert "intermesh_connected_agents 1" in body.decode("utf-8")
 
 
 @pytest.mark.asyncio
@@ -87,8 +87,8 @@ async def test_live_hub_http_probes():
         with urllib.request.urlopen(f"http://localhost:{port}/metrics") as resp:
             assert resp.status == 200
             metrics_text = resp.read().decode("utf-8")
-            assert "nexus_uptime_seconds" in metrics_text
-            assert "nexus_connected_agents" in metrics_text
+            assert "intermesh_uptime_seconds" in metrics_text
+            assert "intermesh_connected_agents" in metrics_text
 
     finally:
         hub_proc.terminate()

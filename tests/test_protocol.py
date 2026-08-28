@@ -1,17 +1,17 @@
 import uuid
 import pytest
-from nexus_sdk import NexusMessage, MessageType, NexusTask, TaskStatus
+from intermesh import InterMeshMessage, MessageType, InterMeshTask, TaskStatus
 
 
 def test_nexus_message_creation():
     """Vérifie la conformité de création d'un message."""
-    msg = NexusMessage(
+    msg = InterMeshMessage(
         type=MessageType.MESSAGE,
         sender="agent_alpha",
         to="agent_beta",
         content={"data": "test_payload"}
     )
-    assert msg.version == "nexus/v1"
+    assert msg.version == "intermesh/v1"
     assert msg.sender == "agent_alpha"
     assert msg.to == "agent_beta"
     assert msg.type == MessageType.MESSAGE
@@ -22,7 +22,7 @@ def test_nexus_message_creation():
 def test_nexus_message_serialization():
     """Vérifie l'idempotence de la sérialisation/désérialisation JSON."""
     msg_id = str(uuid.uuid4())
-    original = NexusMessage(
+    original = InterMeshMessage(
         type=MessageType.REQUEST,
         sender="orchestrator",
         to="worker",
@@ -33,7 +33,7 @@ def test_nexus_message_serialization():
     )
     
     raw_json = original.to_json()
-    restored = NexusMessage.from_json(raw_json)
+    restored = InterMeshMessage.from_json(raw_json)
     
     assert restored.id == original.id
     assert restored.type == MessageType.REQUEST
@@ -46,7 +46,7 @@ def test_nexus_message_serialization():
 
 def test_task_status_lifecycle():
     """Vérifie le cycle de vie formel d'une tâche."""
-    task = NexusTask(
+    task = InterMeshTask(
         title="Traitement Image",
         orchestrator="agent_a",
         assignee="agent_b",

@@ -1,7 +1,7 @@
 /**
  * Cœur des adaptateurs JS : détection de la convention d'appel et pontage.
  *
- * Miroir du module Python `nexus_sdk.adapters.base`, pour la même raison :
+ * Miroir du module Python `intermesh.adapters.base`, pour la même raison :
  * un développeur ne réécrira pas son agent LangChain.js ou LlamaIndex.TS
  * pour essayer un protocole. Ce module détecte comment appeler l'objet
  * qu'on lui confie plutôt que d'imposer une interface.
@@ -9,7 +9,7 @@
  * Il n'importe aucun framework — voir `adapters/index.js`.
  */
 
-import { NexusAgent } from '../index.js';
+import { InterMeshAgent } from '../index.js';
 
 export class AdapterError extends Error {}
 
@@ -103,17 +103,17 @@ export function toJsonable(value) {
 }
 
 /**
- * Un `NexusAgent` dont le travail est délégué à un agent étranger.
+ * Un `InterMeshAgent` dont le travail est délégué à un agent étranger.
  *
- * S'utilise exactement comme un agent Nexus natif : il se connecte, se
+ * S'utilise exactement comme un agent InterMesh natif : il se connecte, se
  * fait découvrir par ses capacités, reçoit des tâches et des requêtes, et
  * rend ses résultats chiffrés de bout en bout.
  */
-export class NexusAdapter extends NexusAgent {
+export class InterMeshAdapter extends InterMeshAgent {
   /**
    * @param {*} wrapped L'agent existant à exposer.
    * @param {object} opts
-   * @param {string} opts.name Nom de l'agent sur le réseau Nexus.
+   * @param {string} opts.name Nom de l'agent sur le réseau InterMesh.
    * @param {string[]} [opts.capabilities] Ce qu'il sait faire.
    * @param {string} [opts.inputKey] Extrait une seule valeur du dict de la
    *   tâche avant l'appel — utile pour les agents qui attendent une
@@ -124,7 +124,7 @@ export class NexusAdapter extends NexusAgent {
    *   sortie avant renvoi.
    * @param {string} [opts.invokeMethod] Force la méthode d'invocation si
    *   la détection se trompe.
-   * @param {...*} opts.rest Passés tels quels à `NexusAgent` (hubUrl,
+   * @param {...*} opts.rest Passés tels quels à `InterMeshAgent` (hubUrl,
    *   roles, permissions, metadata, encrypt…).
    */
   constructor(wrapped, opts) {
@@ -177,9 +177,9 @@ export class NexusAdapter extends NexusAgent {
 }
 
 /**
- * Expose un agent existant sur le réseau Nexus.
+ * Expose un agent existant sur le réseau InterMesh.
  *
- *   import { adapt } from 'nexus-mesh/adapters';
+ *   import { adapt } from 'intermesh/adapters';
  *
  *   const agent = adapt(maChaineLangChain, {
  *     name: 'analyste', capabilities: ['market_analysis'],
@@ -187,5 +187,5 @@ export class NexusAdapter extends NexusAgent {
  *   await agent.connect();
  */
 export function adapt(wrapped, opts) {
-  return new NexusAdapter(wrapped, opts);
+  return new InterMeshAdapter(wrapped, opts);
 }

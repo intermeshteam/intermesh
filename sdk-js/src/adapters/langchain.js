@@ -1,9 +1,9 @@
 /**
- * Pont LangChain.js → Nexus.
+ * Pont LangChain.js → InterMesh.
  *
- *   import { NexusLangChainAdapter } from 'nexus-mesh/adapters/langchain';
+ *   import { InterMeshLangChainAdapter } from 'intermesh/adapters/langchain';
  *
- *   const agent = new NexusLangChainAdapter(monRunnable, {
+ *   const agent = new InterMeshLangChainAdapter(monRunnable, {
  *     name: 'analyste', capabilities: ['market_analysis'],
  *   });
  *   await agent.connect();
@@ -14,9 +14,9 @@
  * LCEL ou un modèle de chat.
  */
 
-import { NexusAdapter } from './base.js';
+import { InterMeshAdapter } from './base.js';
 
-export class NexusLangChainAdapter extends NexusAdapter {
+export class InterMeshLangChainAdapter extends InterMeshAdapter {
   /**
    * @param {*} runnable `AgentExecutor`, chaîne LCEL, `Runnable`…
    * @param {object} opts

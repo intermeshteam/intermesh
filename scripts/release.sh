@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================================"
-echo "   NEXUS PROTOCOL — BUILD & RELEASE AUTOMATION         "
+echo "   INTERMESH PROTOCOL — BUILD & RELEASE AUTOMATION         "
 echo "========================================================"
 
 # 1. Validation de la suite de tests

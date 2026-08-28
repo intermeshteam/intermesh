@@ -1,5 +1,5 @@
 """
-Nexus Hub — routage central, console d'administration, persistance.
+InterMesh Hub — routage central, console d'administration, persistance.
 """
 import argparse
 import asyncio
@@ -8,19 +8,19 @@ import time
 import jwt
 import websockets
 
-from nexus_sdk.admin import MUTATING, AdminContext, AdminError, authorize, caller_scope
-from nexus_sdk.admin import execute as admin_execute
-from nexus_sdk.apikeys import ApiKeyStore
-from nexus_sdk.audit import ImmutableAuditLog
-from nexus_sdk.escrow import EscrowError, EscrowManager
-from nexus_sdk.guardrails import AsimovGuardrailEngine, PolicyViolationError
-from nexus_sdk.health import HealthCheckHandler
-from nexus_sdk.identity import AgentIdentity
-from nexus_sdk.message import MessageType, NexusMessage
-from nexus_sdk.ratelimit import RateLimiter
-from nexus_sdk.secret import resolve_hub_secret
-from nexus_sdk.store import NexusStore
-from nexus_sdk.task import NexusTask, TaskStatus
+from intermesh.admin import MUTATING, AdminContext, AdminError, authorize, caller_scope
+from intermesh.admin import execute as admin_execute
+from intermesh.apikeys import ApiKeyStore
+from intermesh.audit import ImmutableAuditLog
+from intermesh.escrow import EscrowError, EscrowManager
+from intermesh.guardrails import AsimovGuardrailEngine, PolicyViolationError
+from intermesh.health import HealthCheckHandler
+from intermesh.identity import AgentIdentity
+from intermesh.message import MessageType, InterMeshMessage
+from intermesh.ratelimit import RateLimiter
+from intermesh.secret import resolve_hub_secret
+from intermesh.store import InterMeshStore
+from intermesh.task import InterMeshTask, TaskStatus
 
 TOKEN_EXPIRY_SECONDS = 3600
 MAX_FREE_AGENTS = 15
@@ -28,10 +28,10 @@ MAX_FREE_AGENTS = 15
 # État partagé du Hub, peuplé par main() au démarrage.
 agents: dict[str, "websockets.ServerConnection"] = {}       # qualified_name -> websocket
 identity_registry: dict[str, AgentIdentity] = {}             # qualified_name -> AgentIdentity
-task_registry: dict[str, NexusTask] = {}                     # task_id -> NexusTask
+task_registry: dict[str, InterMeshTask] = {}                     # task_id -> InterMeshTask
 peered_hubs: dict[str, object] = {}                           # org -> websocket pair
 
-store: NexusStore | None = None
+store: InterMeshStore | None = None
 api_keys: ApiKeyStore | None = None
 audit_log: ImmutableAuditLog | None = None
 rate_limiter = RateLimiter(default_rate=20.0, default_burst=30.0)
@@ -40,7 +40,7 @@ escrow_manager = EscrowManager()
 
 HUB_SECRET: str = ""
 HUB_ORG: str = "default"
-SNAPSHOT_DIR: str | None = None   # None => ~/.nexus/snapshots (ou $NEXUS_HOME)
+SNAPSHOT_DIR: str | None = None   # None => ~/.intermesh/snapshots (ou $INTERMESH_HOME)
 
 
 # ----------------------------------------------------------------------
@@ -76,7 +76,7 @@ def verify_token(token: str, expected_agent: str) -> bool:
 # ----------------------------------------------------------------------
 
 def _qualified_name(identity: AgentIdentity) -> str:
-    # Convention partagée avec nexus_sdk.store et nexus_sdk.admin::_org_of :
+    # Convention partagée avec intermesh.store et intermesh.admin::_org_of :
     # un nom sans préfixe appartient à l'organisation "default". AgentIdentity
     # préfixe pourtant systématiquement ("default/x") ; on l'enlève ici.
     if identity.org_id == "default":
@@ -93,17 +93,17 @@ def _agent_org(qualified_name: str) -> str:
     return HUB_ORG
 
 
-def remember_task(task: NexusTask) -> None:
+def remember_task(task: InterMeshTask) -> None:
     task_registry[task.task_id] = task
     if store is not None:
         store.save_task(task)
 
 
-async def send_task_to_agent(task: NexusTask) -> bool:
+async def send_task_to_agent(task: InterMeshTask) -> bool:
     ws = agents.get(task.assignee)
     if ws is None:
         return False
-    await ws.send(NexusMessage(
+    await ws.send(InterMeshMessage(
         type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee, content=task.to_dict(),
     ).to_json())
     return True
@@ -150,8 +150,8 @@ def discover_agents(query: dict, caller_org: str) -> list[dict]:
 _health_handler = HealthCheckHandler(
     readiness_evaluator=lambda: True,
     state_metrics_provider=lambda: {
-        "nexus_connected_agents": len(agents),
-        "nexus_registered_identities": len(identity_registry),
+        "intermesh_connected_agents": len(agents),
+        "intermesh_registered_identities": len(identity_registry),
     },
 )
 
@@ -184,7 +184,7 @@ async def process_request(connection, request=None):
 # Console d'administration
 # ----------------------------------------------------------------------
 
-async def _handle_admin_request(websocket, msg: NexusMessage) -> None:
+async def _handle_admin_request(websocket, msg: InterMeshMessage) -> None:
     content = msg.content if isinstance(msg.content, dict) else {}
     command = content.get("command")
     params = content.get("params") or {}
@@ -208,14 +208,14 @@ async def _handle_admin_request(websocket, msg: NexusMessage) -> None:
         if command in MUTATING:
             audit_log.log("ADMIN_ACTION", msg.sender, None, {"command": command})
 
-        await websocket.send(NexusMessage(
+        await websocket.send(InterMeshMessage(
             type=MessageType.ADMIN_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
             content=result, token=msg.token,
         ).to_json())
 
     except AdminError as exc:
         audit_log.log("ADMIN_DENIED", msg.sender, None, {"command": command, "reason": str(exc)})
-        await websocket.send(NexusMessage(
+        await websocket.send(InterMeshMessage(
             type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id,
             content=str(exc), token=msg.token,
         ).to_json())
@@ -237,9 +237,9 @@ async def handle_agent(websocket, my_org: str):
     try:
         async for raw_data in websocket:
             try:
-                msg = NexusMessage.from_json(raw_data)
+                msg = InterMeshMessage.from_json(raw_data)
             except Exception as e:
-                await websocket.send(NexusMessage(type=MessageType.ERROR, sender="hub", content=str(e)).to_json())
+                await websocket.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", content=str(e)).to_json())
                 continue
 
             if msg.type == MessageType.REGISTER:
@@ -249,14 +249,14 @@ async def handle_agent(websocket, my_org: str):
                 current_active = len(agents)
                 if current_active >= MAX_FREE_AGENTS:
                     err_msg = f"AGENT_QUOTA_EXCEEDED: Free tier limit reached ({current_active}/{MAX_FREE_AGENTS} agents)."
-                    await websocket.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content=err_msg).to_json())
+                    await websocket.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content=err_msg).to_json())
                     continue
 
                 api_key = d.get("api_key")
                 if api_key:
                     info = api_keys.lookup(api_key)
                     if info is None:
-                        await websocket.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content="API Key Entreprise invalide.").to_json())
+                        await websocket.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content="API Key Entreprise invalide.").to_json())
                         continue
                     org_id = info["org_id"]
                     roles = info["roles"]
@@ -279,7 +279,7 @@ async def handle_agent(websocket, my_org: str):
                 agent_name = _qualified_name(identity)
 
                 if asimov_engine.circuit_breaker.is_tripped(agent_name):
-                    await websocket.send(NexusMessage(
+                    await websocket.send(InterMeshMessage(
                         type=MessageType.ERROR, sender="hub", to=agent_name,
                         content="ASIMOV_GUARDRAIL: agent isolé par le disjoncteur de sécurité.",
                     ).to_json())
@@ -295,7 +295,7 @@ async def handle_agent(websocket, my_org: str):
 
                 audit_log.log("AGENT_REGISTERED", agent_name, "hub", {"roles": identity.roles, "org_id": identity.org_id})
 
-                await websocket.send(NexusMessage(type=MessageType.REGISTERED, sender="hub", to=agent_name, content={
+                await websocket.send(InterMeshMessage(type=MessageType.REGISTERED, sender="hub", to=agent_name, content={
                     "status": "ready", "agent_id": identity.agent_id, "qualified_name": agent_name,
                     "roles": identity.roles, "permissions": identity.permissions, "org_id": identity.org_id,
                     "token": token, "online_agents": list(agents.keys()),
@@ -305,14 +305,14 @@ async def handle_agent(websocket, my_org: str):
                 pending = [t for t in task_registry.values()
                            if t.assignee == agent_name and t.status == TaskStatus.PENDING]
                 for task in pending:
-                    await websocket.send(NexusMessage(
+                    await websocket.send(InterMeshMessage(
                         type=MessageType.TASK_ASSIGN, sender="hub", to=agent_name, content=task.to_dict(),
                     ).to_json())
                     audit_log.log("TASK_RESUMED", "hub", agent_name, {"task_id": task.task_id})
 
             elif msg.type in AUTHENTICATED_TYPES:
                 if not msg.token or not verify_token(msg.token, msg.sender):
-                    await websocket.send(NexusMessage(type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id, content="Token invalide.").to_json())
+                    await websocket.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id, content="Token invalide.").to_json())
                     continue
 
                 if msg.type == MessageType.WHO_IS:
@@ -320,13 +320,13 @@ async def handle_agent(websocket, my_org: str):
                     ident = identity_registry.get(target_name)
                     sender_org = _agent_org(msg.sender)
                     if ident is not None and ident.org_id == sender_org:
-                        await websocket.send(NexusMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender, reply_to=msg.id, content=ident.to_dict(), token=msg.token).to_json())
+                        await websocket.send(InterMeshMessage(type=MessageType.IDENTITY, sender="hub", to=msg.sender, reply_to=msg.id, content=ident.to_dict(), token=msg.token).to_json())
 
                 elif msg.type == MessageType.DISCOVER:
                     query = msg.content or {}
                     caller_org = _agent_org(msg.sender)
                     matched = discover_agents(query, caller_org)
-                    await websocket.send(NexusMessage(
+                    await websocket.send(InterMeshMessage(
                         type=MessageType.DISCOVER_RESULT, sender="hub", to=msg.sender, reply_to=msg.id,
                         content={"query": query, "count": len(matched), "agents": matched}, token=msg.token,
                     ).to_json())
@@ -347,7 +347,7 @@ async def handle_agent(websocket, my_org: str):
                         audit_log.log("ASIMOV_GUARDRAIL_VIOLATION", msg.sender, raw_task.get("assignee"), {
                             "rule": pve.rule_name, "reason": str(pve), "task_id": raw_task.get("task_id"),
                         })
-                        await websocket.send(NexusMessage(
+                        await websocket.send(InterMeshMessage(
                             type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id,
                             content=str(pve), token=msg.token,
                         ).to_json())
@@ -367,7 +367,7 @@ async def handle_agent(websocket, my_org: str):
                             audit_log.log("ESCROW_REJECTED", msg.sender, raw_task.get("assignee"), {
                                 "reason": str(ee), "task_id": raw_task.get("task_id"),
                             })
-                            await websocket.send(NexusMessage(
+                            await websocket.send(InterMeshMessage(
                                 type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id,
                                 content=str(ee), token=msg.token,
                             ).to_json())
@@ -376,18 +376,18 @@ async def handle_agent(websocket, my_org: str):
                             "task_id": hold.task_id, "amount": hold.amount, "currency": hold.currency,
                         })
 
-                    task = NexusTask.from_dict(msg.content)
+                    task = InterMeshTask.from_dict(msg.content)
                     remember_task(task)
                     audit_log.log("TASK_SUBMITTED", msg.sender, task.assignee, {"task_id": task.task_id, "title": task.title})
                     if task.assignee in agents:
-                        await agents[task.assignee].send(NexusMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee, reply_to=msg.id, content=task.to_dict(), token=msg.token).to_json())
+                        await agents[task.assignee].send(InterMeshMessage(type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee, reply_to=msg.id, content=task.to_dict(), token=msg.token).to_json())
 
                 elif msg.type == MessageType.TASK_UPDATE:
                     td = msg.content or {}
                     tid = td.get("task_id")
                     orch = td.get("orchestrator")
                     if tid in task_registry:
-                        task = NexusTask.from_dict(td)
+                        task = InterMeshTask.from_dict(td)
                         remember_task(task)
                         if task.status == TaskStatus.COMPLETED:
                             audit_log.log("TASK_COMPLETED", msg.sender, orch, {"task_id": tid})
@@ -406,14 +406,14 @@ async def handle_agent(websocket, my_org: str):
                                     "task_id": tid, "amount": hold.amount, "currency": hold.currency,
                                 })
                     if orch in agents:
-                        await agents[orch].send(NexusMessage(type=MessageType.TASK_UPDATE, sender="hub", to=orch, content=td, token=msg.token).to_json())
+                        await agents[orch].send(InterMeshMessage(type=MessageType.TASK_UPDATE, sender="hub", to=orch, content=td, token=msg.token).to_json())
 
                 elif msg.type in (MessageType.MESSAGE, MessageType.REQUEST, MessageType.RESPONSE):
                     target = msg.to
                     sender_org = _agent_org(msg.sender)
                     target_org = _agent_org(target) if target else sender_org
                     if target and target_org != sender_org:
-                        await websocket.send(NexusMessage(
+                        await websocket.send(InterMeshMessage(
                             type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id,
                             content=f"Isolement Multi-Tenant : '{target}' appartient à une autre organisation.",
                         ).to_json())
@@ -434,7 +434,7 @@ async def handle_agent(websocket, my_org: str):
 async def main():
     global store, api_keys, audit_log, HUB_SECRET, HUB_ORG, SNAPSHOT_DIR
 
-    parser = argparse.ArgumentParser(description="Nexus Hub")
+    parser = argparse.ArgumentParser(description="InterMesh Hub")
     parser.add_argument("--port", type=int, default=8765, help="Port")
     parser.add_argument("--org", type=str, default="default", help="Org")
     parser.add_argument("--ephemeral-state", action="store_true", help="État en mémoire, rien sur disque")
@@ -452,11 +452,11 @@ async def main():
     SNAPSHOT_DIR = args.snapshot_dir
 
     if args.ephemeral_state:
-        store = NexusStore(ephemeral=True)
+        store = InterMeshStore(ephemeral=True)
     elif args.state_file:
-        store = NexusStore(path=args.state_file)
+        store = InterMeshStore(path=args.state_file)
     else:
-        store = NexusStore()
+        store = InterMeshStore()
 
     identity_registry.update(store.load_identities())
     task_registry.update(store.load_tasks())
@@ -468,7 +468,7 @@ async def main():
 
     audit_log = ImmutableAuditLog(entries=store.load_audit(), on_append=store.append_audit)
 
-    print(f"Nexus Hub — org={HUB_ORG} port={args.port}")
+    print(f"InterMesh Hub — org={HUB_ORG} port={args.port}")
     print(f"  secret : {secret_desc}")
     print(f"  état   : {store.description}")
     print(f"  clés   : {api_keys.source}")

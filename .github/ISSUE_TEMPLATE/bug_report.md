@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report unexpected behavior to help us improve Nexus Protocol
+about: Report unexpected behavior to help us improve InterMesh Protocol
 title: "[BUG] "
 labels: bug
 assignees: ''

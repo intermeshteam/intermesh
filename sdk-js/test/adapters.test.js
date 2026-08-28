@@ -11,10 +11,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { NexusAgent } from '../src/index.js';
-import { AdapterError, NexusAdapter, adapt, detectInvoker } from '../src/adapters/base.js';
-import { NexusLangChainAdapter } from '../src/adapters/langchain.js';
-import { NexusLlamaIndexAdapter } from '../src/adapters/llamaindex.js';
+import { InterMeshAgent } from '../src/index.js';
+import { AdapterError, InterMeshAdapter, adapt, detectInvoker } from '../src/adapters/base.js';
+import { InterMeshLangChainAdapter } from '../src/adapters/langchain.js';
+import { InterMeshLlamaIndexAdapter } from '../src/adapters/llamaindex.js';
 
 // ----------------------------------------------------------------------
 // Doublures
@@ -86,20 +86,20 @@ test('une fonction simple est acceptée directement', () => {
 // ----------------------------------------------------------------------
 
 test('un agent LangChain.js reçoit l\'objet de tâche', async () => {
-  const a = new NexusLangChainAdapter(new FakeRunnable(), { name: 'lc', capabilities: ['analysis'] });
+  const a = new InterMeshLangChainAdapter(new FakeRunnable(), { name: 'lc', capabilities: ['analysis'] });
   const out = await a._handleTask({ input: 'marché' });
   assert.deepEqual(out, { output: 'analysé: marché' });
   assert.deepEqual(a.identity.capabilities, ['analysis']);
 });
 
 test('LlamaIndex.TS : inputKey="query" par défaut et réponse aplatie', async () => {
-  const a = new NexusLlamaIndexAdapter(new FakeQueryEngine(), { name: 'li', capabilities: ['rag'] });
+  const a = new InterMeshLlamaIndexAdapter(new FakeQueryEngine(), { name: 'li', capabilities: ['rag'] });
   const out = await a._handleTask({ query: 'quota' });
   assert.equal(out, 'trouvé : quota');
 });
 
 test('une sortie synchrone traverse le pont sans await manquant', async () => {
-  const a = new NexusLangChainAdapter(new FakeSyncRunnable(), { name: 'sync', capabilities: ['x'] });
+  const a = new InterMeshLangChainAdapter(new FakeSyncRunnable(), { name: 'sync', capabilities: ['x'] });
   const out = await a._handleTask({ input: 'test' });
   assert.deepEqual(out, { output: 'TEST' });
 });
@@ -125,14 +125,14 @@ test('inputAdapter et outputAdapter transforment la charge', async () => {
 });
 
 test('l\'adaptateur répond aussi bien aux requêtes directes qu\'aux tâches', async () => {
-  const a = new NexusLangChainAdapter(new FakeRunnable(), { name: 'both', capabilities: ['x'] });
+  const a = new InterMeshLangChainAdapter(new FakeRunnable(), { name: 'both', capabilities: ['x'] });
   const out = await a._handleRequest({ input: 'ping' });
   assert.deepEqual(out, { output: 'analysé: ping' });
 });
 
-test('l\'adaptateur est un agent Nexus à part entière', () => {
+test('l\'adaptateur est un agent InterMesh à part entière', () => {
   const a = adapt((d) => d, { name: 'x', capabilities: ['c'], roles: ['worker'] });
-  assert.ok(a instanceof NexusAgent);
+  assert.ok(a instanceof InterMeshAgent);
   assert.deepEqual(a.identity.capabilities, ['c']);
   assert.deepEqual(a.identity.roles, ['worker']);
 });

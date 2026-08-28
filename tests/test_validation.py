@@ -1,19 +1,19 @@
 import pytest
-from nexus_sdk.message import NexusMessage, MessageType, ValidationError
-from nexus_sdk.task import NexusTask, TaskStatus, TaskValidationError
+from intermesh.message import InterMeshMessage, MessageType, ValidationError
+from intermesh.task import InterMeshTask, TaskStatus, TaskValidationError
 
 
 def test_message_validation_nominal():
     payload = {
         "id": "12345",
-        "version": "nexus/v1",
+        "version": "intermesh/v1",
         "type": "message",
         "sender": "agent_a",
         "to": "agent_b",
         "content": "hello",
         "timestamp": 1700000000.0
     }
-    msg = NexusMessage.from_dict(payload)
+    msg = InterMeshMessage.from_dict(payload)
     assert msg.id == "12345"
     assert msg.sender == "agent_a"
     assert msg.type == MessageType.MESSAGE
@@ -21,11 +21,11 @@ def test_message_validation_nominal():
 
 def test_message_validation_missing_mandatory():
     payload = {
-        "version": "nexus/v1",
+        "version": "intermesh/v1",
         "sender": "agent_a"
     }
     with pytest.raises(ValidationError) as exc:
-        NexusMessage.from_dict(payload)
+        InterMeshMessage.from_dict(payload)
     assert "Champ obligatoire absent" in str(exc.value)
 
 
@@ -35,7 +35,7 @@ def test_message_validation_bad_types():
         "sender": 12345  # Type incorrect, attendu : str
     }
     with pytest.raises(ValidationError) as exc:
-        NexusMessage.from_dict(payload)
+        InterMeshMessage.from_dict(payload)
     assert "sender" in str(exc.value)
 
 
@@ -46,14 +46,14 @@ def test_message_validation_bad_version():
         "sender": "agent_a"
     }
     with pytest.raises(ValidationError) as exc:
-        NexusMessage.from_dict(payload)
+        InterMeshMessage.from_dict(payload)
     assert "Version de protocole non supportee" in str(exc.value)
 
 
 def test_message_validation_bad_json():
     bad_raw_json = '{"type": "message", "sender": "agent_a",}'  # Virgule terminale invalide en JSON standard
     with pytest.raises(ValidationError) as exc:
-        NexusMessage.from_json(bad_raw_json)
+        InterMeshMessage.from_json(bad_raw_json)
     assert "JSON invalide" in str(exc.value)
 
 
@@ -66,7 +66,7 @@ def test_task_validation_nominal():
         "input_data": {"x": 1},
         "status": "pending"
     }
-    task = NexusTask.from_dict(payload)
+    task = InterMeshTask.from_dict(payload)
     assert task.task_id == "task-99"
     assert task.status == TaskStatus.PENDING
 
@@ -80,5 +80,5 @@ def test_task_validation_bad_status():
         "status": "not_started_invalid"  # Statut invalide
     }
     with pytest.raises(TaskValidationError) as exc:
-        NexusTask.from_dict(payload)
+        InterMeshTask.from_dict(payload)
     assert "Statut de tache invalide" in str(exc.value)

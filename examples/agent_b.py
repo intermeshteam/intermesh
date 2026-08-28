@@ -1,6 +1,6 @@
 import asyncio
 import os
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -13,7 +13,7 @@ async def compute_handler(input_data, task):
 
 
 async def main():
-    agent = NexusAgent(name="agent_b", capabilities=["calculate"], roles=["worker"], hub_url=HUB_URL)
+    agent = InterMeshAgent(name="agent_b", capabilities=["calculate"], roles=["worker"], hub_url=HUB_URL)
     agent.on_task(compute_handler)
     await agent.connect()
     print(f"[agent_b] Listening on {HUB_URL}...")

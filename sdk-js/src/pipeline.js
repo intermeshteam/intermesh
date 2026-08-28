@@ -1,10 +1,10 @@
 /**
  * Orchestration déclarative de plusieurs agents. Miroir de
- * `nexus_sdk.pipeline` côté Python — voir ce module pour le contexte.
+ * `intermesh.pipeline` côté Python — voir ce module pour le contexte.
  *
- *   import { NexusPipeline } from 'nexus-mesh';
+ *   import { InterMeshPipeline } from 'intermesh';
  *
- *   const pipeline = new NexusPipeline(orchestrator)
+ *   const pipeline = new InterMeshPipeline(orchestrator)
  *     .step('Traduire', { capabilities: ['translate'] })
  *     .step('Calculer', {
  *       capabilities: ['calculate'],
@@ -37,7 +37,7 @@ class Step {
  * nommé explicitement. La sortie d'une étape est l'entrée de la suivante,
  * via `inputFn` si la forme doit changer.
  */
-export class NexusPipeline {
+export class InterMeshPipeline {
   constructor(orchestrator) {
     this.orchestrator = orchestrator;
     this._steps = [];
@@ -46,7 +46,7 @@ export class NexusPipeline {
   /**
    * Ajoute une étape et retourne le pipeline, pour enchaîner les appels.
    *
-   * @param {string} title Titre de la tâche Nexus, visible dans le dashboard.
+   * @param {string} title Titre de la tâche InterMesh, visible dans le dashboard.
    * @param {object} opts
    * @param {string} [opts.agent] Nom exact de l'agent visé. Omis, l'agent
    *   est recherché par `capabilities`/`roles` au moment de l'exécution —
@@ -109,7 +109,7 @@ export class NexusPipeline {
 /**
  * Soumet plusieurs tâches en parallèle et attend toutes les réponses.
  *
- * Le pendant du pipeline séquentiel : là où `NexusPipeline` enchaîne,
+ * Le pendant du pipeline séquentiel : là où `InterMeshPipeline` enchaîne,
  * `fanOut` interroge plusieurs agents à la fois.
  *
  *   const results = await fanOut(orchestrator, [
@@ -117,7 +117,7 @@ export class NexusPipeline {
  *     ['de', { region: 'DE' }],
  *   ], { agents: { fr: 'marché_fr', de: 'marché_de' } });
  *
- * @param {*} orchestrator Agent Nexus dont `discover`/`submitTask` porte
+ * @param {*} orchestrator Agent InterMesh dont `discover`/`submitTask` porte
  *   les branches.
  * @param {Array<[string, *]>} branches Paires `[clé, entrée]`. La clé
  *   identifie la branche dans le résultat.

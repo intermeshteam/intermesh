@@ -15,17 +15,17 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, Optional
 
-from nexus_sdk.audit import AuditEntry
-from nexus_sdk.identity import AgentIdentity
-from nexus_sdk.task import NexusTask
+from intermesh.audit import AuditEntry
+from intermesh.identity import AgentIdentity
+from intermesh.task import InterMeshTask
 
 
 def default_state_path() -> Path:
-    """Emplacement par défaut de la base d'état, surchargeable via NEXUS_HOME."""
-    base = os.environ.get("NEXUS_HOME")
+    """Emplacement par défaut de la base d'état, surchargeable via INTERMESH_HOME."""
+    base = os.environ.get("INTERMESH_HOME")
     if base:
         return Path(base) / "hub_state.db"
-    return Path.home() / ".nexus" / "state.db"
+    return Path.home() / ".intermesh" / "state.db"
 
 
 _SCHEMA = """
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 """
 
 
-class NexusStore:
+class InterMeshStore:
     """Stockage persistant (SQLite) ou éphémère (mémoire) du Hub."""
 
     def __init__(self, path: Optional[str | os.PathLike] = None, ephemeral: bool = False):
@@ -72,7 +72,7 @@ class NexusStore:
     # Cycle de vie
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> "NexusStore":
+    def __enter__(self) -> "InterMeshStore":
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -116,16 +116,16 @@ class NexusStore:
     # Tâches
     # ------------------------------------------------------------------
 
-    def save_task(self, task: NexusTask) -> None:
+    def save_task(self, task: InterMeshTask) -> None:
         self._conn.execute(
             "INSERT OR REPLACE INTO tasks (task_id, status, payload) VALUES (?, ?, ?)",
             (task.task_id, task.status.value, json.dumps(task.to_dict())),
         )
         self._conn.commit()
 
-    def load_tasks(self) -> Dict[str, NexusTask]:
+    def load_tasks(self) -> Dict[str, InterMeshTask]:
         rows = self._conn.execute("SELECT task_id, payload FROM tasks").fetchall()
-        return {task_id: NexusTask.from_dict(json.loads(payload)) for task_id, payload in rows}
+        return {task_id: InterMeshTask.from_dict(json.loads(payload)) for task_id, payload in rows}
 
     def count_tasks_by_status(self) -> Dict[str, int]:
         rows = self._conn.execute(
@@ -152,7 +152,7 @@ class NexusStore:
                 [(name, json.dumps(i.to_dict())) for name, i in identities.items()],
             )
 
-    def replace_tasks(self, tasks: Dict[str, NexusTask]) -> None:
+    def replace_tasks(self, tasks: Dict[str, InterMeshTask]) -> None:
         """Vide la table des tâches et la réécrit, en une seule transaction."""
         with self._conn:
             self._conn.execute("DELETE FROM tasks")

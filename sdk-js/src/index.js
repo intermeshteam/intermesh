@@ -2,13 +2,13 @@ import { Buffer } from 'buffer';
 import crypto from 'crypto';
 import WebSocket from 'ws';
 
-export { NexusPipeline, PipelineError, fanOut } from './pipeline.js';
+export { InterMeshPipeline, PipelineError, fanOut } from './pipeline.js';
 
 // ============================================================================
 // MOTEUR CRYPTOGRAPHIQUE COMPATIBLE PYTHON (RSA-OAEP + AES-256-GCM)
 // ============================================================================
 
-export class NexusCrypto {
+export class InterMeshCrypto {
   static generateKeyPair() {
     return crypto.generateKeyPairSync('rsa', {
       modulusLength: 2048,
@@ -73,19 +73,19 @@ export class NexusCrypto {
 }
 
 // ============================================================================
-// AGENT NEXUS JAVASCRIPT / NODE.JS (COMPATIBLE PROTOCOLE nexus/v1)
+// AGENT NEXUS JAVASCRIPT / NODE.JS (COMPATIBLE PROTOCOLE intermesh/v1)
 // ============================================================================
 
-export class NexusAgent {
+export class InterMeshAgent {
   constructor({
     name,
-    orgId = process.env.NEXUS_DEFAULT_ORG || 'default',
+    orgId = process.env.INTERMESH_DEFAULT_ORG || 'default',
     apiKey = null,
     capabilities = [],
     roles = [],
     permissions = [],
     metadata = {},
-    hubUrl = process.env.NEXUS_HUB_URL || 'ws://localhost:8765',
+    hubUrl = process.env.INTERMESH_HUB_URL || 'ws://localhost:8765',
     encrypt = true
   }) {
     this.name = name;
@@ -104,7 +104,7 @@ export class NexusAgent {
     this.pendingRequests = {};
     this.pendingTasks = {};
 
-    const { publicKey, privateKey } = NexusCrypto.generateKeyPair();
+    const { publicKey, privateKey } = InterMeshCrypto.generateKeyPair();
     this.privateKeyPem = privateKey;
     this.publicKeyPem = publicKey;
 
@@ -157,7 +157,7 @@ export class NexusAgent {
 
         const regMsg = {
           id: crypto.randomUUID(),
-          version: 'nexus/v1',
+          version: 'intermesh/v1',
           type: 'register',
           sender: this.name,
           content: payload
@@ -208,9 +208,9 @@ export class NexusAgent {
           let content = msg.content;
           if (this.encrypt && msg.type === 'response' && typeof content === 'string') {
             try {
-              content = JSON.parse(NexusCrypto.decryptWith(this.privateKeyPem, content));
+              content = JSON.parse(InterMeshCrypto.decryptWith(this.privateKeyPem, content));
             } catch {
-              content = NexusCrypto.decryptWith(this.privateKeyPem, content);
+              content = InterMeshCrypto.decryptWith(this.privateKeyPem, content);
             }
           }
           resolve(content);
@@ -229,9 +229,9 @@ export class NexusAgent {
               let out = task.output_data;
               if (this.encrypt && typeof out === 'string') {
                 try {
-                  out = JSON.parse(NexusCrypto.decryptWith(this.privateKeyPem, out));
+                  out = JSON.parse(InterMeshCrypto.decryptWith(this.privateKeyPem, out));
                 } catch {
-                  out = NexusCrypto.decryptWith(this.privateKeyPem, out);
+                  out = InterMeshCrypto.decryptWith(this.privateKeyPem, out);
                 }
               }
               resolve(out);
@@ -246,9 +246,9 @@ export class NexusAgent {
           let content = msg.content;
           if (this.encrypt && typeof content === 'string') {
             try {
-              content = JSON.parse(NexusCrypto.decryptWith(this.privateKeyPem, content));
+              content = JSON.parse(InterMeshCrypto.decryptWith(this.privateKeyPem, content));
             } catch {
-              content = NexusCrypto.decryptWith(this.privateKeyPem, content);
+              content = InterMeshCrypto.decryptWith(this.privateKeyPem, content);
             }
           }
 
@@ -257,13 +257,13 @@ export class NexusAgent {
             if (this.encrypt) {
               const pk = await this._fetchPublicKey(msg.sender);
               if (pk) {
-                reply = NexusCrypto.encryptFor(pk, reply);
+                reply = InterMeshCrypto.encryptFor(pk, reply);
               }
             }
 
             this.ws.send(JSON.stringify({
               id: crypto.randomUUID(),
-              version: 'nexus/v1',
+              version: 'intermesh/v1',
               type: 'response',
               sender: this.qualifiedName,
               to: msg.sender,
@@ -278,9 +278,9 @@ export class NexusAgent {
           let content = msg.content;
           if (this.encrypt && typeof content === 'string') {
             try {
-              content = JSON.parse(NexusCrypto.decryptWith(this.privateKeyPem, content));
+              content = JSON.parse(InterMeshCrypto.decryptWith(this.privateKeyPem, content));
             } catch {
-              content = NexusCrypto.decryptWith(this.privateKeyPem, content);
+              content = InterMeshCrypto.decryptWith(this.privateKeyPem, content);
             }
           }
           if (this.messageHandler) this.messageHandler(content, msg.sender);
@@ -303,7 +303,7 @@ export class NexusAgent {
     task.status = 'running';
     this.ws.send(JSON.stringify({
       id: crypto.randomUUID(),
-      version: 'nexus/v1',
+      version: 'intermesh/v1',
       type: 'task_update',
       sender: this.qualifiedName,
       content: task,
@@ -313,9 +313,9 @@ export class NexusAgent {
     let input = task.input_data;
     if (this.encrypt && typeof input === 'string') {
       try {
-        input = JSON.parse(NexusCrypto.decryptWith(this.privateKeyPem, input));
+        input = JSON.parse(InterMeshCrypto.decryptWith(this.privateKeyPem, input));
       } catch {
-        input = NexusCrypto.decryptWith(this.privateKeyPem, input);
+        input = InterMeshCrypto.decryptWith(this.privateKeyPem, input);
       }
     }
 
@@ -326,7 +326,7 @@ export class NexusAgent {
       if (this.encrypt) {
         const pk = await this._fetchPublicKey(task.orchestrator);
         if (pk) {
-          encOutput = NexusCrypto.encryptFor(pk, output);
+          encOutput = InterMeshCrypto.encryptFor(pk, output);
         }
       }
       task.status = 'completed';
@@ -338,7 +338,7 @@ export class NexusAgent {
 
     this.ws.send(JSON.stringify({
       id: crypto.randomUUID(),
-      version: 'nexus/v1',
+      version: 'intermesh/v1',
       type: 'task_update',
       sender: this.qualifiedName,
       content: task,
@@ -375,7 +375,7 @@ export class NexusAgent {
 
       this.ws.send(JSON.stringify({
         id: msgId,
-        version: 'nexus/v1',
+        version: 'intermesh/v1',
         type: 'who_is',
         sender: this.qualifiedName,
         content: agentName,
@@ -399,7 +399,7 @@ export class NexusAgent {
 
       this.ws.send(JSON.stringify({
         id: msgId,
-        version: 'nexus/v1',
+        version: 'intermesh/v1',
         type: 'discover',
         sender: this.qualifiedName,
         content: query,
@@ -413,7 +413,7 @@ export class NexusAgent {
     if (this.encrypt) {
       const pk = await this._fetchPublicKey(assignee);
       if (pk) {
-        encryptedInput = NexusCrypto.encryptFor(pk, inputData);
+        encryptedInput = InterMeshCrypto.encryptFor(pk, inputData);
       }
     }
 
@@ -441,7 +441,7 @@ export class NexusAgent {
 
       this.ws.send(JSON.stringify({
         id: crypto.randomUUID(),
-        version: 'nexus/v1',
+        version: 'intermesh/v1',
         type: 'task_submit',
         sender: this.qualifiedName,
         to: assignee,

@@ -138,10 +138,10 @@ export default function MissionControlDashboard() {
 
       ws.onopen = () => {
         setHubConnected(true);
-        pushLog('INFO', 'System', 'Control Plane connected to Nexus Hub (ws://localhost:8765)');
+        pushLog('INFO', 'System', 'Control Plane connected to InterMesh Hub (ws://localhost:8765)');
         ws.send(JSON.stringify({
           id: crypto.randomUUID(),
-          version: 'nexus/v1',
+          version: 'intermesh/v1',
           type: 'register',
           sender: `dashboard_main_${Math.random().toString(36).slice(2, 7)}`,
           content: { name: 'dashboard_main', roles: ['observer', 'admin'] },

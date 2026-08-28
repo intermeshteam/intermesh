@@ -4,7 +4,7 @@ import sys
 import subprocess
 import pytest
 
-from nexus_sdk import NexusAgent, nexus_service, from_callable, from_langchain
+from intermesh import InterMeshAgent, intermesh_service, from_callable, from_langchain
 
 
 def mock_legacy_ai_function(input_data):
@@ -22,17 +22,17 @@ class MockLangChainRunnable:
 def test_adapter_unit_creation():
     """Vérifie la création des agents adaptés."""
     # 1. Option 1-Line Classmethod
-    agent1 = NexusAgent.from_callable(mock_legacy_ai_function, name="tool_1", capabilities=["summarize"])
+    agent1 = InterMeshAgent.from_callable(mock_legacy_ai_function, name="tool_1", capabilities=["summarize"])
     assert agent1.name == "tool_1"
     assert "summarize" in agent1.identity.capabilities
 
     # 2. Option LangChain
     lc_mock = MockLangChainRunnable()
-    agent2 = NexusAgent.from_langchain(lc_mock, name="langchain_bot", capabilities=["chain_exec"])
+    agent2 = InterMeshAgent.from_langchain(lc_mock, name="langchain_bot", capabilities=["chain_exec"])
     assert agent2.name == "langchain_bot"
 
     # 3. Option Decorator
-    @nexus_service(name="decorated_service", capabilities=["nlp"])
+    @intermesh_service(name="decorated_service", capabilities=["nlp"])
     def my_service(data):
         return "ok"
 
@@ -50,8 +50,8 @@ async def test_1line_integration_live_execution():
     await asyncio.sleep(1.0)
 
     try:
-        # 1. CRÉATION EN 1 LIGNE : On adapte notre fonction ordinaire en Agent Nexus
-        worker_agent = NexusAgent.from_callable(
+        # 1. CRÉATION EN 1 LIGNE : On adapte notre fonction ordinaire en Agent InterMesh
+        worker_agent = InterMeshAgent.from_callable(
             mock_legacy_ai_function, 
             name="1line_worker", 
             capabilities=["summarize"]
@@ -59,7 +59,7 @@ async def test_1line_integration_live_execution():
         await worker_agent.connect()
 
         # 2. L'orchestrateur s'exécute et délègue la tâche au worker 1-ligne
-        orchestrator = NexusAgent(name="caller_agent", roles=["admin"])
+        orchestrator = InterMeshAgent(name="caller_agent", roles=["admin"])
         await orchestrator.connect()
 
         await asyncio.sleep(0.5)
@@ -68,10 +68,10 @@ async def test_1line_integration_live_execution():
         res = await orchestrator.submit_task(
             title="Summary Task",
             assignee="default/1line_worker",
-            input_data={"text": "nexus protocol"}
+            input_data={"text": "intermesh protocol"}
         )
 
-        assert res == {"summary": "PROCESSED: NEXUS PROTOCOL"}
+        assert res == {"summary": "PROCESSED: INTERMESH PROTOCOL"}
         print("\n✅ 1-Line Adapter Live Execution Verified Successfully!")
 
         await worker_agent.ws.close()

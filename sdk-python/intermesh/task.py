@@ -16,7 +16,7 @@ class TaskStatus(str, Enum):
     FAILED = "failed"
 
 
-class NexusTask:
+class InterMeshTask:
     def __init__(
         self,
         title: str,
@@ -62,7 +62,7 @@ class NexusTask:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "NexusTask":
+    def from_dict(cls, data: dict) -> "InterMeshTask":
         if not isinstance(data, dict):
             raise TaskValidationError("Le payload de la tache doit etre un dictionnaire JSON.")
 

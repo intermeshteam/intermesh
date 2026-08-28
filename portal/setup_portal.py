@@ -52,9 +52,9 @@ import { ArrowRight, Copy, Check, ChevronDown } from 'lucide-react';
 export default function LandingPage() {
   const [copied, setCopied] = useState(false);
 
-  const realNexusCode = `from nexus_sdk import NexusAgent
+  const realInterMeshCode = `from intermesh import InterMeshAgent
 
-agent = NexusAgent(
+agent = InterMeshAgent(
     name="orchestrator",
     capabilities=["translate", "calculate"],
     roles=["admin"],
@@ -70,7 +70,7 @@ await agent.connect()
 response = await agent.ask(to="translator_french", content="Hello")`;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(realNexusCode);
+    navigator.clipboard.writeText(realInterMeshCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -146,7 +146,7 @@ response = await agent.ask(to="translator_french", content="Hello")`;
 
             <div className="p-5 font-mono text-xs leading-relaxed overflow-x-auto text-slate-300 selection:bg-slate-800">
               <pre suppressHydrationWarning>
-                <code>{realNexusCode}</code>
+                <code>{realInterMeshCode}</code>
               </pre>
             </div>
           </div>
@@ -348,17 +348,17 @@ export default function DocsPage() {
 
       <div>
         <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">RFC-001 SPECIFICATION</span>
-        <h1 className="text-3xl font-extrabold text-white mt-1">Nexus Core Protocol v1</h1>
+        <h1 className="text-3xl font-extrabold text-white mt-1">InterMesh Core Protocol v1</h1>
         <p className="text-sm text-slate-400 mt-2">Official technical specification for universal AI agent coordination.</p>
       </div>
 
       <div className="bg-[#0D0E12] border border-slate-800 rounded-xl p-6 space-y-6 font-mono text-xs text-slate-300 leading-relaxed">
         <div>
-          <h3 className="text-white font-bold text-sm mb-2 font-sans">1. Nexus Message Envelope (nexus/v1)</h3>
+          <h3 className="text-white font-bold text-sm mb-2 font-sans">1. InterMesh Message Envelope (intermesh/v1)</h3>
           <pre className="bg-[#08080A] p-4 rounded-lg text-slate-200 overflow-x-auto">
 {`{
   "id": "UUID-v4 (Unique message ID)",
-  "version": "nexus/v1",
+  "version": "intermesh/v1",
   "type": "register | message | request | response | task_submit | task_assign | task_update",
   "sender": "org_id/agent_name",
   "to": "org_id/target_agent",
@@ -372,7 +372,7 @@ export default function DocsPage() {
         <div>
           <h3 className="text-white font-bold text-sm mb-2 font-sans">2. Cryptographic Security & E2E Encryption</h3>
           <p className="text-slate-400 font-sans text-xs leading-relaxed">
-            All payload content is encrypted client-side using hybrid encryption: RSA-2048-OAEP for key exchange and AES-256-GCM for payload data. The Nexus Hub routes messages without access to plaintext content.
+            All payload content is encrypted client-side using hybrid encryption: RSA-2048-OAEP for key exchange and AES-256-GCM for payload data. The InterMesh Hub routes messages without access to plaintext content.
           </p>
         </div>
       </div>

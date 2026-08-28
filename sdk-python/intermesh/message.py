@@ -37,7 +37,7 @@ class MessageType(str, Enum):
     TELEMETRY = "telemetry_event"          # Hub -> Observateurs
 
 
-class NexusMessage:
+class InterMeshMessage:
     def __init__(
         self,
         type: MessageType,
@@ -47,7 +47,7 @@ class NexusMessage:
         reply_to: Optional[str] = None,
         msg_id: Optional[str] = None,
         timestamp: Optional[float] = None,
-        version: str = "nexus/v1",
+        version: str = "intermesh/v1",
         token: Optional[str] = None
     ):
         self.id = msg_id or str(uuid.uuid4())
@@ -79,7 +79,7 @@ class NexusMessage:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_dict(cls, data: dict) -> "NexusMessage":
+    def from_dict(cls, data: dict) -> "InterMeshMessage":
         if not isinstance(data, dict):
             raise ValidationError("Le payload du message doit etre un dictionnaire JSON.")
 
@@ -90,8 +90,8 @@ class NexusMessage:
                 raise ValidationError(f"Champ obligatoire absent : '{field}'")
 
         # Validation de la version
-        version = data.get("version", "nexus/v1")
-        if version != "nexus/v1":
+        version = data.get("version", "intermesh/v1")
+        if version != "intermesh/v1":
             raise ValidationError(f"Version de protocole non supportee : '{version}'")
 
         # Validation du type de message
@@ -144,7 +144,7 @@ class NexusMessage:
         )
 
     @classmethod
-    def from_json(cls, raw_json: str) -> "NexusMessage":
+    def from_json(cls, raw_json: str) -> "InterMeshMessage":
         try:
             data = json.loads(raw_json)
         except json.JSONDecodeError as e:

@@ -1,6 +1,6 @@
 import os
 import pytest
-from nexus_sdk.crypto import generate_keypair, get_private_key_pem, save_encrypted_vault, load_encrypted_vault
+from intermesh.crypto import generate_keypair, get_private_key_pem, save_encrypted_vault, load_encrypted_vault
 
 
 def test_encrypted_local_key_vault(tmp_path):

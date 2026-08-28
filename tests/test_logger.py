@@ -1,6 +1,6 @@
 import json
 import logging
-from nexus_sdk.logger import get_logger, JSONFormatter, StandardFormatter
+from intermesh.logger import get_logger, JSONFormatter, StandardFormatter
 
 
 def test_json_formatter_structure():

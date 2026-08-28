@@ -116,7 +116,7 @@ delegate to a partner's without either side standing up shared
 infrastructure or trusting the other with more than the task requires.
 
 **Framework adapters that add nothing.** `from_langchain` wraps an existing
-LangChain runnable; `from_callable` and the `@nexus_service` decorator turn
+LangChain runnable; `from_callable` and the `@intermesh_service` decorator turn
 any Python function into a discoverable agent, which is how the CrewAI,
 AutoGen and LlamaIndex examples bridge their own frameworks. None of this
 imports the frameworks themselves, on purpose — installing Nexus never
@@ -195,5 +195,5 @@ it, break it, tell us where it's wrong.
 
 ---
 
-*Nexus Protocol is open source under Apache 2.0. `pip install nexus-mesh` /
-`npm install nexus-mesh`.*
+*InterMesh Protocol is open source under Apache 2.0. `pip install intermesh` /
+`npm install intermesh`.*

@@ -1,4 +1,4 @@
-name: Nexus Protocol CI/CD
+name: InterMesh Protocol CI/CD
 
 on:
   push:

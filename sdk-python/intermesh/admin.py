@@ -43,11 +43,11 @@ import dataclasses
 import time
 from typing import Any, Callable, Optional
 
-from nexus_sdk import snapshot as snapshot_store
-from nexus_sdk.escrow import EscrowError
-from nexus_sdk.guardrails import GuardrailPolicy
-from nexus_sdk.snapshot import SnapshotError
-from nexus_sdk.task import NexusTask, TaskStatus
+from intermesh import snapshot as snapshot_store
+from intermesh.escrow import EscrowError
+from intermesh.guardrails import GuardrailPolicy
+from intermesh.snapshot import SnapshotError
+from intermesh.task import InterMeshTask, TaskStatus
 
 # Commandes qui modifient l'état. Isolées pour être journalisées
 # distinctement des simples lectures.
@@ -148,7 +148,7 @@ def caller_scope(token_payload: dict) -> tuple[str, bool]:
 
 def _org_of(qualified_name: Optional[str]) -> str:
     """
-    Organisation porteuse d'un nom qualifié Nexus (`"acme/bot"` -> `"acme"`).
+    Organisation porteuse d'un nom qualifié InterMesh (`"acme/bot"` -> `"acme"`).
 
     Un nom sans préfixe appartient à l'organisation par défaut du Hub —
     la même convention que `AgentIdentity.qualified_name`.

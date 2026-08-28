@@ -14,17 +14,17 @@ import stat
 
 import pytest
 
-from nexus_sdk import snapshot
-from nexus_sdk.admin import AdminContext, AdminError
-from nexus_sdk.admin import execute as admin_execute
-from nexus_sdk.apikeys import ApiKeyStore
-from nexus_sdk.audit import ImmutableAuditLog
-from nexus_sdk.escrow import EscrowManager
-from nexus_sdk.guardrails import AsimovGuardrailEngine, GuardrailPolicy
-from nexus_sdk.identity import AgentIdentity
-from nexus_sdk.snapshot import SnapshotError
-from nexus_sdk.store import NexusStore
-from nexus_sdk.task import NexusTask, TaskStatus
+from intermesh import snapshot
+from intermesh.admin import AdminContext, AdminError
+from intermesh.admin import execute as admin_execute
+from intermesh.apikeys import ApiKeyStore
+from intermesh.audit import ImmutableAuditLog
+from intermesh.escrow import EscrowManager
+from intermesh.guardrails import AsimovGuardrailEngine, GuardrailPolicy
+from intermesh.identity import AgentIdentity
+from intermesh.snapshot import SnapshotError
+from intermesh.store import InterMeshStore
+from intermesh.task import InterMeshTask, TaskStatus
 
 
 # ----------------------------------------------------------------------
@@ -36,8 +36,8 @@ def _identity(name: str, org: str = "acme", caps=None) -> AgentIdentity:
                          roles=["standard"])
 
 
-def _task(title: str, assignee: str) -> NexusTask:
-    return NexusTask(title=title, orchestrator="acme/boss", assignee=assignee,
+def _task(title: str, assignee: str) -> InterMeshTask:
+    return InterMeshTask(title=title, orchestrator="acme/boss", assignee=assignee,
                      input_data={"text": "bonjour"})
 
 
@@ -48,7 +48,7 @@ class _Hub:
         self.identity_registry = {}
         self.task_registry = {}
         self.agents = {}
-        self.store = NexusStore(path=str(tmp_path / "state.db"))
+        self.store = InterMeshStore(path=str(tmp_path / "state.db"))
         self.audit_log = ImmutableAuditLog(entries=self.store.load_audit(),
                                            on_append=self.store.append_audit)
         self.asimov_engine = AsimovGuardrailEngine()
@@ -60,7 +60,7 @@ class _Hub:
         else:
             # Clés injectées par l'environnement : lecture seule.
             self.api_keys = ApiKeyStore({"nx_env_key": {"org_id": "acme", "roles": ["admin"]}},
-                                        source="variable NEXUS_API_KEYS")
+                                        source="variable INTERMESH_API_KEYS")
 
     def ctx(self, *, scoped=False, caller_org="acme") -> AdminContext:
         return AdminContext(

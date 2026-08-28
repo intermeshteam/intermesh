@@ -1,13 +1,13 @@
-# Nexus Mesh — JavaScript / TypeScript SDK
+# InterMesh — JavaScript / TypeScript SDK
 
-The official Node.js SDK for **Nexus Protocol**, the universal open-source coordination
+The official Node.js SDK for **InterMesh Protocol**, the universal open-source coordination
 protocol for AI agents.
 
 Fully interoperable with the Python SDK: a Node.js agent and a Python agent can exchange
 end-to-end encrypted messages and tasks through the same hub.
 
 ```bash
-npm install nexus-mesh
+npm install intermesh
 ```
 
 ---
@@ -23,9 +23,9 @@ nexus hub
 **Connect an agent:**
 
 ```javascript
-import { NexusAgent } from 'nexus-mesh';
+import { InterMeshAgent } from 'intermesh';
 
-const agent = new NexusAgent({
+const agent = new InterMeshAgent({
   name: 'node_orchestrator',
   capabilities: ['orchestration'],
   roles: ['admin'],
@@ -62,12 +62,12 @@ agent.onRequest(async (content, sender) => {
 
 Wrap an existing LangChain.js `Runnable` or LlamaIndex.TS query/chat engine without
 changing a line of it — it becomes discoverable and receives delegated tasks like a
-native Nexus agent:
+native InterMesh agent:
 
 ```javascript
-import { NexusLangChainAdapter } from 'nexus-mesh/adapters/langchain';
+import { InterMeshLangChainAdapter } from 'intermesh/adapters/langchain';
 
-const agent = new NexusLangChainAdapter(myRunnable, {
+const agent = new InterMeshLangChainAdapter(myRunnable, {
   name: 'analyst',
   capabilities: ['market_analysis'],
 });
@@ -75,9 +75,9 @@ await agent.connect();
 ```
 
 ```javascript
-import { NexusLlamaIndexAdapter } from 'nexus-mesh/adapters/llamaindex';
+import { InterMeshLlamaIndexAdapter } from 'intermesh/adapters/llamaindex';
 
-const agent = new NexusLlamaIndexAdapter(index.asQueryEngine(), {
+const agent = new InterMeshLlamaIndexAdapter(index.asQueryEngine(), {
   name: 'knowledge_base',
   capabilities: ['document_search', 'rag'],
 });
@@ -88,7 +88,7 @@ Any other object exposing `invoke`, `run`, `call`, `query`, `chat`, `predict` �
 plain function — works with the generic `adapt()`:
 
 ```javascript
-import { adapt } from 'nexus-mesh/adapters';
+import { adapt } from 'intermesh/adapters';
 
 const agent = adapt(myExistingAgent, { name: 'x', capabilities: ['c'] });
 ```
@@ -107,13 +107,13 @@ you write the adapting function yourself — see
 
 ## Orchestration: chain and parallelize agents
 
-`NexusPipeline` chains tasks across agents found by capability — the output of
+`InterMeshPipeline` chains tasks across agents found by capability — the output of
 one step feeds the next:
 
 ```javascript
-import { NexusPipeline } from 'nexus-mesh';
+import { InterMeshPipeline } from 'intermesh';
 
-const pipeline = new NexusPipeline(orchestrator)
+const pipeline = new InterMeshPipeline(orchestrator)
   .step('Translate', { capabilities: ['translate'] })
   .step('Calculate', {
     capabilities: ['calculate'],
@@ -126,7 +126,7 @@ const result = await pipeline.run({ text: 'compute forty two doubled' });
 `fanOut` runs independent branches concurrently and keys the results:
 
 ```javascript
-import { fanOut } from 'nexus-mesh';
+import { fanOut } from 'intermesh';
 
 const results = await fanOut(orchestrator, [
   ['fr', { region: 'FR' }],

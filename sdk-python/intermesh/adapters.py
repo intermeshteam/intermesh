@@ -13,9 +13,9 @@ def from_callable(
     hub_url: str = "ws://localhost:8765",
     encrypt: bool = True
 ):
-    from nexus_sdk.agent import NexusAgent
+    from intermesh.agent import InterMeshAgent
 
-    agent = NexusAgent(
+    agent = InterMeshAgent(
         name=name,
         org_id=org_id,
         capabilities=capabilities or ["compute"],
@@ -43,9 +43,9 @@ def from_langchain(
     hub_url: str = "ws://localhost:8765",
     encrypt: bool = True
 ):
-    from nexus_sdk.agent import NexusAgent
+    from intermesh.agent import InterMeshAgent
 
-    agent = NexusAgent(
+    agent = InterMeshAgent(
         name=name,
         capabilities=capabilities or ["langchain_chain"],
         roles=roles or ["worker"],
@@ -65,13 +65,13 @@ def from_langchain(
         else:
             raise TypeError("L'objet fourni n'est pas un Runnable/Chain LangChain valide.")
 
-        return {"output": res, "adapter": "langchain_nexus_v1"}
+        return {"output": res, "adapter": "langchain_intermesh_v1"}
 
     agent.on_task(langchain_handler)
     return agent
 
 
-def nexus_service(
+def intermesh_service(
     name: str,
     capabilities: Optional[List[str]] = None,
     roles: Optional[List[str]] = None,

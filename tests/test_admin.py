@@ -9,8 +9,8 @@ import tempfile
 
 import pytest
 
-from nexus_sdk import NexusAgent
-from nexus_sdk.admin import AdminError, authorize
+from intermesh import InterMeshAgent
+from intermesh.admin import AdminError, authorize
 
 PORT = 8807
 
@@ -72,7 +72,7 @@ def hub():
 
     os.system(f"fuser -k {PORT}/tcp 2>/dev/null")
 
-    env = {**os.environ, "NEXUS_API_KEYS_FILE": keys_file}
+    env = {**os.environ, "INTERMESH_API_KEYS_FILE": keys_file}
     proc = subprocess.Popen(
         [sys.executable, "-u", "server/hub.py", "--port", str(PORT), "--org", "acme",
          "--state-file", os.path.join(work, "s.db"),
@@ -92,7 +92,7 @@ def hub():
 
 
 async def _connect(name, api_key=None, roles=None):
-    agent = NexusAgent(name=name, hub_url=f"ws://localhost:{PORT}",
+    agent = InterMeshAgent(name=name, hub_url=f"ws://localhost:{PORT}",
                        api_key=api_key, roles=roles, encrypt=False)
     await agent.connect()
     return agent

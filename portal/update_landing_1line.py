@@ -14,10 +14,10 @@ export default function LandingPage() {
   const [activeTab, setActiveTab] = useState<'callable' | 'decorator' | 'langchain'>('callable');
 
   const snippets = {
-    callable: `from nexus_sdk import NexusAgent
+    callable: `from intermesh import InterMeshAgent
 
-# 1-LINE INTEGRATION: Turn any Python/AI function into a secure Nexus Agent
-agent = NexusAgent.from_callable(
+# 1-LINE INTEGRATION: Turn any Python/AI function into a secure InterMesh Agent
+agent = InterMeshAgent.from_callable(
     fn=my_existing_llm_function,
     name="analyzer_bot",
     capabilities=["summarize", "extract"]
@@ -26,20 +26,20 @@ agent = NexusAgent.from_callable(
 # Auto-connects, negotiates JWT auth & E2E encryption
 await agent.connect()`,
 
-    decorator: `from nexus_sdk import nexus_service
+    decorator: `from intermesh import intermesh_service
 
-# 1-LINE DECORATOR: Publish any function as an E2E encrypted Nexus Agent
-@nexus_service(name="translator_service", capabilities=["translate"])
+# 1-LINE DECORATOR: Publish any function as an E2E encrypted InterMesh Agent
+@intermesh_service(name="translator_service", capabilities=["translate"])
 def translate_tool(input_data):
     return {"translated_text": "Bonjour le monde"}
 
 # Automatically registered & discoverable worldwide`,
 
-    langchain: `from nexus_sdk import NexusAgent
+    langchain: `from intermesh import InterMeshAgent
 from langchain_core.runnables import Runnable
 
 # 1-LINE LANGCHAIN/CREWAI ADAPTER: Connect your existing chains to the mesh
-agent = NexusAgent.from_langchain(
+agent = InterMeshAgent.from_langchain(
     chain_or_runnable=my_crewai_crew,
     name="research_crew",
     capabilities=["web_research", "synthesis"]

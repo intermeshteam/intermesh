@@ -1,5 +1,5 @@
 """
-Nexus Escrow — séquestre inter-organisations pour les tâches payantes.
+InterMesh Escrow — séquestre inter-organisations pour les tâches payantes.
 
 Portée volontairement limitée : ceci est le PROTOCOLE (états, règles,
 traçabilité), pas une passerelle de paiement. Le `SimulatedLedger` tient des

@@ -1,5 +1,5 @@
 """
-Nexus Schema Ontology — traduction de payloads entre conventions de nommage.
+InterMesh Schema Ontology — traduction de payloads entre conventions de nommage.
 
 Ce n'est PAS un modèle de traduction sémantique par IA : c'est une table de
 correspondance déterministe entre schémas nommés (`SchemaRegistry`) complétée

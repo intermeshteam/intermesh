@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from nexus_sdk.config import Settings
+from intermesh.config import Settings
 
 def test_settings_defaults():
     settings = Settings()
@@ -10,10 +10,10 @@ def test_settings_defaults():
     assert settings.default_timeout_ask == 10.0
 
 def test_settings_from_env(monkeypatch):
-    monkeypatch.setenv("NEXUS_HUB_PORT", "9999")
-    monkeypatch.setenv("NEXUS_DEFAULT_ORG", "test_org")
-    monkeypatch.setenv("NEXUS_ENCRYPT", "false")
-    monkeypatch.setenv("NEXUS_TIMEOUT_ASK", "45.5")
+    monkeypatch.setenv("INTERMESH_HUB_PORT", "9999")
+    monkeypatch.setenv("INTERMESH_DEFAULT_ORG", "test_org")
+    monkeypatch.setenv("INTERMESH_ENCRYPT", "false")
+    monkeypatch.setenv("INTERMESH_TIMEOUT_ASK", "45.5")
     
     settings = Settings()
     assert settings.hub_port == 9999

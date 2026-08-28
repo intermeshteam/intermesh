@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nexus-mesh"
+name = "intermesh"
 version = "0.3.0"
 description = "Universal coordination protocol for AI agents — E2E encrypted, cross-language, federated"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Nexus Protocol Authors"},
+    {name = "InterMesh Protocol Authors"},
 ]
 keywords = [
     "ai",
@@ -49,8 +49,8 @@ Documentation = "https://github.com/mrlomemba-cmd/nexus/tree/main/docs"
 Issues = "https://github.com/mrlomemba-cmd/nexus/issues"
 
 [project.scripts]
-nexus = "nexus_sdk.cli:main"
+intermesh = "intermesh.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["nexus_sdk*"]
+include = ["intermesh*"]

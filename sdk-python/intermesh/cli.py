@@ -8,18 +8,18 @@ import socketserver
 import sys
 import time
 
-from nexus_sdk import NexusAgent, NexusMessage, MessageType
-from nexus_sdk.crypto import generate_keypair, get_public_key_pem
-from nexus_sdk.identity import AgentIdentity
+from intermesh import InterMeshAgent, InterMeshMessage, MessageType
+from intermesh.crypto import generate_keypair, get_public_key_pem
+from intermesh.identity import AgentIdentity
 
 
 def print_banner():
     # La version vient du paquet : une chaîne en dur ici finit toujours
     # par mentir après quelques releases.
-    from nexus_sdk import __version__
+    from intermesh import __version__
     print(f"""
 \033[36m    _   ___________  _______
-   / | / / ____/   |/  _/   |  NEXUS PROTOCOL
+   / | / / ____/   |/  _/   |  INTERMESH PROTOCOL
   /  |/ / __/ / /| |/ // /| |  Universal Agent Infrastructure
  / /|  / /___/ ___ / // ___ |  CLI Developer Tool v{__version__}
 /_/ |_/_____/_/  |_/___/_/  |_|\033[0m
@@ -36,7 +36,7 @@ def run_security_check(args):
     checks.append(("Chiffrement E2E (RSA-2048 + AES-256-GCM)", True, "Activé par défaut dans le SDK"))
 
     # 2. Vérification de l'isolation du Hub (127.0.0.1)
-    bind_ip = os.getenv("NEXUS_BIND_IP", "127.0.0.1")
+    bind_ip = os.getenv("INTERMESH_BIND_IP", "127.0.0.1")
     if bind_ip in ("127.0.0.1", "localhost"):
         checks.append(("Isolation du Hub (Loopback 127.0.0.1)", True, "Le Hub est isolé sur votre machine locale"))
     else:
@@ -44,24 +44,24 @@ def run_security_check(args):
         score -= 20
 
     # 3. Vérification du TLS / WSS
-    cert_path = os.getenv("NEXUS_SSL_CERT")
+    cert_path = os.getenv("INTERMESH_SSL_CERT")
     if cert_path and os.path.exists(cert_path):
         checks.append(("Transport Sécurisé TLS (wss://)", True, "Certificat SSL/TLS détecté"))
     else:
         checks.append(("Transport Sécurisé TLS (wss://)", False, "Attention: Utilisation de ws:// non chiffré sur le réseau local"))
         score -= 10
 
-    # 4. Vérification des permissions du dossier .nexus/
-    nexus_dir = os.path.expanduser("~/.nexus")
-    if os.path.exists(nexus_dir):
-        mode = oct(os.stat(nexus_dir).st_mode)[-3:]
+    # 4. Vérification des permissions du dossier .intermesh/
+    intermesh_dir = os.path.expanduser("~/.intermesh")
+    if os.path.exists(intermesh_dir):
+        mode = oct(os.stat(intermesh_dir).st_mode)[-3:]
         if mode in ("700", "600"):
-            checks.append(("Permissions du dossier ~/.nexus/", True, f"Permissions restrictives idéales ({mode})"))
+            checks.append(("Permissions du dossier ~/.intermesh/", True, f"Permissions restrictives idéales ({mode})"))
         else:
-            checks.append(("Permissions du dossier ~/.nexus/", False, f"Permissions ouvertes ({mode}). Recommandé: 700"))
+            checks.append(("Permissions du dossier ~/.intermesh/", False, f"Permissions ouvertes ({mode}). Recommandé: 700"))
             score -= 10
     else:
-        checks.append(("Dossier de clés ~/.nexus/", True, "Non créé pour l'instant"))
+        checks.append(("Dossier de clés ~/.intermesh/", True, "Non créé pour l'instant"))
 
     print(f"{'TEST DE SÉCURITÉ':<45} {'STATUT':<12} {'DÉTAILS'}")
     print("-" * 75)
@@ -94,7 +94,7 @@ def run_docs(args):
 
 
 async def run_discover(args):
-    agent = NexusAgent(name="cli_inspector", roles=["admin"], encrypt=False)
+    agent = InterMeshAgent(name="cli_inspector", roles=["admin"], encrypt=False)
     await agent.connect()
     query = {}
     if args.capability: query["capabilities"] = [args.capability]
@@ -121,12 +121,12 @@ async def _admin_call(args, command: str, **params) -> dict:
     L'administration exige une identité authentifiée par clé d'API : les
     rôles déclarés à l'enregistrement ne suffisent pas (voir admin.py).
     """
-    api_key = args.api_key or os.getenv("NEXUS_API_KEY")
+    api_key = args.api_key or os.getenv("INTERMESH_API_KEY")
     if not api_key:
-        print("\033[31m✗ Clé d'API requise : --api-key, ou la variable NEXUS_API_KEY.\033[0m")
+        print("\033[31m✗ Clé d'API requise : --api-key, ou la variable INTERMESH_API_KEY.\033[0m")
         sys.exit(2)
 
-    agent = NexusAgent(name="cli_snapshot", api_key=api_key, encrypt=False)
+    agent = InterMeshAgent(name="cli_snapshot", api_key=api_key, encrypt=False)
     await agent.connect()
     try:
         return await agent.admin(command, **params)
@@ -214,7 +214,7 @@ def run_dashboard(args):
             super().__init__(*args_h, directory=dashboard_dir, **kwargs_h)
         def log_message(self, format, *log_args): pass
 
-    print(f"\033[32m✓ Nexus Mission Control Dashboard actif sur http://localhost:{port}\033[0m")
+    print(f"\033[32m✓ InterMesh Mission Control Dashboard actif sur http://localhost:{port}\033[0m")
     with socketserver.TCPServer(("", port), Handler) as httpd:
         try: httpd.serve_forever()
         except KeyboardInterrupt: pass
@@ -222,7 +222,7 @@ def run_dashboard(args):
 
 def main():
     print_banner()
-    parser = argparse.ArgumentParser(description="Nexus Protocol Developer CLI")
+    parser = argparse.ArgumentParser(description="InterMesh Protocol Developer CLI")
     subparsers = parser.add_subparsers(dest="command", help="Commandes disponibles")
 
     # Command: security-check
@@ -242,7 +242,7 @@ def main():
     snap_parser.add_argument("action", choices=["create", "list", "restore", "delete"])
     snap_parser.add_argument("--name", "-n", type=str, help="Nom de l'instantané")
     snap_parser.add_argument("--api-key", type=str, default=None,
-                             help="Clé d'API admin (ou variable NEXUS_API_KEY)")
+                             help="Clé d'API admin (ou variable INTERMESH_API_KEY)")
     snap_parser.add_argument("--encrypt", action="store_true",
                              help="Chiffrer/déchiffrer l'instantané (passphrase demandée)")
 

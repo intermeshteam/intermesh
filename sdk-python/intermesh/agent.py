@@ -6,14 +6,14 @@ from typing import Callable, Optional, List, Any, Union
 
 import websockets
 
-from nexus_sdk.message import MessageType, NexusMessage
-from nexus_sdk.identity import AgentIdentity
-from nexus_sdk.task import NexusTask, TaskStatus
-from nexus_sdk.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
-from nexus_sdk.schema import SchemaRegistry, default_registry
+from intermesh.message import MessageType, InterMeshMessage
+from intermesh.identity import AgentIdentity
+from intermesh.task import InterMeshTask, TaskStatus
+from intermesh.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
+from intermesh.schema import SchemaRegistry, default_registry
 
 
-class NexusAgent:
+class InterMeshAgent:
     def __init__(
         self,
         name: str,
@@ -70,14 +70,14 @@ class NexusAgent:
 
     @classmethod
     def from_callable(cls, fn: Callable[[Any], Any], name: str, capabilities: Optional[List[str]] = None, **kwargs):
-        """1-LINE INTEGRATION: Transforme n'importe quelle fonction Python en Agent Nexus."""
-        from nexus_sdk.adapters import from_callable as _from_callable
+        """1-LINE INTEGRATION: Transforme n'importe quelle fonction Python en Agent InterMesh."""
+        from intermesh.adapters import from_callable as _from_callable
         return _from_callable(fn=fn, name=name, capabilities=capabilities, **kwargs)
 
     @classmethod
     def from_langchain(cls, chain_or_runnable: Any, name: str, capabilities: Optional[List[str]] = None, **kwargs):
-        """1-LINE INTEGRATION: Transforme un Runnable LangChain / CrewAI en Agent Nexus."""
-        from nexus_sdk.adapters import from_langchain as _from_langchain
+        """1-LINE INTEGRATION: Transforme un Runnable LangChain / CrewAI en Agent InterMesh."""
+        from intermesh.adapters import from_langchain as _from_langchain
         return _from_langchain(chain_or_runnable=chain_or_runnable, name=name, capabilities=capabilities, **kwargs)
 
     def on_message(self, handler: Callable): self._message_handler = handler
@@ -99,9 +99,9 @@ class NexusAgent:
         if self.api_key:
             reg_payload["api_key"] = self.api_key
 
-        reg_msg = NexusMessage(type=MessageType.REGISTER, sender=self.name, content=reg_payload)
+        reg_msg = InterMeshMessage(type=MessageType.REGISTER, sender=self.name, content=reg_payload)
         await ws.send(reg_msg.to_json())
-        res = NexusMessage.from_json(await ws.recv())
+        res = InterMeshMessage.from_json(await ws.recv())
 
         if res.type == MessageType.REGISTERED:
             self.ws = ws
@@ -248,7 +248,7 @@ class NexusAgent:
     async def _listen_loop(self):
         try:
             async for raw in self.ws:
-                msg = NexusMessage.from_json(raw)
+                msg = InterMeshMessage.from_json(raw)
 
                 if msg.type in (MessageType.RESPONSE, MessageType.IDENTITY, MessageType.DISCOVER_RESULT, MessageType.ADMIN_RESULT) and msg.reply_to in self._pending_requests:
                     future = self._pending_requests.pop(msg.reply_to)
@@ -259,11 +259,11 @@ class NexusAgent:
                         future.set_result(content)
 
                 elif msg.type == MessageType.TASK_ASSIGN:
-                    task = NexusTask.from_dict(msg.content)
+                    task = InterMeshTask.from_dict(msg.content)
                     asyncio.create_task(self._execute_assigned_task(task))
 
                 elif msg.type == MessageType.TASK_UPDATE:
-                    task = NexusTask.from_dict(msg.content)
+                    task = InterMeshTask.from_dict(msg.content)
                     if task.task_id in self._pending_tasks:
                         future = self._pending_tasks[task.task_id]
                         if task.status == TaskStatus.COMPLETED:
@@ -286,7 +286,7 @@ class NexusAgent:
                         if self.encrypt:
                             pk = await self._fetch_public_key(msg.sender)
                             if pk: reply = self._encrypt_content(pk, reply)
-                        await self.ws.send(NexusMessage(type=MessageType.RESPONSE, sender=self.qualified_name, to=msg.sender, reply_to=msg.id, content=reply, token=self.token).to_json())
+                        await self.ws.send(InterMeshMessage(type=MessageType.RESPONSE, sender=self.qualified_name, to=msg.sender, reply_to=msg.id, content=reply, token=self.token).to_json())
 
                 elif msg.type == MessageType.MESSAGE:
                     content = msg.content
@@ -322,10 +322,10 @@ class NexusAgent:
             if self.auto_reconnect and not self._closing:
                 asyncio.create_task(self._reconnect_loop())
 
-    async def _execute_assigned_task(self, task: NexusTask):
+    async def _execute_assigned_task(self, task: InterMeshTask):
         print(f"⚙️  [{self.qualified_name}] Tâche: '{task.title}' de {task.orchestrator}")
         task.update_status(TaskStatus.RUNNING)
-        await self.ws.send(NexusMessage(type=MessageType.TASK_UPDATE, sender=self.qualified_name, content=task.to_dict(), token=self.token).to_json())
+        await self.ws.send(InterMeshMessage(type=MessageType.TASK_UPDATE, sender=self.qualified_name, content=task.to_dict(), token=self.token).to_json())
 
         decrypted_input = task.input_data
         if self.encrypt and isinstance(decrypted_input, str):
@@ -344,7 +344,7 @@ class NexusAgent:
         except Exception as e:
             task.update_status(TaskStatus.FAILED, error_message=str(e))
 
-        await self.ws.send(NexusMessage(type=MessageType.TASK_UPDATE, sender=self.qualified_name, content=task.to_dict(), token=self.token).to_json())
+        await self.ws.send(InterMeshMessage(type=MessageType.TASK_UPDATE, sender=self.qualified_name, content=task.to_dict(), token=self.token).to_json())
         print(f"✅ [{self.qualified_name}] Tâche terminée: {task.status.value.upper()}")
 
     async def send(self, to: str, content):
@@ -352,14 +352,14 @@ class NexusAgent:
         if self.encrypt:
             pk = await self._fetch_public_key(to)
             if pk: ec = self._encrypt_content(pk, ec)
-        await self.ws.send(NexusMessage(type=MessageType.MESSAGE, sender=self.qualified_name, to=to, content=ec, token=self.token).to_json())
+        await self.ws.send(InterMeshMessage(type=MessageType.MESSAGE, sender=self.qualified_name, to=to, content=ec, token=self.token).to_json())
 
     async def ask(self, to: str, content, timeout: float = 10.0):
         ec = await self._translate_for(to, content)
         if self.encrypt:
             pk = await self._fetch_public_key(to)
             if pk: ec = self._encrypt_content(pk, ec)
-        msg = NexusMessage(type=MessageType.REQUEST, sender=self.qualified_name, to=to, content=ec, token=self.token)
+        msg = InterMeshMessage(type=MessageType.REQUEST, sender=self.qualified_name, to=to, content=ec, token=self.token)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_requests[msg.id] = future
@@ -377,7 +377,7 @@ class NexusAgent:
         if self.encrypt:
             pk = await self._fetch_public_key(assignee)
             if pk: ei = self._encrypt_content(pk, ei)
-        task = NexusTask(title=title, orchestrator=self.qualified_name, assignee=assignee, input_data=ei)
+        task = InterMeshTask(title=title, orchestrator=self.qualified_name, assignee=assignee, input_data=ei)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_tasks[task.task_id] = future
@@ -388,7 +388,7 @@ class NexusAgent:
             content["parent_task_id"] = parent_task_id
         if escrow:
             content["escrow"] = escrow
-        await self.ws.send(NexusMessage(type=MessageType.TASK_SUBMIT, sender=self.qualified_name, to=assignee, content=content, token=self.token).to_json())
+        await self.ws.send(InterMeshMessage(type=MessageType.TASK_SUBMIT, sender=self.qualified_name, to=assignee, content=content, token=self.token).to_json())
         print(f"📝 [{self.qualified_name}] Tâche ➜ {assignee}")
         try:
             return await asyncio.wait_for(future, timeout=timeout)
@@ -397,7 +397,7 @@ class NexusAgent:
             raise TimeoutError(f"Tâche '{title}' expirée ({timeout}s).")
 
     async def who_is(self, agent_name: str, timeout: float = 5.0) -> dict:
-        msg = NexusMessage(type=MessageType.WHO_IS, sender=self.qualified_name, content=agent_name, token=self.token)
+        msg = InterMeshMessage(type=MessageType.WHO_IS, sender=self.qualified_name, content=agent_name, token=self.token)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_requests[msg.id] = future
@@ -412,7 +412,7 @@ class NexusAgent:
             raise TimeoutError("Who_is timeout.")
 
     async def discover(self, timeout: float = 5.0, **query) -> dict:
-        msg = NexusMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content=query, token=self.token)
+        msg = InterMeshMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content=query, token=self.token)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_requests[msg.id] = future
@@ -434,7 +434,7 @@ class NexusAgent:
             RuntimeError: la commande a été exécutée mais refusée par le
                 gestionnaire lui-même (ex: hors du périmètre de l'org).
         """
-        msg = NexusMessage(
+        msg = InterMeshMessage(
             type=MessageType.ADMIN_REQUEST, sender=self.qualified_name,
             content={"command": command, "params": params}, token=self.token,
         )

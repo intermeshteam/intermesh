@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NexusAgent } from '../src/index.js';
+import { InterMeshAgent } from '../src/index.js';
 
-test('NexusAgent - instanciation et calcul du fingerprint d identité', () => {
-  const agent = new NexusAgent({
+test('InterMeshAgent - instanciation et calcul du fingerprint d identité', () => {
+  const agent = new InterMeshAgent({
     name: 'analyste',
     orgId: 'globex',
     capabilities: ['analytics', 'nlp'],

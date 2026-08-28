@@ -1,6 +1,6 @@
 """
-Un vrai agent AutoGen (`ConversableAgent`, pas un agent Nexus fait main
-qui imite une conversation), exposé sur le réseau Nexus via
+Un vrai agent AutoGen (`ConversableAgent`, pas un agent InterMesh fait main
+qui imite une conversation), exposé sur le réseau InterMesh via
 `from_callable`.
 
 Comme CrewAI, AutoGen n'a pas de mode hors ligne déterministe : un
@@ -11,7 +11,7 @@ requis pour exécuter réellement une tâche.
     export OPENAI_API_KEY=sk-...
     python examples/frameworks/autogen_agent.py
 
-Une tâche Nexus `{"message": "..."}` alimente `generate_reply` : la
+Une tâche InterMesh `{"message": "..."}` alimente `generate_reply` : la
 fonction passée à `from_callable` lit la clé `message` et la reformate en
 `[{"role": "user", "content": ...}]`, la forme attendue par AutoGen.
 """
@@ -20,7 +20,7 @@ import asyncio
 import os
 import sys
 
-from nexus_sdk import from_callable
+from intermesh import from_callable
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -55,7 +55,7 @@ async def main():
     # on construit ce format à partir de la clé `message` du dict de tâche.
     #
     # L'appel est synchrone et bloque le temps de la réponse du LLM.
-    # `asyncio.to_thread` l'écarte de la boucle, sans quoi l'agent Nexus
+    # `asyncio.to_thread` l'écarte de la boucle, sans quoi l'agent InterMesh
     # cesserait de répondre pendant toute la durée de l'inférence.
     async def run_autogen(input_data):
         messages = [{"role": "user", "content": input_data["message"]}]

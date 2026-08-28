@@ -4,7 +4,7 @@ import subprocess
 import sys
 import tempfile
 import pytest
-from nexus_sdk.agent import NexusAgent
+from intermesh.agent import InterMeshAgent
 
 
 @pytest.mark.asyncio
@@ -25,8 +25,8 @@ async def test_strict_tenant_isolation_by_default():
     await asyncio.sleep(1.5)
 
     try:
-        agent_acme = NexusAgent(name="worker", org_id="acme", hub_url=f"ws://localhost:{port}", encrypt=False)
-        agent_globex = NexusAgent(name="analyzer", org_id="globex", hub_url=f"ws://localhost:{port}", encrypt=False)
+        agent_acme = InterMeshAgent(name="worker", org_id="acme", hub_url=f"ws://localhost:{port}", encrypt=False)
+        agent_globex = InterMeshAgent(name="analyzer", org_id="globex", hub_url=f"ws://localhost:{port}", encrypt=False)
 
         await agent_acme.connect()
         await agent_globex.connect()

@@ -1,12 +1,12 @@
 """
 Un vrai agent LangChain (chaîne LCEL prompt | llm | parser), exposé sur le
-réseau Nexus via `from_langchain` — pas d'agent Nexus fait main
+réseau InterMesh via `from_langchain` — pas d'agent InterMesh fait main
 imitant un LLM, un `Runnable` LangChain réel.
 
 Avec `OPENAI_API_KEY` défini, la chaîne appelle un vrai modèle OpenAI.
 Sans clé, elle utilise `FakeListChatModel` (fourni par `langchain-core`,
 pas une doublure du dépôt) pour que la démo tourne hors ligne et sans
-coût : le `Runnable`, le prompt et le pont Nexus restent réels, seule la
+coût : le `Runnable`, le prompt et le pont InterMesh restent réels, seule la
 génération de texte est déterministe.
 
     pip install langchain-core                 # suffit sans clé API
@@ -21,7 +21,7 @@ import os
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from nexus_sdk import from_langchain
+from intermesh import from_langchain
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -51,10 +51,10 @@ async def main():
 
     # `from_langchain` privilégie `ainvoke` s'il existe, sinon retombe sur
     # `invoke`, `run`, ou l'objet lui-même s'il est appelable. Il renvoie
-    # `{"output": <résultat>, "adapter": "langchain_nexus_v1"}`.
+    # `{"output": <résultat>, "adapter": "langchain_intermesh_v1"}`.
     #
     # Le dict de tâche est transmis tel quel : le prompt attend
-    # `{"input": "..."}`, la forme exacte de ce que Nexus envoie. Extraire
+    # `{"input": "..."}`, la forme exacte de ce que InterMesh envoie. Extraire
     # la valeur donnerait une chaîne nue au `Runnable`, qui échouerait à
     # résoudre la variable du template.
     #

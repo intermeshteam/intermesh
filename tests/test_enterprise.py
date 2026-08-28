@@ -4,7 +4,7 @@ import sys
 import subprocess
 import pytest
 
-from nexus_sdk import NexusAgent, ImmutableAuditLog, RateLimiter
+from intermesh import InterMeshAgent, ImmutableAuditLog, RateLimiter
 
 
 def test_immutable_audit_log_integrity():
@@ -55,7 +55,7 @@ async def test_service_account_api_key_authentication():
 
     try:
         # Connexion avec une clé d'API Entreprise valide
-        agent = NexusAgent(
+        agent = InterMeshAgent(
             name="backend_microservice",
             api_key="nx_dev_acme_demo_key",
             hub_url="ws://localhost:8765"

@@ -1,6 +1,6 @@
 import asyncio
 import os
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -20,7 +20,7 @@ async def translate_handler(input_data, task):
 
 
 async def main():
-    agent = NexusAgent(name="translator_french", capabilities=["translate"], roles=["worker"], hub_url=HUB_URL)
+    agent = InterMeshAgent(name="translator_french", capabilities=["translate"], roles=["worker"], hub_url=HUB_URL)
     agent.on_task(translate_handler)
     await agent.connect()
     print(f"[translator_french] Listening on {HUB_URL}...")

@@ -1,6 +1,6 @@
 """
 Un vrai moteur de requête LlamaIndex sur un mini-index documentaire,
-exposé sur le réseau Nexus via `from_callable`.
+exposé sur le réseau InterMesh via `from_callable`.
 
 Avec `OPENAI_API_KEY` défini, l'indexation et les réponses passent par de
 vrais embeddings et un vrai LLM OpenAI. Sans clé, `MockEmbedding` et
@@ -20,13 +20,13 @@ import os
 
 from llama_index.core import Document, Settings, VectorStoreIndex
 
-from nexus_sdk import from_callable
+from intermesh import from_callable
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
 DOCUMENTS = [
-    "Le protocole Nexus chiffre chaque message de bout en bout avec RSA-OAEP et AES-256-GCM.",
-    "Un agent Nexus se découvre par ses capacités déclarées, pas par son nom.",
+    "Le protocole InterMesh chiffre chaque message de bout en bout avec RSA-OAEP et AES-256-GCM.",
+    "Un agent InterMesh se découvre par ses capacités déclarées, pas par son nom.",
     "La fédération relie deux Hubs de deux organisations différentes sans rompre le chiffrement.",
 ]
 

@@ -1,16 +1,16 @@
-# Nexus Mesh — Python SDK
+# InterMesh — Python SDK
 
-The official Python SDK for **Nexus Protocol**, the universal open-source coordination
+The official Python SDK for **InterMesh Protocol**, the universal open-source coordination
 protocol for AI agents.
 
 Nexus lets agents — regardless of language, framework, or vendor — discover each other,
 communicate with end-to-end encryption, and collaborate on distributed tasks.
 
 ```bash
-pip install nexus-mesh
+pip install intermesh
 ```
 
-> The distribution is named `nexus-mesh`; the import module is `nexus_sdk`.
+> The distribution is named `intermesh`; the import module is `intermesh`.
 
 ---
 
@@ -26,13 +26,13 @@ nexus hub
 
 ```python
 import asyncio
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 async def compute(input_data, task):
     return {"result": input_data["a"] + input_data["b"]}
 
 async def main():
-    agent = NexusAgent(
+    agent = InterMeshAgent(
         name="calc_bot",
         capabilities=["calculate"],
         roles=["worker"],
@@ -47,9 +47,9 @@ asyncio.run(main())
 **Delegate work from an orchestrator:**
 
 ```python
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
-orchestrator = NexusAgent(name="lead", roles=["admin"])
+orchestrator = InterMeshAgent(name="lead", roles=["admin"])
 await orchestrator.connect()
 
 # Find an agent by capability, then hand it a task
@@ -67,12 +67,12 @@ result = await orchestrator.submit_task(
 ## Bridge an existing framework agent
 
 Wrap an existing agent without changing a line of it — it becomes discoverable
-and receives delegated tasks like a native Nexus agent.
+and receives delegated tasks like a native InterMesh agent.
 
 A LangChain runnable:
 
 ```python
-from nexus_sdk import from_langchain
+from intermesh import from_langchain
 
 agent = from_langchain(my_chain, name="analyst", capabilities=["market_analysis"])
 await agent.connect()
@@ -83,7 +83,7 @@ plain function — goes through `from_callable`:
 
 ```python
 import asyncio
-from nexus_sdk import from_callable
+from intermesh import from_callable
 
 async def run(data):
     # to_thread keeps a blocking LLM call off the event loop, so the agent
@@ -97,9 +97,9 @@ await agent.connect()
 Or as a decorator:
 
 ```python
-from nexus_sdk import nexus_service
+from intermesh import intermesh_service
 
-@nexus_service(name="summarizer", capabilities=["summarize"])
+@intermesh_service(name="summarizer", capabilities=["summarize"])
 def summarize(data):
     return {"summary": my_model(data["text"])}
 ```
@@ -110,10 +110,10 @@ Runnable examples for all four frameworks are in
 ## Orchestrate multiple agents
 
 ```python
-from nexus_sdk import NexusPipeline
+from intermesh import InterMeshPipeline
 
 pipeline = (
-    NexusPipeline(orchestrator)
+    InterMeshPipeline(orchestrator)
     .step("Translate", capabilities=["translate"])
     .step("Calculate", capabilities=["calculate"],
           input_fn=lambda prev: {"expression": prev["translated_text"]})

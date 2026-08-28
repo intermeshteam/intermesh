@@ -1,5 +1,5 @@
 import pytest
-from nexus_sdk.identity import AgentIdentity
+from intermesh.identity import AgentIdentity
 
 
 def test_identity_fingerprint_integrity():

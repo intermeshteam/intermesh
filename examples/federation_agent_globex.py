@@ -1,5 +1,5 @@
 import asyncio
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 
 async def compute_handler(input_data, task):
@@ -11,7 +11,7 @@ async def compute_handler(input_data, task):
 
 async def main():
     # Cet agent est connecté au Hub Privé de Globex (port 8766)
-    agent = NexusAgent(
+    agent = InterMeshAgent(
         name="financial_engine",
         org_id="globex",
         capabilities=["financial_compute"],

@@ -1,6 +1,6 @@
 import json
 from typing import Optional, Tuple, List, Callable, Any
-from nexus_sdk.metrics import metrics
+from intermesh.metrics import metrics
 
 
 class HealthCheckHandler:

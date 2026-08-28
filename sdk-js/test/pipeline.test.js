@@ -1,12 +1,12 @@
 /**
- * `NexusPipeline`/`fanOut` composent `discover()`/`submitTask()` sans
+ * `InterMeshPipeline`/`fanOut` composent `discover()`/`submitTask()` sans
  * toucher au fil : un orchestrateur factice suffit à les tester.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { NexusPipeline, PipelineError, fanOut } from '../src/pipeline.js';
+import { InterMeshPipeline, PipelineError, fanOut } from '../src/pipeline.js';
 
 class FakeOrchestrator {
   constructor(agentsByCapability, outputsByTitle) {
@@ -36,7 +36,7 @@ class FakeOrchestrator {
 }
 
 // ----------------------------------------------------------------------
-// NexusPipeline
+// InterMeshPipeline
 // ----------------------------------------------------------------------
 
 test('la sortie d\'une étape alimente l\'entrée de la suivante', async () => {
@@ -44,7 +44,7 @@ test('la sortie d\'une étape alimente l\'entrée de la suivante', async () => {
     { translate: 'traducteur', calculate: 'calculateur' },
     { Traduire: { translated_text: '42 * 2' }, Calculer: { result: 84 } },
   );
-  const pipeline = new NexusPipeline(orch)
+  const pipeline = new InterMeshPipeline(orch)
     .step('Traduire', { capabilities: ['translate'] })
     .step('Calculer', {
       capabilities: ['calculate'],
@@ -60,7 +60,7 @@ test('la sortie d\'une étape alimente l\'entrée de la suivante', async () => {
 
 test('la découverte est différée jusqu\'à l\'exécution', async () => {
   const orch = new FakeOrchestrator({}, { Étape: 'ok' });
-  const pipeline = new NexusPipeline(orch).step('Étape', { capabilities: ['x'] });
+  const pipeline = new InterMeshPipeline(orch).step('Étape', { capabilities: ['x'] });
 
   orch.agentsByCapability.x = 'venu_en_retard';
   const out = await pipeline.run();
@@ -71,7 +71,7 @@ test('la découverte est différée jusqu\'à l\'exécution', async () => {
 
 test('un agent explicite court-circuite la découverte', async () => {
   const orch = new FakeOrchestrator({}, { Étape: 'ok' });
-  const pipeline = new NexusPipeline(orch).step('Étape', { agent: 'nommé_directement' });
+  const pipeline = new InterMeshPipeline(orch).step('Étape', { agent: 'nommé_directement' });
   await pipeline.run();
 
   assert.equal(orch.calls[0][1], 'nommé_directement');
@@ -79,7 +79,7 @@ test('un agent explicite court-circuite la découverte', async () => {
 
 test('aucun agent trouvé lève une PipelineError explicite', async () => {
   const orch = new FakeOrchestrator({}, {});
-  const pipeline = new NexusPipeline(orch).step('Étape', { capabilities: ['introuvable'] });
+  const pipeline = new InterMeshPipeline(orch).step('Étape', { capabilities: ['introuvable'] });
 
   await assert.rejects(() => pipeline.run(), PipelineError);
 });
@@ -89,7 +89,7 @@ test('l\'échec d\'une étape arrête les suivantes', async () => {
     { a: 'agent_a', b: 'agent_b' },
     { A: new Error('échec distant') },
   );
-  const pipeline = new NexusPipeline(orch)
+  const pipeline = new InterMeshPipeline(orch)
     .step('A', { capabilities: ['a'] })
     .step('B', { capabilities: ['b'] });
 
@@ -98,11 +98,11 @@ test('l\'échec d\'une étape arrête les suivantes', async () => {
 });
 
 test('une étape sans agent ni critère est rejetée à la déclaration', () => {
-  assert.throws(() => new NexusPipeline(new FakeOrchestrator({}, {})).step('Étape'), PipelineError);
+  assert.throws(() => new InterMeshPipeline(new FakeOrchestrator({}, {})).step('Étape'), PipelineError);
 });
 
 test('un pipeline vide est rejeté à l\'exécution', async () => {
-  await assert.rejects(() => new NexusPipeline(new FakeOrchestrator({}, {})).run(), PipelineError);
+  await assert.rejects(() => new InterMeshPipeline(new FakeOrchestrator({}, {})).run(), PipelineError);
 });
 
 // ----------------------------------------------------------------------

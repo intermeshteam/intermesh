@@ -9,21 +9,21 @@ services:
       - "8765:8765"
     environment:
       # Le Hub écrit sa clé de signature JWT et sa base d'état dans
-      # NEXUS_HOME. Sans volume, `docker compose down && up` régénérerait
+      # INTERMESH_HOME. Sans volume, `docker compose down && up` régénérerait
       # la clé (invalidant tous les tokens) et effacerait identités,
       # tâches et journal d'audit.
-      - NEXUS_HOME=/data/nexus
+      - INTERMESH_HOME=/data/nexus
       # En production, préférez injecter la clé sans jamais l'écrire sur
       # disque (le volume ci-dessous devient alors inutile) :
-      #   NEXUS_HUB_SECRET=${NEXUS_HUB_SECRET}
+      #   INTERMESH_HUB_SECRET=${INTERMESH_HUB_SECRET}
       # Générez-la avec :
       #   python3 -c "import secrets; print(secrets.token_hex(32))"
       # Le volume reste nécessaire pour la base d'état.
       #
       # Comptes de service : les clés d'API ne sont plus dans le code.
-      # Injectez-les en JSON, ou déposez ~/.nexus/api_keys.json dans le
+      # Injectez-les en JSON, ou déposez ~/.intermesh/api_keys.json dans le
       # volume. Sans configuration, ils restent désactivés.
-      #   NEXUS_API_KEYS=${NEXUS_API_KEYS}
+      #   INTERMESH_API_KEYS=${INTERMESH_API_KEYS}
       # Générez une clé avec : nexus apikey --org acme
     volumes:
       - nexus-hub-data:/data/nexus

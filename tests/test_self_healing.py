@@ -5,7 +5,7 @@ Portée assumée : ceci est un mécanisme de reconnexion CLIENT vers une liste
 de Hubs candidats déjà en fonctionnement (ex: un Hub principal et une
 réplique à chaud partageant le même `--state-file`) — pas une élection de
 leader ni une promotion automatique côté serveur. Voir le docstring de
-`NexusAgent._reconnect_loop` dans agent.py.
+`InterMeshAgent._reconnect_loop` dans agent.py.
 """
 
 import asyncio
@@ -17,18 +17,18 @@ import time
 
 import pytest
 
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 PORT_A = 8890
 PORT_B = 8891
 
 
 def test_hub_url_accepts_a_single_string_or_a_list():
-    single = NexusAgent(name="a", hub_url="ws://localhost:8765")
+    single = InterMeshAgent(name="a", hub_url="ws://localhost:8765")
     assert single._hub_candidates == ["ws://localhost:8765"]
     assert single.hub_url == "ws://localhost:8765"
 
-    multi = NexusAgent(name="b", hub_url=["ws://localhost:8765", "ws://localhost:8766"])
+    multi = InterMeshAgent(name="b", hub_url=["ws://localhost:8765", "ws://localhost:8766"])
     assert multi._hub_candidates == ["ws://localhost:8765", "ws://localhost:8766"]
     assert multi.hub_url == "ws://localhost:8765"
     print("✓ hub_url accepte une chaîne ou une liste de secours")
@@ -36,7 +36,7 @@ def test_hub_url_accepts_a_single_string_or_a_list():
 
 def test_auto_reconnect_is_off_by_default():
     """Aucune reconnexion surprise pour le code existant qui ferme `agent.ws` lui-même."""
-    agent = NexusAgent(name="a")
+    agent = InterMeshAgent(name="a")
     assert agent.auto_reconnect is False
     print("✓ auto_reconnect désactivé par défaut (rétrocompatible)")
 
@@ -85,7 +85,7 @@ async def test_agent_fails_over_to_backup_hub_when_primary_dies(shared_state_hub
     hub_b_url = f"ws://localhost:{PORT_B}"
 
     failovers = []
-    worker = NexusAgent(
+    worker = InterMeshAgent(
         name="worker", org_id="acme", hub_url=[hub_a_url, hub_b_url],
         auto_reconnect=True, reconnect_backoff=0.3, encrypt=False,
     )
@@ -107,7 +107,7 @@ async def test_agent_fails_over_to_backup_hub_when_primary_dies(shared_state_hub
     assert failovers and failovers[0] == (hub_a_url, hub_b_url)
 
     # L'agent redevenu joignable traite normalement une nouvelle tâche.
-    lead = NexusAgent(name="lead", org_id="acme", hub_url=hub_b_url, roles=["admin"], encrypt=False)
+    lead = InterMeshAgent(name="lead", org_id="acme", hub_url=hub_b_url, roles=["admin"], encrypt=False)
     await lead.connect()
     result = await lead.submit_task("Après bascule", "acme/worker", {"x": 1}, timeout=5.0)
     assert result == {"handled_on": hub_b_url}
@@ -123,7 +123,7 @@ async def test_pending_calls_fail_fast_on_disconnect_instead_of_hanging(shared_s
     Sans auto_reconnect, une perte de connexion doit échouer vite (ConnectionError)
     plutôt que de laisser l'appelant attendre le timeout complet.
     """
-    agent = NexusAgent(name="lonely", org_id="acme", hub_url=f"ws://localhost:{PORT_A}", encrypt=False)
+    agent = InterMeshAgent(name="lonely", org_id="acme", hub_url=f"ws://localhost:{PORT_A}", encrypt=False)
     await agent.connect()
 
     # who_is sur un nom inconnu : le Hub ne répond jamais, l'appel resterait

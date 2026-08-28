@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌐 NEXUS PROTOCOL
+# 🌐 INTERMESH PROTOCOL
 
 ### The universal open-source coordination protocol for AI agents
 
@@ -44,8 +44,8 @@ framework, or vendor — discover each other, communicate securely, and collabor
 ## Quick start
 
 ```bash
-pip install nexus-mesh      # Python SDK + the `nexus` CLI
-npm install nexus-mesh      # JavaScript / TypeScript SDK
+pip install intermesh      # Python SDK + the `nexus` CLI
+npm install intermesh      # JavaScript / TypeScript SDK
 ```
 
 Or from source:
@@ -66,9 +66,9 @@ nexus hub
 **2. Write a worker agent**
 
 ```python
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
-agent = NexusAgent(name="calc_bot", capabilities=["calculate"], roles=["worker"])
+agent = InterMeshAgent(name="calc_bot", capabilities=["calculate"], roles=["worker"])
 
 @agent.on_task
 async def run(input_data, task):
@@ -95,8 +95,8 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 | 🛡️ **RBAC** | Per-agent access policies enforced at the hub. |
 | 🔍 **Discovery** | Find agents by capability, role, metadata, or name. |
 | 📋 **Tasks & workflows** | Async distributed task lifecycle: `pending → running → completed/failed`. |
-| 🔌 **Framework adapters** | Python: `from_langchain`, `from_callable`, `@nexus_service` — the CrewAI, AutoGen and LlamaIndex examples bridge through `from_callable`. JS: `adapt()`, `NexusLangChainAdapter`, `NexusLlamaIndexAdapter`. |
-| 🧵 **Orchestration helpers** | `NexusPipeline` chains steps across agents found by capability; `fan_out`/`fanOut` runs branches in parallel and aggregates results. |
+| 🔌 **Framework adapters** | Python: `from_langchain`, `from_callable`, `@intermesh_service` — the CrewAI, AutoGen and LlamaIndex examples bridge through `from_callable`. JS: `adapt()`, `InterMeshLangChainAdapter`, `InterMeshLlamaIndexAdapter`. |
+| 🧵 **Orchestration helpers** | `InterMeshPipeline` chains steps across agents found by capability; `fan_out`/`fanOut` runs branches in parallel and aggregates results. |
 | 🌐 **Federation** | Hub-to-hub peering across organizations, E2E preserved end to end. |
 | 📜 **Immutable audit log** | Merkle-chained events; any retroactive edit breaks the chain. |
 | 🚦 **Rate limiting** | Token-bucket throttling per agent. |
@@ -110,8 +110,8 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 
 | Path | Purpose |
 |---|---|
-| `sdk-python/` | Official Python SDK (`nexus-mesh`) and the `nexus` CLI — `from_callable`, `from_langchain`, `@nexus_service` |
-| `sdk-js/` | Official JavaScript/TypeScript SDK (`nexus-mesh`) — adapters for LangChain.js and LlamaIndex.TS |
+| `sdk-python/` | Official Python SDK (`intermesh`) and the `nexus` CLI — `from_callable`, `from_langchain`, `@intermesh_service` |
+| `sdk-js/` | Official JavaScript/TypeScript SDK (`intermesh`) — adapters for LangChain.js and LlamaIndex.TS |
 | `server/` | The coordination hub |
 | `dashboard/` | Mission Control web UI |
 | `docs/` | RFC-001, security spec, API reference |

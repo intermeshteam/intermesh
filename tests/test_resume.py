@@ -10,7 +10,7 @@ import tempfile
 
 import pytest
 
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 PORT = 8805
 
@@ -51,7 +51,7 @@ async def test_task_submitted_while_assignee_offline_is_resumed_on_reconnect():
 
     try:
         # 1. L'orchestrateur confie une tâche à un exécutant hors ligne.
-        lead = NexusAgent(name="lead", hub_url=f"ws://localhost:{PORT}",
+        lead = InterMeshAgent(name="lead", hub_url=f"ws://localhost:{PORT}",
                           roles=["admin"], encrypt=False)
         await lead.connect()
 
@@ -71,7 +71,7 @@ async def test_task_submitted_while_assignee_offline_is_resumed_on_reconnect():
             executed.set()
             return {"result": input_data["a"] * input_data["b"]}
 
-        worker = NexusAgent(name="worker", org_id="acme",
+        worker = InterMeshAgent(name="worker", org_id="acme",
                             hub_url=f"ws://localhost:{PORT}",
                             capabilities=["calculate"], roles=["worker"], encrypt=False)
         worker.on_task(handler)

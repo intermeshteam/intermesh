@@ -158,7 +158,7 @@ footer{border-top:1px solid var(--line2);padding:44px 0 34px}
     </p>
     <div class="cta">
       <div class="install">
-        <span class="p">$</span><span id="cmd">pip install nexus-mesh</span>
+        <span class="p">$</span><span id="cmd">pip install intermesh</span>
         <button id="copy">copy</button>
       </div>
       <a class="btn" href="https://github.com/mrlomemba-cmd/nexus">Read the source</a>
@@ -308,16 +308,16 @@ footer{border-top:1px solid var(--line2);padding:44px 0 34px}
       <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/docs/MANIFESTO.md">Manifesto</a></div>
     <div class="fcol"><h4>Developers</h4>
       <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/docs/API-REFERENCE.md">API reference</a>
-      <a href="https://pypi.org/project/nexus-mesh/">PyPI</a>
-      <a href="https://www.npmjs.com/package/nexus-mesh">npm</a></div>
+      <a href="https://pypi.org/project/intermesh/">PyPI</a>
+      <a href="https://www.npmjs.com/package/intermesh">npm</a></div>
     <div class="fcol"><h4>Project</h4>
       <a href="https://github.com/mrlomemba-cmd/nexus">Source</a>
       <a href="https://github.com/mrlomemba-cmd/nexus/blob/main/CONTRIBUTING.md">Contributing</a>
       <a href="https://github.com/mrlomemba-cmd/nexus/issues">Issues</a></div>
   </div>
   <div class="fbottom">
-    <span>APACHE 2.0 · PROTOCOL nexus/v1</span>
-    <span>pip install nexus-mesh · npm install nexus-mesh</span>
+    <span>APACHE 2.0 · PROTOCOL intermesh/v1</span>
+    <span>pip install intermesh · npm install intermesh</span>
   </div>
 </div></footer>
 
@@ -326,10 +326,10 @@ footer{border-top:1px solid var(--line2);padding:44px 0 34px}
    page whose code does not run is worse than one with no code at all. */
 const SAMPLES = {
   py: { file: 'worker.py', code:
-`<span class="k">from</span> nexus_sdk <span class="k">import</span> NexusAgent
+`<span class="k">from</span> intermesh <span class="k">import</span> InterMeshAgent
 
 <span class="c"># An agent announces what it can do. Others find it by that.</span>
-agent = <span class="f">NexusAgent</span>(
+agent = <span class="f">InterMeshAgent</span>(
     name=<span class="s">"translator"</span>,
     capabilities=[<span class="s">"translate"</span>],
     roles=[<span class="s">"worker"</span>],
@@ -342,9 +342,9 @@ agent = <span class="f">NexusAgent</span>(
 <span class="k">await</span> agent.<span class="f">connect</span>()   <span class="c"># now discoverable, E2E encrypted</span>`},
 
   js: { file: 'orchestrator.mjs', code:
-`<span class="k">import</span> { NexusAgent } <span class="k">from</span> <span class="s">'nexus-mesh'</span>;
+`<span class="k">import</span> { InterMeshAgent } <span class="k">from</span> <span class="s">'intermesh'</span>;
 
-<span class="k">const</span> lead = <span class="k">new</span> <span class="f">NexusAgent</span>({
+<span class="k">const</span> lead = <span class="k">new</span> <span class="f">InterMeshAgent</span>({
   name: <span class="s">'orchestrator'</span>,
   roles: [<span class="s">'admin'</span>],
 });
@@ -361,7 +361,7 @@ agent = <span class="f">NexusAgent</span>(
 
   lc: { file: 'bridge.py', code:
 `<span class="k">import</span> asyncio
-<span class="k">from</span> nexus_sdk <span class="k">import</span> from_callable
+<span class="k">from</span> intermesh <span class="k">import</span> from_callable
 
 <span class="c"># Whatever you already built — a CrewAI crew, an AutoGen agent,</span>
 <span class="c"># a LlamaIndex engine, or a plain function.</span>

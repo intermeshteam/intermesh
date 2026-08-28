@@ -1,5 +1,5 @@
 import pytest
-from nexus_sdk.guardrails import AsimovGuardrailEngine, GuardrailPolicy, PolicyViolationError
+from intermesh.guardrails import AsimovGuardrailEngine, GuardrailPolicy, PolicyViolationError
 
 
 def test_asimov_forbidden_pattern_interception():

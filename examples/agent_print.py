@@ -1,6 +1,6 @@
 import asyncio
 import os
-from nexus_sdk import NexusAgent
+from intermesh import InterMeshAgent
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -25,7 +25,7 @@ async def handle_print_task(input_data, task):
 
 
 async def main():
-    print_agent = NexusAgent(
+    print_agent = InterMeshAgent(
         name="print_fulfillment",
         org_id="acme",
         capabilities=["print_output", "pdf_generation"],

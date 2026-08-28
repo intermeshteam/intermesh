@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import NetworkBackground from '@/components/NetworkBackground';
 import AnimatedCodeEditor from '@/components/AnimatedCodeEditor';
+import NexusLogo from '@/components/NexusLogo';
 
 export default function LandingPage() {
   const installCommand = "pip install nexus-sdk";
@@ -53,12 +54,13 @@ export default function LandingPage() {
         
         {/* TOPBAR NAVIGATION */}
         <header className="flex items-center justify-between py-2">
-          <Link 
-            href="/" 
-            className="text-xl font-extrabold tracking-widest hover:opacity-80 transition notranslate font-sans"
+          <Link
+            href="/"
+            className="flex items-center space-x-3 text-xl font-extrabold tracking-widest hover:opacity-80 transition notranslate font-sans"
             translate="no"
           >
-            N E X U S
+            <NexusLogo className="w-6 h-6 shrink-0" />
+            <span>N E X U S</span>
           </Link>
 
           <nav className="hidden md:flex items-center space-x-8 text-xs text-slate-400 font-medium">
@@ -363,7 +365,7 @@ await print_agent.connect()`}
         <footer className="relative z-10 border-t border-zinc-900 bg-[#08080A] py-12 px-6 font-sans">
           <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
             <div className="flex items-center space-x-2 font-semibold">
-              <div className="w-5 h-5 rounded-full bg-slate-700 text-black flex items-center justify-center text-[8px] font-mono">⬡</div>
+              <NexusLogo className="w-4 h-4 shrink-0" />
               <span>Nexus Protocol © 2026 • Apache 2.0 License</span>
             </div>
             <div className="flex items-center space-x-6 mt-4 md:mt-0 font-medium text-xs">

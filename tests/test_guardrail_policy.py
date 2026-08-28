@@ -9,8 +9,8 @@ import time
 
 import pytest
 
-from nexus_sdk import NexusAgent
-from nexus_sdk.guardrails import AsimovGuardrailEngine, GuardrailPolicy, PolicyViolationError
+from intermesh import InterMeshAgent
+from intermesh.guardrails import AsimovGuardrailEngine, GuardrailPolicy, PolicyViolationError
 
 PORT = 8870
 
@@ -84,7 +84,7 @@ def hub():
     os.chmod(os.path.join(work, "api_keys.json"), 0o600)
 
     os.system(f"fuser -k {PORT}/tcp 2>/dev/null")
-    env = {**os.environ, "NEXUS_API_KEYS_FILE": os.path.join(work, "api_keys.json")}
+    env = {**os.environ, "INTERMESH_API_KEYS_FILE": os.path.join(work, "api_keys.json")}
     proc = subprocess.Popen(
         [sys.executable, "-u", "server/hub.py", "--port", str(PORT), "--org", "acme",
          "--ephemeral-state", "--ephemeral-secret"],
@@ -100,7 +100,7 @@ def hub():
 
 
 async def _connect(name, api_key=None, roles=None):
-    agent = NexusAgent(name=name, hub_url=f"ws://localhost:{PORT}", api_key=api_key, roles=roles, encrypt=False)
+    agent = InterMeshAgent(name=name, hub_url=f"ws://localhost:{PORT}", api_key=api_key, roles=roles, encrypt=False)
     await agent.connect()
     return agent
 
