@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import getpass
 import http.server
 import json
 import os
@@ -13,11 +14,14 @@ from nexus_sdk.identity import AgentIdentity
 
 
 def print_banner():
-    print("""
+    # La version vient du paquet : une chaîne en dur ici finit toujours
+    # par mentir après quelques releases.
+    from nexus_sdk import __version__
+    print(f"""
 \033[36m    _   ___________  _______
    / | / / ____/   |/  _/   |  NEXUS PROTOCOL
   /  |/ / __/ / /| |/ // /| |  Universal Agent Infrastructure
- / /|  / /___/ ___ / // ___ |  CLI Developer Tool v0.1.0
+ / /|  / /___/ ___ / // ___ |  CLI Developer Tool v{__version__}
 /_/ |_/_____/_/  |_/___/_/  |_|\033[0m
 """)
 
@@ -110,6 +114,98 @@ async def run_discover(args):
     await agent.ws.close()
 
 
+async def _admin_call(args, command: str, **params) -> dict:
+    """
+    Ouvre une session d'administration éphémère et exécute une commande.
+
+    L'administration exige une identité authentifiée par clé d'API : les
+    rôles déclarés à l'enregistrement ne suffisent pas (voir admin.py).
+    """
+    api_key = args.api_key or os.getenv("NEXUS_API_KEY")
+    if not api_key:
+        print("\033[31m✗ Clé d'API requise : --api-key, ou la variable NEXUS_API_KEY.\033[0m")
+        sys.exit(2)
+
+    agent = NexusAgent(name="cli_snapshot", api_key=api_key, encrypt=False)
+    await agent.connect()
+    try:
+        return await agent.admin(command, **params)
+    finally:
+        await agent.close()
+
+
+def _snapshot_passphrase(args, *, confirm: bool) -> str | None:
+    """
+    Passphrase de chiffrement au repos, demandée interactivement.
+
+    Jamais lue depuis un argument de ligne de commande : `ps` et
+    l'historique du shell exposeraient un secret à toute la machine.
+    """
+    if not args.encrypt:
+        return None
+    first = getpass.getpass("Passphrase de l'instantané : ")
+    if not first:
+        print("\033[31m✗ Passphrase vide.\033[0m")
+        sys.exit(2)
+    if confirm and getpass.getpass("Confirmez la passphrase : ") != first:
+        print("\033[31m✗ Les passphrases ne correspondent pas.\033[0m")
+        sys.exit(2)
+    return first
+
+
+async def run_snapshot(args):
+    action = args.action
+
+    if action == "list":
+        result = await _admin_call(args, "snapshot.list")
+        snapshots = result.get("snapshots", [])
+        print(f"\n\033[32m✓ {len(snapshots)} instantané(s) :\033[0m\n")
+        print(f"{'NOM':<28} {'DATE':<21} {'AGENTS':<8} {'TÂCHES':<8} {'CHIFFRÉ'}")
+        print("-" * 78)
+        for s in snapshots:
+            when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(s.get("created_at", 0)))
+            counts = s.get("counts", {})
+            lock = "🔒 oui" if s.get("encrypted") else "🔓 non"
+            print(f"{s.get('name', '?'):<28} {when:<21} "
+                  f"{counts.get('identities', 0):<8} {counts.get('tasks', 0):<8} {lock}")
+        print()
+        return
+
+    if action == "create":
+        passphrase = _snapshot_passphrase(args, confirm=True)
+        result = await _admin_call(args, "snapshot.create", name=args.name, passphrase=passphrase)
+        counts = result.get("counts", {})
+        print(f"\n\033[32m✓ Instantané '{result['name']}' créé.\033[0m")
+        print(f"  {counts.get('identities', 0)} identité(s), {counts.get('tasks', 0)} tâche(s), "
+              f"{counts.get('api_keys', 0)} clé(s), {counts.get('escrow_holds', 0)} séquestre(s)")
+        if result.get("warning"):
+            print(f"\033[33m  ⚠️  {result['warning']}\033[0m")
+        print()
+        return
+
+    if action == "restore":
+        passphrase = _snapshot_passphrase(args, confirm=False)
+        result = await _admin_call(args, "snapshot.restore", name=args.name, passphrase=passphrase)
+        print(f"\n\033[32m✓ État restauré depuis '{result['restored_from']}'.\033[0m")
+        print(f"  {result.get('identities', 0)} identité(s), {result.get('tasks', 0)} tâche(s)")
+        print(f"  Restauré : {', '.join(result.get('restored', [])) or 'rien'}")
+        if result.get("safety_snapshot"):
+            print(f"  Filet de sécurité pris avant restauration : "
+                  f"\033[36m{result['safety_snapshot']}\033[0m")
+        for skipped in result.get("skipped", []):
+            print(f"\033[33m  ⚠️  Ignoré ({skipped['what']}) : {skipped['reason']}\033[0m")
+        if result.get("orphaned_online"):
+            print(f"\033[33m  ⚠️  Connectés mais absents de l'instantané : "
+                  f"{', '.join(result['orphaned_online'])}\033[0m")
+        print("\033[36m  ℹ️  Le journal d'audit n'a pas été remplacé : la restauration "
+              "y est enregistrée.\033[0m\n")
+        return
+
+    if action == "delete":
+        result = await _admin_call(args, "snapshot.delete", name=args.name)
+        print(f"\n\033[32m✓ Instantané '{result['deleted']}' supprimé.\033[0m\n")
+
+
 def run_dashboard(args):
     port = args.port
     dashboard_dir = os.path.expanduser("~/nexus/dashboard")
@@ -141,6 +237,15 @@ def main():
     disc_parser.add_argument("--capability", "-c", type=str, help="Capacité")
     disc_parser.add_argument("--role", "-r", type=str, help="Rôle")
 
+    # Command: snapshot
+    snap_parser = subparsers.add_parser("snapshot", help="Sauvegarder / restaurer l'état du Hub")
+    snap_parser.add_argument("action", choices=["create", "list", "restore", "delete"])
+    snap_parser.add_argument("--name", "-n", type=str, help="Nom de l'instantané")
+    snap_parser.add_argument("--api-key", type=str, default=None,
+                             help="Clé d'API admin (ou variable NEXUS_API_KEY)")
+    snap_parser.add_argument("--encrypt", action="store_true",
+                             help="Chiffrer/déchiffrer l'instantané (passphrase demandée)")
+
     # Command: dashboard
     dash_parser = subparsers.add_parser("dashboard", help="Lancer Dashboard")
     dash_parser.add_argument("--port", type=int, default=8080, help="Port Web")
@@ -150,9 +255,13 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    if args.command == "snapshot" and args.action != "list" and not args.name:
+        parser.error("--name est requis pour 'snapshot " + args.action + "'.")
+
     if args.command == "security-check": run_security_check(args)
     elif args.command == "docs": run_docs(args)
     elif args.command == "discover": asyncio.run(run_discover(args))
+    elif args.command == "snapshot": asyncio.run(run_snapshot(args))
     elif args.command == "dashboard": run_dashboard(args)
 
 

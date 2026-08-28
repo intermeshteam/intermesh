@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Non publié]
+## [0.3.0]
+
+Python SDK only. The JavaScript SDK is unchanged and stays at `0.1.1`.
+
+### Added
+
+- **Hub snapshots.** `snapshot.create`, `snapshot.restore` and `snapshot.list`
+  admin commands, plus a `nexus snapshot` CLI. A snapshot captures identities,
+  tasks, API key digests, escrow holds and guardrail policies.
+- **Encryption at rest for snapshots.** `encrypt_blob` / `decrypt_blob` derive
+  a key with PBKDF2-HMAC (100 000 iterations, random salt) and seal it with
+  AES-256-GCM. The passphrase is read with `getpass`, never from a command-line
+  argument — `ps` and shell history would otherwise expose it to every user on
+  the machine.
+- State export/import across the SDK: `ApiKeyStore.export_hashed` /
+  `import_hashed`, `NexusStore.replace_identities` / `replace_tasks`,
+  `EscrowManager.export_state` / `import_state`,
+  `AsimovGuardrailEngine.export_policies` / `import_policies`.
+- Health probes (`/healthz`, `/readyz`, `/metrics`) served on the hub's
+  WebSocket port.
+
+### Security
+
+- API keys sourced from the environment are read-only: `import_hashed` refuses
+  to overwrite them. They belong to the orchestrator (Kubernetes, CI), and
+  restoring a snapshot over them would silently diverge the hub from its source
+  of truth.
+- `replace_identities` and `replace_tasks` run their `DELETE` and `INSERT` in a
+  single transaction. A crash between the two would leave a hub with no
+  persisted identities at all — worse than the state being restored.
+
+### Fixed
+
+- Documentation aligned with the real adapter API. The `examples/frameworks/`
+  files imported `nexus_sdk.adapters.crewai` and siblings — modules removed when
+  the adapters package was flattened — and raised `ModuleNotFoundError` on the
+  first line. See the notes below for the blocking-call caveat that came with
+  the rewrite.
+
+---
+
+## [0.2.0]
 
 ### Added
 

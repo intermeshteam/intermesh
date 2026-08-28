@@ -1,3 +1,4 @@
+import dataclasses
 import re
 import time
 from collections import deque
@@ -131,6 +132,33 @@ class AsimovGuardrailEngine:
         if org_id and org_id in self._org_policies:
             return self._org_policies[org_id]
         return self.policy
+
+    def export_policies(self) -> Dict[str, Any]:
+        """
+        Policy par défaut du Hub + policies par organisation, sérialisées.
+
+        Les compteurs volatils (cascade, débit, disjoncteur) ne sont
+        volontairement pas exportés : ce sont des fenêtres glissantes de
+        quelques secondes, restaurer celles d'hier n'aurait pas de sens et
+        pourrait ressusciter un blocage déjà expiré.
+        """
+        return {
+            "default": dataclasses.asdict(self.policy),
+            "orgs": {org: dataclasses.asdict(p) for org, p in self._org_policies.items()},
+        }
+
+    def import_policies(self, state: Dict[str, Any]) -> None:
+        """Remplace la policy par défaut et toutes les policies d'organisation."""
+        default = state.get("default")
+        if default:
+            self.policy = GuardrailPolicy(**default)
+            self.circuit_breaker.threshold = self.policy.circuit_breaker_threshold
+        self._org_policies = {
+            org: GuardrailPolicy(**p) for org, p in (state.get("orgs") or {}).items()
+        }
+        # Le cache est indexé par id() d'objet : les policies remplacées ont
+        # disparu, leurs motifs compilés doivent disparaître avec elles.
+        self._compiled_patterns_cache.clear()
 
     def _compiled_patterns(self, policy: GuardrailPolicy) -> List[re.Pattern]:
         key = id(policy)

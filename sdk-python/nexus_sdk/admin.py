@@ -43,8 +43,10 @@ import dataclasses
 import time
 from typing import Any, Callable, Optional
 
+from nexus_sdk import snapshot as snapshot_store
 from nexus_sdk.escrow import EscrowError
 from nexus_sdk.guardrails import GuardrailPolicy
+from nexus_sdk.snapshot import SnapshotError
 from nexus_sdk.task import NexusTask, TaskStatus
 
 # Commandes qui modifient l'état. Isolées pour être journalisées
@@ -59,6 +61,9 @@ MUTATING = {
     "escrow.grant",
     "escrow.release",
     "escrow.refund",
+    "snapshot.create",
+    "snapshot.restore",
+    "snapshot.delete",
 }
 
 
@@ -87,7 +92,9 @@ class AdminContext:
         scoped: bool = False,
         asimov_engine: Any = None,
         escrow_manager: Any = None,
+        snapshot_dir: Any = None,
     ):
+        self.snapshot_dir = snapshot_dir
         self.agents = agents
         self.identity_registry = identity_registry
         self.task_registry = task_registry
@@ -537,6 +544,156 @@ def _escrow_refund(ctx: AdminContext, params: dict) -> dict:
     return refunded.to_dict()
 
 
+# ----------------------------------------------------------------------
+# Instantanés
+# ----------------------------------------------------------------------
+
+def _require_hub_admin(ctx: AdminContext, action: str) -> None:
+    """
+    Un instantané est hub-wide par nature : il contient le registre, les
+    clés et les séquestres de TOUTES les organisations. Un `org_admin` qui
+    pourrait le créer lirait ses voisins ; s'il pouvait le restaurer, il
+    écraserait leur état. Ces commandes sont donc réservées à `admin`.
+    """
+    if ctx.scoped:
+        raise AdminError(
+            f"'{action}' porte sur l'ensemble du Hub, toutes organisations "
+            f"confondues : le rôle 'admin' est requis, 'org_admin' ne suffit pas."
+        )
+
+
+def _audit_head(ctx: AdminContext) -> dict:
+    chain = getattr(ctx.audit_log, "chain", None)
+    if not chain:
+        return {}
+    return {"index": chain[-1].index, "hash": chain[-1].hash}
+
+
+def _capture(ctx: AdminContext) -> dict:
+    return snapshot_store.capture_state(
+        identity_registry=ctx.identity_registry,
+        task_registry=ctx.task_registry,
+        api_keys=ctx.api_keys,
+        asimov_engine=ctx.asimov_engine,
+        escrow_manager=ctx.escrow_manager,
+    )
+
+
+def _snapshot_create(ctx: AdminContext, params: dict) -> dict:
+    _require_hub_admin(ctx, "snapshot.create")
+    name = params.get("name")
+    if not name:
+        raise AdminError("name requis.")
+    try:
+        manifest = snapshot_store.save(
+            name,
+            _capture(ctx),
+            hub_org=ctx.my_org,
+            audit_head=_audit_head(ctx),
+            directory=ctx.snapshot_dir,
+            passphrase=params.get("passphrase"),
+            overwrite=bool(params.get("overwrite", True)),
+        )
+    except SnapshotError as exc:
+        raise AdminError(str(exc)) from exc
+
+    if not manifest["encrypted"]:
+        manifest["warning"] = (
+            "Instantané non chiffré. Le fichier est en 0600 mais contient les "
+            "empreintes de clés d'API et l'inventaire de toutes les organisations : "
+            "fournissez `passphrase` avant de le sortir de cette machine."
+        )
+    return manifest
+
+
+def _snapshot_list(ctx: AdminContext, params: dict) -> dict:
+    _require_hub_admin(ctx, "snapshot.list")
+    snapshots = snapshot_store.list_snapshots(ctx.snapshot_dir)
+    return {"snapshots": snapshots, "total": len(snapshots)}
+
+
+def _snapshot_delete(ctx: AdminContext, params: dict) -> dict:
+    _require_hub_admin(ctx, "snapshot.delete")
+    name = params.get("name")
+    if not name:
+        raise AdminError("name requis.")
+    try:
+        deleted = snapshot_store.delete(name, ctx.snapshot_dir)
+    except SnapshotError as exc:
+        raise AdminError(str(exc)) from exc
+    if not deleted:
+        raise AdminError(f"Instantané inconnu : '{name}'.")
+    return {"deleted": name}
+
+
+def _snapshot_restore(ctx: AdminContext, params: dict) -> dict:
+    """
+    Réinstalle un instantané, après en avoir pris un de sécurité.
+
+    Le filet de sécurité est pris AVANT toute écriture, avec la même
+    passphrase que celle fournie pour la lecture : une restauration ratée
+    reste elle-même réversible. `safety_snapshot=False` le désactive.
+    """
+    _require_hub_admin(ctx, "snapshot.restore")
+    name = params.get("name")
+    if not name:
+        raise AdminError("name requis.")
+    passphrase = params.get("passphrase")
+
+    try:
+        manifest, state = snapshot_store.load(
+            name, directory=ctx.snapshot_dir, passphrase=passphrase,
+        )
+    except SnapshotError as exc:
+        raise AdminError(str(exc)) from exc
+
+    safety_name = None
+    if params.get("safety_snapshot", True):
+        safety_name = f"pre-restore-{int(time.time())}"
+        try:
+            snapshot_store.save(
+                safety_name, _capture(ctx), hub_org=ctx.my_org,
+                audit_head=_audit_head(ctx), directory=ctx.snapshot_dir,
+                passphrase=passphrase,
+            )
+        except SnapshotError as exc:
+            raise AdminError(
+                f"Filet de sécurité impossible à écrire ({exc}) : restauration "
+                f"abandonnée. Passez `safety_snapshot: false` pour forcer."
+            ) from exc
+
+    report = snapshot_store.apply_state(
+        state,
+        identity_registry=ctx.identity_registry,
+        task_registry=ctx.task_registry,
+        connected_agents=ctx.agents,
+        store=ctx.store,
+        api_keys=ctx.api_keys,
+        asimov_engine=ctx.asimov_engine,
+        escrow_manager=ctx.escrow_manager,
+    )
+
+    # La chaîne d'audit vivante n'est jamais remplacée : elle est
+    # prolongée. Un instantané ne peut donc pas effacer la trace de sa
+    # propre restauration.
+    if ctx.audit_log is not None:
+        ctx.audit_log.log("SNAPSHOT_RESTORED", "hub", None, {
+            "snapshot": name,
+            "snapshot_created_at": manifest.get("created_at"),
+            "safety_snapshot": safety_name,
+            "restored": report.get("restored"),
+            "skipped": [s["what"] for s in report.get("skipped", [])],
+        })
+
+    return {
+        "restored_from": name,
+        "manifest": manifest,
+        "safety_snapshot": safety_name,
+        "audit_preserved": True,
+        **report,
+    }
+
+
 HANDLERS: dict[str, Callable[..., Any]] = {
     "hub.info": _hub_info,
     "agents.list": _agents_list,
@@ -556,6 +713,10 @@ HANDLERS: dict[str, Callable[..., Any]] = {
     "escrow.list": _escrow_list,
     "escrow.release": _escrow_release,
     "escrow.refund": _escrow_refund,
+    "snapshot.create": _snapshot_create,
+    "snapshot.list": _snapshot_list,
+    "snapshot.restore": _snapshot_restore,
+    "snapshot.delete": _snapshot_delete,
 }
 
 

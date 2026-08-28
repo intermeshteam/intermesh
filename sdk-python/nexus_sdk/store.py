@@ -134,6 +134,34 @@ class NexusStore:
         return {status: count for status, count in rows}
 
     # ------------------------------------------------------------------
+    # Remplacement en bloc (restauration d'instantané)
+    # ------------------------------------------------------------------
+
+    def replace_identities(self, identities: Dict[str, AgentIdentity]) -> None:
+        """
+        Vide la table des identités et la réécrit, en une seule transaction.
+
+        Le `DELETE` et les `INSERT` doivent être atomiques : un plantage
+        entre les deux laisserait un Hub sans aucune identité persistée,
+        pire que l'état qu'on cherchait à restaurer.
+        """
+        with self._conn:
+            self._conn.execute("DELETE FROM identities")
+            self._conn.executemany(
+                "INSERT INTO identities (qualified_name, payload) VALUES (?, ?)",
+                [(name, json.dumps(i.to_dict())) for name, i in identities.items()],
+            )
+
+    def replace_tasks(self, tasks: Dict[str, NexusTask]) -> None:
+        """Vide la table des tâches et la réécrit, en une seule transaction."""
+        with self._conn:
+            self._conn.execute("DELETE FROM tasks")
+            self._conn.executemany(
+                "INSERT INTO tasks (task_id, status, payload) VALUES (?, ?, ?)",
+                [(t.task_id, t.status.value, json.dumps(t.to_dict())) for t in tasks.values()],
+            )
+
+    # ------------------------------------------------------------------
     # Journal d'audit
     # ------------------------------------------------------------------
 

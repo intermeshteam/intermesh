@@ -71,36 +71,72 @@ def decrypt_with(private_key, encrypted_b64: str) -> str:
     return aesgcm.decrypt(base64.b64decode(envelope["n"]), base64.b64decode(envelope["ct"]), None).decode("utf-8")
 
 
-# --- NOUVEAU : COFFRE-FORT DE CLÉS LOCAL CHIFFRÉ (LOCAL KEY VAULT) ---
+# --- CHIFFREMENT AU REPOS PAR PASSPHRASE (PBKDF2 + AES-256-GCM) ---
+
+PBKDF2_ITERATIONS = 100_000
+
+
+def _derive_key(passphrase: str, salt: bytes) -> bytes:
+    """Dérive une clé AES-256 depuis une passphrase, via PBKDF2-HMAC-SHA256."""
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=PBKDF2_ITERATIONS,
+    )
+    return kdf.derive(passphrase.encode("utf-8"))
+
+
+def encrypt_blob(plaintext: str, passphrase: str) -> dict:
+    """
+    Chiffre un texte quelconque avec une passphrase.
+
+    Retourne un dict JSON-sérialisable (`salt`/`nonce`/`ciphertext` en
+    base64) : le sel est stocké en clair, il n'est pas secret — il empêche
+    seulement de pré-calculer une table pour toutes les passphrases.
+    """
+    salt = os.urandom(16)
+    nonce = os.urandom(12)
+    ciphertext = AESGCM(_derive_key(passphrase, salt)).encrypt(
+        nonce, plaintext.encode("utf-8"), None
+    )
+    return {
+        "salt": base64.b64encode(salt).decode("utf-8"),
+        "nonce": base64.b64encode(nonce).decode("utf-8"),
+        "ciphertext": base64.b64encode(ciphertext).decode("utf-8"),
+    }
+
+
+def decrypt_blob(blob: dict, passphrase: str) -> str:
+    """
+    Déchiffre un blob produit par `encrypt_blob`.
+
+    Raises:
+        cryptography.exceptions.InvalidTag: passphrase incorrecte, ou
+            contenu altéré — AES-GCM ne distingue pas les deux cas, et
+            c'est voulu : les deux signifient « ne fais pas confiance ».
+    """
+    key = _derive_key(passphrase, base64.b64decode(blob["salt"]))
+    return AESGCM(key).decrypt(
+        base64.b64decode(blob["nonce"]),
+        base64.b64decode(blob["ciphertext"]),
+        None,
+    ).decode("utf-8")
+
+
+# --- COFFRE-FORT DE CLÉS LOCAL CHIFFRÉ (LOCAL KEY VAULT) ---
 
 def save_encrypted_vault(file_path: str, private_key_pem: str, passphrase: str):
     """
     Chiffre et sauvegarde la clé privée sur le disque avec PBKDF2 (100 000 itérations) + AES-256-GCM.
     """
-    salt = os.urandom(16)
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=100_000,
-    )
-    key = kdf.derive(passphrase.encode("utf-8"))
-    
-    nonce = os.urandom(12)
-    aesgcm = AESGCM(key)
-    ciphertext = aesgcm.encrypt(nonce, private_key_pem.encode("utf-8"), None)
-    
-    vault_data = {
-        "salt": base64.b64encode(salt).decode("utf-8"),
-        "nonce": base64.b64encode(nonce).decode("utf-8"),
-        "ciphertext": base64.b64encode(ciphertext).decode("utf-8"),
-        "version": "nexus_vault_v1"
-    }
-    
+    vault_data = encrypt_blob(private_key_pem, passphrase)
+    vault_data["version"] = "nexus_vault_v1"
+
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(vault_data, f, indent=2)
-    
+
     # Restreindre les permissions du fichier sous Linux (600 = lecture/écriture propriétaire seul)
     os.chmod(file_path, 0o600)
 
@@ -111,19 +147,4 @@ def load_encrypted_vault(file_path: str, passphrase: str) -> str:
     """
     with open(file_path, "r", encoding="utf-8") as f:
         vault_data = json.load(f)
-        
-    salt = base64.b64decode(vault_data["salt"])
-    nonce = base64.b64decode(vault_data["nonce"])
-    ciphertext = base64.b64decode(vault_data["ciphertext"])
-    
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=100_000,
-    )
-    key = kdf.derive(passphrase.encode("utf-8"))
-    
-    aesgcm = AESGCM(key)
-    plaintext_bytes = aesgcm.decrypt(nonce, ciphertext, None)
-    return plaintext_bytes.decode("utf-8")
+    return decrypt_blob(vault_data, passphrase)

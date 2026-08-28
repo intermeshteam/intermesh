@@ -43,4 +43,9 @@ try:
 except ImportError:
     pass
 
-__version__ = "0.2.0"
+try:
+    from nexus_sdk.snapshot import SnapshotError
+except ImportError:
+    pass
+
+__version__ = "0.3.0"

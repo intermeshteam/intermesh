@@ -99,6 +99,19 @@ class SimulatedLedger:
         self._balances[key] = self._balances.get(key, 0.0) + amount
         return self._balances[key]
 
+    def export_state(self) -> List[dict]:
+        """Soldes sérialisables — le tuple (org, devise) ne survit pas à JSON."""
+        return [
+            {"org_id": org, "currency": currency, "amount": amount}
+            for (org, currency), amount in sorted(self._balances.items())
+        ]
+
+    def import_state(self, rows: List[dict]) -> None:
+        """Remplace intégralement les soldes."""
+        self._balances = {
+            (r["org_id"], r["currency"]): float(r["amount"]) for r in rows
+        }
+
 
 class EscrowManager:
     """Un séquestre par tâche : créé à la soumission, résolu à l'issue de la tâche."""
@@ -163,6 +176,28 @@ class EscrowManager:
         hold.status = EscrowStatus.REFUNDED
         hold.resolved_at = time.time()
         return hold
+
+    def export_state(self) -> dict:
+        """Séquestres et soldes, pour un instantané du Hub."""
+        return {
+            "ledger": self.ledger.export_state(),
+            "holds": [h.to_dict() for h in self._holds.values()],
+        }
+
+    def import_state(self, state: dict) -> None:
+        """Remplace intégralement séquestres et soldes."""
+        self.ledger.import_state(state.get("ledger") or [])
+        self._holds = {}
+        for raw in state.get("holds") or []:
+            hold = EscrowHold(
+                hold_id=raw["hold_id"], task_id=raw["task_id"],
+                payer_org=raw["payer_org"], payee_org=raw["payee_org"],
+                amount=float(raw["amount"]), currency=raw["currency"],
+                status=EscrowStatus(raw["status"]), auto_release=bool(raw["auto_release"]),
+                created_at=float(raw["created_at"]), resolved_at=raw.get("resolved_at"),
+                metadata=raw.get("metadata") or {},
+            )
+            self._holds[hold.task_id] = hold
 
     def _require_held(self, task_id: str) -> EscrowHold:
         hold = self._holds.get(task_id)

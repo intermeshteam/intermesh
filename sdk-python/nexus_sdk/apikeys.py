@@ -179,6 +179,35 @@ class ApiKeyStore:
     def __len__(self) -> int:
         return len(self._by_hash)
 
+    # ------------------------------------------------------------------
+    # Instantanés
+    # ------------------------------------------------------------------
+
+    def export_hashed(self) -> dict[str, dict]:
+        """
+        Empreintes et privilèges, tels quels — la forme attendue par
+        `import_hashed`. Aucune clé en clair n'en sort, il n'y en a pas.
+        """
+        return {h: dict(info) for h, info in self._by_hash.items()}
+
+    def import_hashed(self, keys: dict[str, dict]) -> None:
+        """
+        Remplace intégralement le jeu de clés.
+
+        Raises:
+            PermissionError: si les clés viennent de l'environnement. Elles
+                appartiennent alors à l'orchestrateur (Kubernetes, CI), pas
+                au Hub : les écraser depuis un instantané ferait diverger la
+                mémoire du Hub de sa source de vérité.
+        """
+        if not self.mutable:
+            raise PermissionError(
+                "Les clés proviennent de l'environnement et sont en lecture seule : "
+                "elles ne peuvent pas être restaurées depuis un instantané."
+            )
+        self._by_hash = {h: self._normalize(info) for h, info in keys.items()}
+        self._persist()
+
     def lookup(self, raw_key: str) -> dict | None:
         """
         Retourne les privilèges associés à une clé, ou None si inconnue.

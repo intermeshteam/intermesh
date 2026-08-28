@@ -40,6 +40,7 @@ escrow_manager = EscrowManager()
 
 HUB_SECRET: str = ""
 HUB_ORG: str = "default"
+SNAPSHOT_DIR: str | None = None   # None => ~/.nexus/snapshots (ou $NEXUS_HOME)
 
 
 # ----------------------------------------------------------------------
@@ -200,6 +201,7 @@ async def _handle_admin_request(websocket, msg: NexusMessage) -> None:
             audit_log=audit_log, api_keys=api_keys, peered_hubs=peered_hubs, store=store,
             my_org=HUB_ORG, remember_task=remember_task, send_to_agent=send_task_to_agent,
             caller_org=caller_org, scoped=scoped, asimov_engine=asimov_engine, escrow_manager=escrow_manager,
+            snapshot_dir=SNAPSHOT_DIR,
         )
         result = await admin_execute(command, params, ctx)
 
@@ -430,7 +432,7 @@ async def handle_agent(websocket, my_org: str):
 
 
 async def main():
-    global store, api_keys, audit_log, HUB_SECRET, HUB_ORG
+    global store, api_keys, audit_log, HUB_SECRET, HUB_ORG, SNAPSHOT_DIR
 
     parser = argparse.ArgumentParser(description="Nexus Hub")
     parser.add_argument("--port", type=int, default=8765, help="Port")
@@ -439,6 +441,7 @@ async def main():
     parser.add_argument("--state-file", type=str, default=None, help="Chemin de la base d'état")
     parser.add_argument("--ephemeral-secret", action="store_true", help="Clé JWT jetable")
     parser.add_argument("--secret-file", type=str, default=None, help="Chemin du fichier de clé JWT")
+    parser.add_argument("--snapshot-dir", type=str, default=None, help="Dossier des instantanés d'état")
     parser.add_argument("--dev-api-keys", action="store_true", help="Active les clés de démonstration")
     parser.add_argument("--peer", action="append", default=[], help="Pair fédéré ORG=ws://host:port")
 
@@ -446,6 +449,7 @@ async def main():
     args, _ = parser.parse_known_args()
 
     HUB_ORG = args.org
+    SNAPSHOT_DIR = args.snapshot_dir
 
     if args.ephemeral_state:
         store = NexusStore(ephemeral=True)
