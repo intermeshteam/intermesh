@@ -9,7 +9,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        nexus: {
+        intermesh: {
           bg: '#0A0E1A',
           card: '#111827',
           border: '#1E293B',
@@ -18,7 +18,10 @@ module.exports = {
           amber: '#F59E0B',
           red: '#EF4444'
         }
-      }
+      },
+      fontFamily: {
+        sans: ['var(--font-inter)', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+      },
     },
   },
   plugins: [],
