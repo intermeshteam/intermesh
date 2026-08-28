@@ -1,6 +1,6 @@
 """
 Un vrai moteur de requête LlamaIndex sur un mini-index documentaire,
-exposé sur le réseau Nexus via `NexusLlamaIndexAdapter`.
+exposé sur le réseau Nexus via `from_callable`.
 
 Avec `OPENAI_API_KEY` défini, l'indexation et les réponses passent par de
 vrais embeddings et un vrai LLM OpenAI. Sans clé, `MockEmbedding` et
@@ -20,7 +20,7 @@ import os
 
 from llama_index.core import Document, Settings, VectorStoreIndex
 
-from nexus_sdk.adapters.llamaindex import NexusLlamaIndexAdapter
+from nexus_sdk import from_callable
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -53,12 +53,20 @@ def build_query_engine():
 async def main():
     engine = build_query_engine()
 
-    # `NexusLlamaIndexAdapter` extrait `input_key="query"` du dict de tâche
-    # et reconstruit l'appel attendu par le moteur — voir
-    # `nexus_sdk/adapters/llamaindex.py`.
-    agent = NexusLlamaIndexAdapter(
-        engine, name="llamaindex_kb", capabilities=["document_search", "rag"],
-        hub_url=HUB_URL,
+    # Un moteur de requête LlamaIndex attend une chaîne, pas un dict, et
+    # renvoie un objet `Response` que `json.dumps` refuse : on extrait la
+    # clé `query` de la tâche, puis l'attribut `.response` du résultat.
+    #
+    # `query()` est synchrone et bloque le temps de l'appel LLM.
+    # `asyncio.to_thread` empêche qu'il gèle la boucle de l'agent.
+    async def run_query(input_data):
+        question = input_data.get("query", "") if isinstance(input_data, dict) else input_data
+        result = await asyncio.to_thread(lambda: engine.query(question))
+        return {"output": getattr(result, "response", str(result))}
+
+    agent = from_callable(
+        run_query, name="llamaindex_kb",
+        capabilities=["document_search", "rag"], hub_url=HUB_URL,
     )
     await agent.connect()
     print(f"⏳ [llamaindex_kb] En écoute sur {HUB_URL}...")

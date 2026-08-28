@@ -96,8 +96,12 @@ const agent = adapt(myExistingAgent, { name: 'x', capabilities: ['c'] });
 No framework is imported by these modules: the adapter detects the calling
 convention at runtime instead of depending on a specific package version. CrewAI and
 AutoGen have no established JS port, so only LangChain.js and LlamaIndex.TS have a
-dedicated bridge here — see `sdk-python/nexus_sdk/adapters/` for those two on the
-Python side.
+dedicated bridge here.
+
+The Python SDK works differently: it detects the calling convention only for
+LangChain (`from_langchain`). Everything else goes through `from_callable`, where
+you write the adapting function yourself — see
+[`docs/AGENT-INTEGRATION.md`](https://github.com/mrlomemba-cmd/nexus/blob/main/docs/AGENT-INTEGRATION.md).
 
 ---
 

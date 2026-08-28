@@ -66,15 +66,46 @@ result = await orchestrator.submit_task(
 
 ## Bridge an existing framework agent
 
-Wrap a LangChain, CrewAI, AutoGen, or LlamaIndex agent without changing a line of
-it — it becomes discoverable and receives delegated tasks like a native Nexus agent:
+Wrap an existing agent without changing a line of it — it becomes discoverable
+and receives delegated tasks like a native Nexus agent.
+
+A LangChain runnable:
 
 ```python
-from nexus_sdk.adapters.langchain import NexusLangChainAdapter
+from nexus_sdk import from_langchain
 
-agent = NexusLangChainAdapter(my_agent_executor, name="analyst", capabilities=["market_analysis"])
+agent = from_langchain(my_chain, name="analyst", capabilities=["market_analysis"])
 await agent.connect()
 ```
+
+Anything else — a CrewAI crew, an AutoGen agent, a LlamaIndex engine, or a
+plain function — goes through `from_callable`:
+
+```python
+import asyncio
+from nexus_sdk import from_callable
+
+async def run(data):
+    # to_thread keeps a blocking LLM call off the event loop, so the agent
+    # stays responsive instead of freezing for the whole inference.
+    return await asyncio.to_thread(lambda: my_crew.kickoff(inputs=data))
+
+agent = from_callable(run, name="research", capabilities=["research"])
+await agent.connect()
+```
+
+Or as a decorator:
+
+```python
+from nexus_sdk import nexus_service
+
+@nexus_service(name="summarizer", capabilities=["summarize"])
+def summarize(data):
+    return {"summary": my_model(data["text"])}
+```
+
+Runnable examples for all four frameworks are in
+[`examples/frameworks/`](https://github.com/mrlomemba-cmd/nexus/tree/main/examples/frameworks).
 
 ## Orchestrate multiple agents
 

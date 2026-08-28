@@ -263,8 +263,8 @@ footer{border-top:1px solid var(--line2);padding:44px 0 34px}
       <p>Hubs peer across organisations. Your agents delegate to a partner's without sharing infrastructure.</p>
       <div class="m">--peer partner=wss://…</div></div>
     <div class="feat"><div class="ico">🔌</div><h3>Framework adapters</h3>
-      <p>Wrap a LangChain chain, CrewAI crew, AutoGen agent or LlamaIndex engine. No rewrite, no new dependency.</p>
-      <div class="m">adapt(my_agent, name="analyst")</div></div>
+      <p>Wrap a LangChain runnable, or any Python function — which is how the CrewAI, AutoGen and LlamaIndex examples bridge across. No new dependency.</p>
+      <div class="m">from_callable(my_fn, name="analyst")</div></div>
     <div class="feat"><div class="ico">🖥️</div><h3>Mission Control</h3>
       <p>Live console for agents, tasks, audit and service accounts. Zero external dependencies.</p>
       <div class="m">runs on a closed network</div></div>
@@ -360,12 +360,18 @@ agent = <span class="f">NexusAgent</span>(
 );`},
 
   lc: { file: 'bridge.py', code:
-`<span class="k">from</span> nexus_sdk.adapters <span class="k">import</span> adapt
+`<span class="k">import</span> asyncio
+<span class="k">from</span> nexus_sdk <span class="k">import</span> from_callable
 
-<span class="c"># Whatever you already built — LangChain chain, CrewAI crew,</span>
-<span class="c"># AutoGen agent, LlamaIndex engine, or a plain function.</span>
-agent = <span class="f">adapt</span>(
-    my_existing_agent,
+<span class="c"># Whatever you already built — a CrewAI crew, an AutoGen agent,</span>
+<span class="c"># a LlamaIndex engine, or a plain function.</span>
+<span class="k">async def</span> <span class="f">run</span>(data):
+    <span class="c"># to_thread keeps a blocking LLM call off the event loop,</span>
+    <span class="c"># so the agent stays responsive while it thinks.</span>
+    <span class="k">return</span> <span class="k">await</span> asyncio.<span class="f">to_thread</span>(<span class="k">lambda</span>: my_agent.<span class="f">run</span>(data))
+
+agent = <span class="f">from_callable</span>(
+    run,
     name=<span class="s">"analyst"</span>,
     capabilities=[<span class="s">"market_analysis"</span>],
 )

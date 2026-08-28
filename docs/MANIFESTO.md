@@ -115,12 +115,13 @@ that can be quietly rewritten was never actually an audit log.
 delegate to a partner's without either side standing up shared
 infrastructure or trusting the other with more than the task requires.
 
-**Framework adapters that add nothing.** Wrap an existing LangChain chain,
-CrewAI crew, AutoGen agent, or LlamaIndex engine, unmodified. The adapter
-detects the object's calling convention rather than importing the
-framework, on purpose — so installing Nexus never drags in a hundred
-transitive dependencies, and the bridge doesn't shatter every time one of
-these frameworks ships a breaking major version, which by their own
+**Framework adapters that add nothing.** `from_langchain` wraps an existing
+LangChain runnable; `from_callable` and the `@nexus_service` decorator turn
+any Python function into a discoverable agent, which is how the CrewAI,
+AutoGen and LlamaIndex examples bridge their own frameworks. None of this
+imports the frameworks themselves, on purpose — installing Nexus never
+drags in a hundred transitive dependencies, and the bridge doesn't shatter
+every time one of them ships a breaking major version, which by their own
 release histories is often.
 
 None of this is exotic. Every piece here is something a serious production
@@ -157,9 +158,14 @@ needs work we haven't done. Key rotation currently ejects every connected
 agent; there's no overlap window yet. A resumed task can run twice, so
 executors have to be idempotent — that's a real constraint, not a footnote.
 And the framework adapters have been verified against test doubles that
-reproduce each framework's calling convention exactly, not yet against the
-real libraries, because we couldn't get them installed in this environment
-to check. We'd rather tell you that plainly than have you discover it.
+reproduce each framework's calling convention, not yet against the real
+libraries, because we couldn't get them installed in this environment to
+check. One sharp edge there: `from_langchain` falls back to a chain's
+synchronous `invoke()` when no `ainvoke` exists, and calls it on the event
+loop — which freezes the agent for the duration of the inference. If your
+chain is synchronous, wrap it with `from_callable` and `asyncio.to_thread`
+instead, the way the examples in `examples/frameworks/` do. We'd rather
+tell you that plainly than have you discover it in production.
 
 We're also not claiming multi-agent coordination is a solved problem once
 you adopt a protocol. Coordination failures that come from bad task

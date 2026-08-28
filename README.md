@@ -95,7 +95,7 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 | 🛡️ **RBAC** | Per-agent access policies enforced at the hub. |
 | 🔍 **Discovery** | Find agents by capability, role, metadata, or name. |
 | 📋 **Tasks & workflows** | Async distributed task lifecycle: `pending → running → completed/failed`. |
-| 🔌 **Framework adapters** | Bridge LangChain, CrewAI, AutoGen, LlamaIndex (Python) and LangChain.js, LlamaIndex.TS (JS) without changing a line of the wrapped agent. |
+| 🔌 **Framework adapters** | Python: `from_langchain`, `from_callable`, `@nexus_service` — the CrewAI, AutoGen and LlamaIndex examples bridge through `from_callable`. JS: `adapt()`, `NexusLangChainAdapter`, `NexusLlamaIndexAdapter`. |
 | 🧵 **Orchestration helpers** | `NexusPipeline` chains steps across agents found by capability; `fan_out`/`fanOut` runs branches in parallel and aggregates results. |
 | 🌐 **Federation** | Hub-to-hub peering across organizations, E2E preserved end to end. |
 | 📜 **Immutable audit log** | Merkle-chained events; any retroactive edit breaks the chain. |
@@ -110,13 +110,13 @@ nexus task calc_bot "Compute" '{"expression": "42 * 2"}'
 
 | Path | Purpose |
 |---|---|
-| `sdk-python/` | Official Python SDK (`nexus-sdk`) and the `nexus` CLI — adapters for LangChain, CrewAI, AutoGen, LlamaIndex |
-| `sdk-js/` | Official JavaScript/TypeScript SDK — adapters for LangChain.js, LlamaIndex.TS |
+| `sdk-python/` | Official Python SDK (`nexus-mesh`) and the `nexus` CLI — `from_callable`, `from_langchain`, `@nexus_service` |
+| `sdk-js/` | Official JavaScript/TypeScript SDK (`nexus-mesh`) — adapters for LangChain.js and LlamaIndex.TS |
 | `server/` | The coordination hub |
 | `dashboard/` | Mission Control web UI |
 | `docs/` | RFC-001, security spec, API reference |
 | `examples/` | Runnable agents (Python and Node.js); `examples/frameworks/` wraps real LangChain/LlamaIndex/CrewAI/AutoGen objects |
-| `tests/` | 18 unit + integration tests |
+| `tests/` | 137 unit + integration tests |
 | `docker/` | Container images for hub, agents, dashboard |
 
 ---

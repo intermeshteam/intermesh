@@ -12,49 +12,72 @@ sémantique.
 ## Adaptateurs : brancher un agent déjà écrit
 
 Un développeur ne réécrit pas son agent LangChain, CrewAI, AutoGen ou LlamaIndex
-pour essayer un protocole. Les adaptateurs détectent la convention d'appel de
-l'objet qu'on leur confie — méthode connue (`invoke`, `run`, `kickoff`,
-`execute_task`, `query`, `chat`…) ou simple fonction appelable — plutôt que
-d'imposer une interface. Aucun d'eux n'importe le framework qu'il pontage :
+pour essayer un protocole. Aucun adaptateur n'importe le framework qu'il ponte :
 installer le SDK n'entraîne jamais LangChain et ses dépendances transitives.
+
+Les deux SDK ne fonctionnent pas de la même manière, et c'est important à
+connaître avant de lire la suite :
+
+- **JavaScript** détecte la convention d'appel de l'objet qu'on lui confie —
+  méthode connue (`invoke`, `run`, `kickoff`, `query`…) ou fonction appelable.
+- **Python** ne fait cette détection que pour LangChain (`from_langchain`).
+  Pour tout le reste, vous écrivez la fonction d'adaptation vous-même et la
+  passez à `from_callable` — quelques lignes, mais explicites.
 
 ### Python
 
-Frameworks couverts : **LangChain**, **CrewAI**, **AutoGen**, **LlamaIndex**.
+Trois fonctions, toutes exportées depuis `nexus_sdk`. Chacune renvoie un
+`NexusAgent` prêt à `connect()`.
+
+**`from_langchain`** — pour un `Runnable`/chaîne LangChain. Il essaie
+`ainvoke`, puis `invoke`, puis `run`, puis l'objet lui-même s'il est appelable,
+et renvoie `{"output": <résultat>, "adapter": "langchain_nexus_v1"}` :
 
 ```python
-from nexus_sdk.adapters.langchain import NexusLangChainAdapter
+from nexus_sdk import from_langchain
 
-agent = NexusLangChainAdapter(
-    mon_agent_executor,
-    name="analyste",
-    capabilities=["market_analysis"],
-)
+agent = from_langchain(ma_chaine, name="analyste", capabilities=["market_analysis"])
 await agent.connect()
 ```
 
-Un framework inconnu fonctionne quand même avec `adapt()`, tant qu'il expose une
-méthode d'invocation reconnaissable :
+**`from_callable`** — pour tout le reste : un `Crew` CrewAI, un agent AutoGen,
+un moteur LlamaIndex, ou une simple fonction. La fonction reçoit le dict de
+tâche tel quel ; c'est à elle d'adapter la convention du framework :
 
 ```python
-from nexus_sdk.adapters import adapt
+import asyncio
+from nexus_sdk import from_callable
 
-agent = adapt(mon_agent_existant, name="x", capabilities=["c"])
+async def run_crew(data):
+    result = await asyncio.to_thread(lambda: mon_crew.kickoff(inputs=data))
+    return {"output": getattr(result, "raw", str(result))}
+
+agent = from_callable(run_crew, name="recherche", capabilities=["research"])
 ```
 
-Options utiles à toute classe d'adaptateur (`**kwargs` transmis à `NexusAgent`) :
+**`@nexus_service`** — le même mécanisme sous forme de décorateur. Attention :
+il **remplace** la fonction par l'agent, `mon_service` n'est plus appelable
+comme une fonction ordinaire ensuite :
 
-| Paramètre | Rôle |
-|---|---|
-| `input_key` | Extrait une seule valeur du dict de tâche avant l'appel (ex. `"query"` pour LlamaIndex, `"message"` pour AutoGen) |
-| `input_adapter` | Transformation complète de l'entrée ; prime sur `input_key` |
-| `output_adapter` | Transformation de la sortie avant renvoi |
-| `invoke_method` | Force la méthode d'invocation si la détection se trompe |
-| `run_in_thread` | `True` par défaut — les appels synchrones partent dans un thread pour ne pas geler la boucle asyncio de l'agent |
+```python
+from nexus_sdk import nexus_service
 
-Les méthodes synchrones (`invoke`, `kickoff`, `run`…) sont exécutées hors de la
-boucle événementielle : un appel LLM qui bloque plusieurs secondes ne fige pas le
-routage des autres tâches de l'agent.
+@nexus_service(name="resumeur", capabilities=["summarize"])
+def mon_service(data):
+    return {"summary": mon_modele(data["text"])}
+
+await mon_service.connect()
+```
+
+`NexusAgent.from_callable(...)` et `NexusAgent.from_langchain(...)` existent
+aussi comme méthodes de classe — même comportement, autre point d'entrée.
+
+⚠️ **Appels bloquants.** `from_callable` exécute votre fonction telle quelle :
+si elle est synchrone, elle s'exécute *dans* la boucle asyncio et gèle l'agent
+pendant toute sa durée — plus aucune tâche reçue, plus aucun message routé.
+Un appel LLM bloque plusieurs secondes. Enveloppez-le dans `asyncio.to_thread`,
+comme ci-dessus. Même remarque pour `from_langchain` si votre chaîne n'expose
+que `invoke` sans `ainvoke`.
 
 ### JavaScript / TypeScript
 
@@ -80,7 +103,9 @@ const agent = new NexusLlamaIndexAdapter(index.asQueryEngine(), {
 });
 ```
 
-Un framework sans pont dédié fonctionne via `adapt()`, comme en Python :
+Un framework sans pont dédié fonctionne via `adapt()`, qui détecte la méthode
+d'invocation de l'objet (côté JS uniquement — l'équivalent Python est
+`from_callable`, avec une fonction que vous écrivez vous-même) :
 
 ```javascript
 import { adapt } from 'nexus-mesh/adapters';

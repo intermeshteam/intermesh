@@ -1,6 +1,6 @@
 """
 Une vraie équipe CrewAI (un `Agent` et une `Task` réels, orchestrés par un
-`Crew`), exposée sur le réseau Nexus via `NexusCrewAIAdapter`.
+`Crew`), exposée sur le réseau Nexus via `from_callable`.
 
 Contrairement aux exemples LangChain/LlamaIndex de ce dossier, CrewAI n'a
 pas de mode hors ligne déterministe intégré : un `Agent` appelle toujours
@@ -14,14 +14,15 @@ quel, mais toute tâche déléguée échouera à l'appel du LLM.
 
 Le dict d'entrée d'une tâche Nexus alimente directement les `{placeholders}`
 de la description CrewAI : `submit_task(..., {"sujet": "..."})` remplit
-`{sujet}` sans code intermédiaire — voir `NexusCrewAIAdapter`.
+`{sujet}`, car la fonction passée à `from_callable` transmet le dict tel
+quel à `kickoff(inputs=...)`.
 """
 
 import asyncio
 import os
 import sys
 
-from nexus_sdk.adapters.crewai import NexusCrewAIAdapter
+from nexus_sdk import from_callable
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -59,12 +60,22 @@ async def main():
 
     crew = build_crew()
 
-    # `NexusCrewAIAdapter` détecte `kickoff(inputs=...)` et aplatit le
-    # `CrewOutput` (objet non sérialisable) en son texte via `.raw` — voir
-    # `nexus_sdk/adapters/crewai.py` et `adapters/base.py::_jsonable`.
-    agent = NexusCrewAIAdapter(
-        crew, name="crewai_research_team", capabilities=["research", "synthesis"],
-        hub_url=HUB_URL,
+    # `from_callable` appelle simplement `fn(input_data)` : c'est donc à
+    # nous d'adapter la convention de CrewAI, qui attend `kickoff(inputs=...)`
+    # en mot-clé et renvoie un `CrewOutput` — un objet que `json.dumps`
+    # refuse. On l'aplatit en son texte via `.raw`.
+    #
+    # `kickoff()` est synchrone et bloque plusieurs secondes (appels LLM).
+    # `asyncio.to_thread` l'écarte de la boucle : sans cela, l'agent Nexus
+    # serait gelé pendant toute la durée de l'appel — plus aucune tâche
+    # reçue, plus aucun message routé.
+    async def run_crew(input_data):
+        result = await asyncio.to_thread(lambda: crew.kickoff(inputs=input_data))
+        return {"output": getattr(result, "raw", str(result))}
+
+    agent = from_callable(
+        run_crew, name="crewai_research_team",
+        capabilities=["research", "synthesis"], hub_url=HUB_URL,
     )
     await agent.connect()
     print(f"⏳ [crewai_research_team] En écoute sur {HUB_URL}...")

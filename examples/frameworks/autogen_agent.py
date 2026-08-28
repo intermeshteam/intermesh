@@ -1,7 +1,7 @@
 """
 Un vrai agent AutoGen (`ConversableAgent`, pas un agent Nexus fait main
 qui imite une conversation), exposé sur le réseau Nexus via
-`NexusAutoGenAdapter`.
+`from_callable`.
 
 Comme CrewAI, AutoGen n'a pas de mode hors ligne déterministe : un
 `ConversableAgent` appelle toujours un vrai LLM. `OPENAI_API_KEY` est donc
@@ -11,16 +11,16 @@ requis pour exécuter réellement une tâche.
     export OPENAI_API_KEY=sk-...
     python examples/frameworks/autogen_agent.py
 
-Une tâche Nexus `{"message": "..."}` alimente directement
-`generate_reply` : c'est la clé par défaut de `NexusAutoGenAdapter`, donc
-aucune configuration supplémentaire n'est nécessaire côté orchestrateur.
+Une tâche Nexus `{"message": "..."}` alimente `generate_reply` : la
+fonction passée à `from_callable` lit la clé `message` et la reformate en
+`[{"role": "user", "content": ...}]`, la forme attendue par AutoGen.
 """
 
 import asyncio
 import os
 import sys
 
-from nexus_sdk.adapters.autogen import NexusAutoGenAdapter
+from nexus_sdk import from_callable
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -52,15 +52,21 @@ async def main():
     autogen_agent = build_agent()
 
     # `generate_reply` attend une liste de messages, pas une chaîne nue :
-    # `input_adapter` construit ce format à partir de la clé `message` du
-    # dict de tâche. `NexusAutoGenAdapter` définirait par défaut
-    # `input_key="message"`, insuffisant ici car la méthode veut
-    # `messages=[{"role": "user", "content": "..."}]`, pas la chaîne seule.
-    agent = NexusAutoGenAdapter(
-        autogen_agent, name="autogen_reasoner", capabilities=["reasoning"],
-        hub_url=HUB_URL,
-        input_adapter=lambda data: [{"role": "user", "content": data["message"]}],
-        invoke_method="generate_reply",
+    # on construit ce format à partir de la clé `message` du dict de tâche.
+    #
+    # L'appel est synchrone et bloque le temps de la réponse du LLM.
+    # `asyncio.to_thread` l'écarte de la boucle, sans quoi l'agent Nexus
+    # cesserait de répondre pendant toute la durée de l'inférence.
+    async def run_autogen(input_data):
+        messages = [{"role": "user", "content": input_data["message"]}]
+        result = await asyncio.to_thread(
+            lambda: autogen_agent.generate_reply(messages=messages)
+        )
+        return {"output": result if isinstance(result, str) else str(result)}
+
+    agent = from_callable(
+        run_autogen, name="autogen_reasoner",
+        capabilities=["reasoning"], hub_url=HUB_URL,
     )
     await agent.connect()
     print(f"⏳ [autogen_reasoner] En écoute sur {HUB_URL}...")

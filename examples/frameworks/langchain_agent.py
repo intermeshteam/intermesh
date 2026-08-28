@@ -1,6 +1,6 @@
 """
 Un vrai agent LangChain (chaîne LCEL prompt | llm | parser), exposé sur le
-réseau Nexus via `NexusLangChainAdapter` — pas d'agent Nexus fait main
+réseau Nexus via `from_langchain` — pas d'agent Nexus fait main
 imitant un LLM, un `Runnable` LangChain réel.
 
 Avec `OPENAI_API_KEY` défini, la chaîne appelle un vrai modèle OpenAI.
@@ -21,7 +21,7 @@ import os
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from nexus_sdk.adapters.langchain import NexusLangChainAdapter
+from nexus_sdk import from_langchain
 
 HUB_URL = os.getenv("HUB_URL", "ws://localhost:8765")
 
@@ -49,17 +49,22 @@ def build_chain():
 async def main():
     chain = build_chain()
 
-    # `NexusLangChainAdapter` détecte `ainvoke`/`invoke` sur la chaîne, exécute
-    # les appels synchrones hors de la boucle asyncio, et aplatit toute sortie
-    # non sérialisable — voir `nexus_sdk/adapters/base.py`.
+    # `from_langchain` privilégie `ainvoke` s'il existe, sinon retombe sur
+    # `invoke`, `run`, ou l'objet lui-même s'il est appelable. Il renvoie
+    # `{"output": <résultat>, "adapter": "langchain_nexus_v1"}`.
     #
-    # `input_key` reste à None : le prompt attend `{"input": "..."}`, la
-    # forme exacte du dict de tâche Nexus. L'extraire donnerait une chaîne
-    # nue au `Runnable`, qui échouerait à résoudre la variable du template.
-    agent = NexusLangChainAdapter(
+    # Le dict de tâche est transmis tel quel : le prompt attend
+    # `{"input": "..."}`, la forme exacte de ce que Nexus envoie. Extraire
+    # la valeur donnerait une chaîne nue au `Runnable`, qui échouerait à
+    # résoudre la variable du template.
+    #
+    # ⚠️ Si votre chaîne n'expose que `invoke` (synchrone), `from_langchain`
+    # l'appelle dans la boucle asyncio et gèle l'agent le temps de
+    # l'inférence. Pour une chaîne synchrone, préférez `from_callable` avec
+    # un `asyncio.to_thread`, comme dans les autres exemples de ce dossier.
+    agent = from_langchain(
         chain, name="langchain_translator", capabilities=["translate"],
         hub_url=HUB_URL,
-        output_adapter=lambda text: {"translated_text": text.strip()},
     )
     await agent.connect()
     print(f"⏳ [langchain_translator] En écoute sur {HUB_URL}...")
