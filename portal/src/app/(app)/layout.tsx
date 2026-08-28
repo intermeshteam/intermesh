@@ -36,7 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="space-y-6">
           <Link href="/" className="flex items-center space-x-3 px-2 py-1 hover:opacity-80 transition">
             <InterMeshLogo className="w-6 h-6 shrink-0" />
-            <span className="font-extrabold tracking-widest text-white text-sm">N E X U S</span>
+            <span className="font-extrabold tracking-widest text-white text-sm">INTERMESH</span>
           </Link>
 
           <div className="bg-[#141519] border border-white/10 rounded-lg p-2.5 flex items-center justify-between text-xs cursor-pointer hover:border-slate-600 transition">

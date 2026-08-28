@@ -22,14 +22,19 @@ import {
   ArrowLeftRight,
   Printer,
   FileText,
-  Clock
+  Clock,
+  Search,
+  KeyRound,
+  Send,
+  ScrollText,
+  AlertTriangle
 } from 'lucide-react';
 import NetworkBackground from '@/components/NetworkBackground';
 import AnimatedCodeEditor from '@/components/AnimatedCodeEditor';
 import InterMeshLogo from '@/components/InterMeshLogo';
 
 export default function LandingPage() {
-  const installCommand = "pip install intermesh-sdk";
+  const installCommand = "pip install intermesh";
 
   const handleCopyCmd = () => {
     navigator.clipboard.writeText(installCommand);
@@ -60,7 +65,7 @@ export default function LandingPage() {
             translate="no"
           >
             <InterMeshLogo className="w-6 h-6 shrink-0" />
-            <span>N E X U S</span>
+            <span>INTERMESH</span>
           </Link>
 
           <nav className="hidden md:flex items-center space-x-8 text-xs text-slate-400 font-medium">
@@ -129,6 +134,88 @@ export default function LandingPage() {
           </div>
 
         </main>
+
+        {/* HOW IT WORKS */}
+        <section className="relative z-10 border-t border-zinc-900 bg-[#08080A] py-20 px-6">
+          <div className="max-w-6xl mx-auto space-y-12">
+
+            <div className="text-center space-y-3 max-w-3xl mx-auto">
+              <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold">HOW IT WORKS</span>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+                Four Steps From "Two Scripts" to a Coordinated Mesh
+              </h2>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                InterMesh is the layer underneath your framework of choice, not a replacement for it.
+                A central <strong className="text-slate-200">Hub</strong> routes messages between agents —
+                it never reads their contents.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-left">
+
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
+                    <KeyRound className="w-4 h-4 stroke-[1.5]" />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-600">STEP 1</span>
+                </div>
+                <h3 className="text-sm font-bold text-white">Register &amp; get a signed identity</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  An agent connects to the Hub and declares its capabilities. The Hub returns a
+                  JWT carrying a SHA-256 fingerprint of its roles and permissions — tampering with
+                  either breaks the fingerprint and is rejected before the agent does anything.
+                </p>
+              </div>
+
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
+                    <Search className="w-4 h-4 stroke-[1.5]" />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-600">STEP 2</span>
+                </div>
+                <h3 className="text-sm font-bold text-white">Discover, by capability not address</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  <code className="text-cyan-400">discover(capabilities=[&quot;translate&quot;])</code> finds
+                  agents by what they do, not where they happen to be running — no hardcoded
+                  addresses that break the moment something moves.
+                </p>
+              </div>
+
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
+                    <Send className="w-4 h-4 stroke-[1.5]" />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-600">STEP 3</span>
+                </div>
+                <h3 className="text-sm font-bold text-white">Delegate, sealed end-to-end</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  A task's payload is wrapped in a per-message AES-256-GCM key, itself sealed with
+                  the recipient's RSA-2048-OAEP public key. The Hub forwards ciphertext — it
+                  physically cannot read what it's routing.
+                </p>
+              </div>
+
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
+                    <ScrollText className="w-4 h-4 stroke-[1.5]" />
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-600">STEP 4</span>
+                </div>
+                <h3 className="text-sm font-bold text-white">Every step chains into an audit log</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Registration, delegation, and completion are appended to a Merkle-chained log.
+                  Edit one entry directly in the database and the chain breaks — loudly, at the
+                  next integrity check, not silently forever.
+                </p>
+              </div>
+
+            </div>
+          </div>
+        </section>
 
         {/* SECTION 24/7 INTERNAL AUTOMATION (SAISIE ➜ IMPRESSION) */}
         <section className="relative z-10 border-t border-zinc-900 bg-[#0A0A0C] py-20 px-6">
@@ -339,6 +426,67 @@ await print_agent.connect()`}
               </div>
 
             </div>
+
+          </div>
+        </section>
+
+        {/* HONEST LIMITATIONS */}
+        <section className="relative z-10 border-t border-zinc-900 bg-[#0A0A0C] py-20 px-6">
+          <div className="max-w-4xl mx-auto space-y-10">
+
+            <div className="text-center space-y-3">
+              <span className="text-xs font-mono uppercase tracking-widest text-amber-500/80 font-semibold flex items-center justify-center space-x-2">
+                <AlertTriangle className="w-3.5 h-3.5 stroke-[1.5]" />
+                <span>WHAT WE'RE NOT CLAIMING</span>
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                RFC-001 Is Real, and It Isn't Finished
+              </h2>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-2xl mx-auto">
+                A protocol page that only lists strengths isn't trustworthy. Here's what to know
+                before you rely on this in production.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-left">
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
+                <h3 className="text-xs font-bold text-white">No TLS by default</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  End-to-end encryption protects payloads, not who's-talking-to-whom metadata. Put
+                  the Hub behind <code className="text-cyan-400">wss://</code> before anything
+                  sensitive touches it.
+                </p>
+              </div>
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
+                <h3 className="text-xs font-bold text-white">State lives in one Hub</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Hubs federate for cross-organization delegation, but multiple hubs sharing one
+                  state store is work we haven't done yet.
+                </p>
+              </div>
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
+                <h3 className="text-xs font-bold text-white">Key rotation ejects agents</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Rotating the Hub's signing key invalidates every issued token immediately —
+                  there's no overlap window yet.
+                </p>
+              </div>
+              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
+                <h3 className="text-xs font-bold text-white">Resumed tasks can run twice</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  A task interrupted by a restart is reassigned on reconnect. Executors must be
+                  idempotent — that's a real constraint, not a footnote.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 text-center max-w-2xl mx-auto leading-relaxed">
+              The spec is public specifically so it can be argued with.{' '}
+              <Link href="/docs" className="text-slate-300 hover:text-white underline underline-offset-2">
+                Read RFC-001
+              </Link>{' '}
+              and tell us where it's wrong.
+            </p>
 
           </div>
         </section>
