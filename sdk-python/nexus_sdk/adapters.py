@@ -13,10 +13,6 @@ def from_callable(
     hub_url: str = "ws://localhost:8765",
     encrypt: bool = True
 ):
-    """
-    Transforme N'IMPORTE QUELLE fonction Python existante en un Agent Nexus complet
-    en 1 seule ligne de code.
-    """
     from nexus_sdk.agent import NexusAgent
 
     agent = NexusAgent(
@@ -47,9 +43,6 @@ def from_langchain(
     hub_url: str = "ws://localhost:8765",
     encrypt: bool = True
 ):
-    """
-    Adapte un Runnable / Chain LangChain ou une équipe CrewAI en un Agent Nexus en 1 ligne.
-    """
     from nexus_sdk.agent import NexusAgent
 
     agent = NexusAgent(
@@ -85,9 +78,6 @@ def nexus_service(
     hub_url: str = "ws://localhost:8765",
     encrypt: bool = True
 ):
-    """
-    Décorateur 1-Ligne pour transformer n'importe quelle fonction en service Nexus.
-    """
     def decorator(fn: Callable[[Any], Any]):
         return from_callable(
             fn=fn,

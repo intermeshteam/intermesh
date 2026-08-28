@@ -1,19 +1,10 @@
 """
-Persistance de l'état du Hub.
+Persistance de l'état du Hub : identités, tâches, journal d'audit.
 
-Sans elle, l'arrêt du Hub efface le registre d'identités, les tâches en
-cours et le journal d'audit — ce dernier prétendant pourtant offrir une
-garantie d'immuabilité. Un journal qui disparaît à chaque `Ctrl+C` ne
-prouve rien à un auditeur.
-
-Le stockage repose sur SQLite : présent dans la bibliothèque standard,
-transactionnel, et adapté à la charge d'un Hub unique. Il devra céder la
-place à PostgreSQL le jour où plusieurs Hubs partageront un même état.
-
-Ce qui n'est *pas* persisté : les connexions WebSocket actives. Un agent
-« en ligne » est une propriété du processus courant, pas un fait durable.
-Après un redémarrage, les identités connues sont rechargées mais tous les
-agents sont considérés hors ligne jusqu'à leur reconnexion.
+Un Hub qui redémarre sans mémoire oublie ses agents connus, ses tâches en
+cours et son historique d'audit. Ce module fournit un magasin SQLite
+(fichier unique, créé en 0600) ou un mode éphémère (tout en mémoire, aucun
+fichier créé) pour les tests et le CI.
 """
 
 from __future__ import annotations
@@ -21,114 +12,104 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import time
 from pathlib import Path
+from typing import Dict, Optional
 
 from nexus_sdk.audit import AuditEntry
 from nexus_sdk.identity import AgentIdentity
 from nexus_sdk.task import NexusTask
 
-SCHEMA_VERSION = 1
+
+def default_state_path() -> Path:
+    """Emplacement par défaut de la base d'état, surchargeable via NEXUS_HOME."""
+    base = os.environ.get("NEXUS_HOME")
+    if base:
+        return Path(base) / "hub_state.db"
+    return Path.home() / ".nexus" / "state.db"
+
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS meta (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS identities (
     qualified_name TEXT PRIMARY KEY,
-    payload        TEXT NOT NULL,
-    updated_at     REAL NOT NULL
+    payload TEXT NOT NULL
 );
-
 CREATE TABLE IF NOT EXISTS tasks (
-    task_id    TEXT PRIMARY KEY,
-    payload    TEXT NOT NULL,
-    status     TEXT NOT NULL,
-    updated_at REAL NOT NULL
+    task_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    payload TEXT NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-
 CREATE TABLE IF NOT EXISTS audit_log (
-    idx     INTEGER PRIMARY KEY,
+    idx INTEGER PRIMARY KEY,
     payload TEXT NOT NULL
 );
 """
 
 
-def default_state_path() -> Path:
-    """Emplacement par défaut de la base, surchargeable via NEXUS_HOME."""
-    base = os.environ.get("NEXUS_HOME")
-    return (Path(base) if base else Path.home() / ".nexus") / "hub_state.db"
-
-
 class NexusStore:
-    """État durable du Hub : identités, tâches et journal d'audit."""
+    """Stockage persistant (SQLite) ou éphémère (mémoire) du Hub."""
 
-    def __init__(self, path: str | os.PathLike | None = None, ephemeral: bool = False):
-        """
-        Args:
-            path:      Chemin de la base. Par défaut ~/.nexus/hub_state.db.
-            ephemeral: Base en mémoire, effacée à la fermeture (tests, CI).
-        """
+    def __init__(self, path: Optional[str | os.PathLike] = None, ephemeral: bool = False):
         self.ephemeral = ephemeral
+        self.path = None if ephemeral else Path(path) if path else default_state_path()
+        self.description = "éphémère (mémoire)" if ephemeral else f"sqlite:{self.path}"
 
-        if ephemeral:
-            self.path = ":memory:"
-            self.description = "en mémoire (perdu au redémarrage)"
+        if self.ephemeral:
+            self._conn = sqlite3.connect(":memory:")
         else:
-            resolved = Path(path) if path else default_state_path()
-            resolved.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            existed = resolved.exists()
-            self.path = str(resolved)
-            self.description = f"{resolved}" + ("" if existed else " (créée)")
+            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            is_new = not self.path.exists()
+            if is_new:
+                fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.close(fd)
+            else:
+                os.chmod(self.path, 0o600)
+            self._conn = sqlite3.connect(str(self.path))
 
-        self._conn = sqlite3.connect(self.path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        if not ephemeral:
-            # WAL : une écriture interrompue ne corrompt pas la base.
-            self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(_SCHEMA)
-        self._conn.execute(
-            "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)",
-            (str(SCHEMA_VERSION),),
-        )
         self._conn.commit()
 
-        if not ephemeral:
-            try:
-                os.chmod(self.path, 0o600)
-            except OSError:
-                pass
+    # ------------------------------------------------------------------
+    # Cycle de vie
+    # ------------------------------------------------------------------
+
+    def __enter__(self) -> "NexusStore":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
 
     # ------------------------------------------------------------------
     # Identités
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _identity_key(identity: AgentIdentity) -> str:
+        # Convention partagée avec admin.py::_org_of : un nom sans préfixe
+        # appartient à l'organisation "default". AgentIdentity préfixe
+        # pourtant systématiquement ("default/ghost") — on retire ce
+        # préfixe ici pour rester cohérent avec le reste du Hub.
+        if identity.org_id == "default":
+            return identity.name
+        return identity.qualified_name
+
     def save_identity(self, identity: AgentIdentity) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO identities (qualified_name, payload, updated_at) "
-            "VALUES (?, ?, ?)",
-            (identity.qualified_name, json.dumps(identity.to_dict()), time.time()),
+            "INSERT OR REPLACE INTO identities (qualified_name, payload) VALUES (?, ?)",
+            (self._identity_key(identity), json.dumps(identity.to_dict())),
         )
         self._conn.commit()
 
-    def load_identities(self) -> dict[str, AgentIdentity]:
-        rows = self._conn.execute(
-            "SELECT qualified_name, payload FROM identities"
-        ).fetchall()
-        return {
-            r["qualified_name"]: AgentIdentity.from_dict(json.loads(r["payload"]))
-            for r in rows
-        }
+    def load_identities(self) -> Dict[str, AgentIdentity]:
+        rows = self._conn.execute("SELECT qualified_name, payload FROM identities").fetchall()
+        return {name: AgentIdentity.from_dict(json.loads(payload)) for name, payload in rows}
 
     def delete_identity(self, qualified_name: str) -> None:
-        self._conn.execute(
-            "DELETE FROM identities WHERE qualified_name = ?", (qualified_name,)
-        )
+        self._conn.execute("DELETE FROM identities WHERE qualified_name = ?", (qualified_name,))
         self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -137,28 +118,28 @@ class NexusStore:
 
     def save_task(self, task: NexusTask) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO tasks (task_id, payload, status, updated_at) "
-            "VALUES (?, ?, ?, ?)",
-            (task.task_id, json.dumps(task.to_dict()), task.status.value, task.updated_at),
+            "INSERT OR REPLACE INTO tasks (task_id, status, payload) VALUES (?, ?, ?)",
+            (task.task_id, task.status.value, json.dumps(task.to_dict())),
         )
         self._conn.commit()
 
-    def load_tasks(self) -> dict[str, NexusTask]:
-        rows = self._conn.execute("SELECT payload FROM tasks").fetchall()
-        return {
-            t.task_id: t
-            for t in (NexusTask.from_dict(json.loads(r["payload"])) for r in rows)
-        }
+    def load_tasks(self) -> Dict[str, NexusTask]:
+        rows = self._conn.execute("SELECT task_id, payload FROM tasks").fetchall()
+        return {task_id: NexusTask.from_dict(json.loads(payload)) for task_id, payload in rows}
 
-    def count_tasks_by_status(self) -> dict[str, int]:
+    def count_tasks_by_status(self) -> Dict[str, int]:
         rows = self._conn.execute(
-            "SELECT status, COUNT(*) AS n FROM tasks GROUP BY status"
+            "SELECT status, COUNT(*) FROM tasks GROUP BY status"
         ).fetchall()
-        return {r["status"]: r["n"] for r in rows}
+        return {status: count for status, count in rows}
 
     # ------------------------------------------------------------------
     # Journal d'audit
     # ------------------------------------------------------------------
+
+    def load_audit(self) -> list[dict]:
+        rows = self._conn.execute("SELECT payload FROM audit_log ORDER BY idx").fetchall()
+        return [json.loads(payload) for (payload,) in rows]
 
     def append_audit(self, entry: AuditEntry) -> None:
         self._conn.execute(
@@ -166,20 +147,3 @@ class NexusStore:
             (entry.index, json.dumps(entry.to_dict())),
         )
         self._conn.commit()
-
-    def load_audit(self) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT payload FROM audit_log ORDER BY idx ASC"
-        ).fetchall()
-        return [json.loads(r["payload"]) for r in rows]
-
-    # ------------------------------------------------------------------
-
-    def close(self) -> None:
-        self._conn.close()
-
-    def __enter__(self) -> "NexusStore":
-        return self
-
-    def __exit__(self, *exc) -> None:
-        self.close()

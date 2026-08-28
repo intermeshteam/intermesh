@@ -16,7 +16,8 @@ class AgentIdentity:
         agent_id: Optional[str] = None,
         created_at: Optional[float] = None,
         metadata: Optional[dict] = None,
-        public_key: Optional[str] = None
+        public_key: Optional[str] = None,
+        schema: Optional[str] = None
     ):
         self.agent_id = agent_id or str(uuid.uuid4())
         self.org_id = org_id
@@ -29,6 +30,7 @@ class AgentIdentity:
         self.created_at = created_at or time.time()
         self.metadata = metadata or {}
         self.public_key = public_key
+        self.schema = schema
         self.fingerprint = self._compute_fingerprint()
 
     def _compute_fingerprint(self) -> str:
@@ -69,6 +71,8 @@ class AgentIdentity:
         }
         if self.public_key:
             d["public_key"] = self.public_key
+        if self.schema:
+            d["schema"] = self.schema
         return d
 
     @classmethod
@@ -82,7 +86,8 @@ class AgentIdentity:
             agent_id=data.get("agent_id"),
             created_at=data.get("created_at"),
             metadata=data.get("metadata", {}),
-            public_key=data.get("public_key")
+            public_key=data.get("public_key"),
+            schema=data.get("schema")
         )
         if "fingerprint" in data:
             identity.fingerprint = data["fingerprint"]

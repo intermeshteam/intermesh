@@ -39,9 +39,12 @@ tâches et journaux d'audit de toutes les autres.
 
 from __future__ import annotations
 
+import dataclasses
 import time
 from typing import Any, Callable, Optional
 
+from nexus_sdk.escrow import EscrowError
+from nexus_sdk.guardrails import GuardrailPolicy
 from nexus_sdk.task import NexusTask, TaskStatus
 
 # Commandes qui modifient l'état. Isolées pour être journalisées
@@ -52,6 +55,10 @@ MUTATING = {
     "task.retry",
     "apikey.create",
     "apikey.revoke",
+    "guardrails.set_policy",
+    "escrow.grant",
+    "escrow.release",
+    "escrow.refund",
 }
 
 
@@ -78,6 +85,8 @@ class AdminContext:
         hub_version: str = "1.5",
         caller_org: str = "default",
         scoped: bool = False,
+        asimov_engine: Any = None,
+        escrow_manager: Any = None,
     ):
         self.agents = agents
         self.identity_registry = identity_registry
@@ -86,6 +95,8 @@ class AdminContext:
         self.api_keys = api_keys
         self.peered_hubs = peered_hubs
         self.store = store
+        self.asimov_engine = asimov_engine
+        self.escrow_manager = escrow_manager
         self.my_org = my_org
         self.remember_task = remember_task
         self.send_to_agent = send_to_agent
@@ -407,6 +418,125 @@ def _apikey_revoke(ctx: AdminContext, params: dict) -> dict:
     return {"revoked": fingerprint}
 
 
+def _policy_to_dict(policy: GuardrailPolicy) -> dict:
+    return dataclasses.asdict(policy)
+
+
+def _resolve_target_org(ctx: AdminContext, params: dict) -> str:
+    """
+    Organisation ciblée par une commande de garde-fous.
+
+    Un `org_admin` ne peut lire/modifier que sa propre organisation : un
+    `org_id` différent dans les paramètres est refusé plutôt qu'ignoré, pour
+    ne jamais laisser croire qu'une action a porté sur la bonne cible.
+    """
+    org_id = params.get("org_id")
+    if ctx.scoped:
+        if org_id and org_id != ctx.caller_org:
+            raise AdminError("Un org_admin ne peut consulter/modifier que sa propre organisation.")
+        return ctx.caller_org
+    return org_id or ctx.my_org
+
+
+def _guardrails_policy(ctx: AdminContext, params: dict) -> dict:
+    if ctx.asimov_engine is None:
+        raise AdminError("Moteur de garde-fous indisponible sur ce Hub.")
+    org_id = _resolve_target_org(ctx, params)
+    return {"org_id": org_id, "policy": _policy_to_dict(ctx.asimov_engine.get_policy(org_id))}
+
+
+def _guardrails_set_policy(ctx: AdminContext, params: dict) -> dict:
+    """
+    Met à jour la policy d'une organisation en ne remplaçant que les champs
+    fournis — les autres restent hérités de la policy actuelle de cette
+    organisation (ou de la policy par défaut du Hub si elle n'en a pas encore).
+    """
+    if ctx.asimov_engine is None:
+        raise AdminError("Moteur de garde-fous indisponible sur ce Hub.")
+    org_id = _resolve_target_org(ctx, params)
+
+    current = _policy_to_dict(ctx.asimov_engine.get_policy(org_id))
+    editable = {f.name for f in dataclasses.fields(GuardrailPolicy)} - {"name"}
+    for key, value in params.items():
+        if key in editable:
+            current[key] = value
+
+    new_policy = GuardrailPolicy(**current)
+    ctx.asimov_engine.set_org_policy(org_id, new_policy)
+    return {"org_id": org_id, "policy": _policy_to_dict(new_policy)}
+
+
+def _require_escrow(ctx: AdminContext):
+    if ctx.escrow_manager is None:
+        raise AdminError("Le module Escrow n'est pas actif sur ce Hub.")
+    return ctx.escrow_manager
+
+
+def _escrow_balance(ctx: AdminContext, params: dict) -> dict:
+    manager = _require_escrow(ctx)
+    org_id = _resolve_target_org(ctx, params)
+    currency = params.get("currency", "USD")
+    return {"org_id": org_id, "currency": currency, "balance": manager.ledger.balance(org_id, currency)}
+
+
+def _escrow_grant(ctx: AdminContext, params: dict) -> dict:
+    """
+    Crédite un solde SIMULÉ pour une organisation — un robinet de démo/test,
+    jamais un vrai mouvement d'argent (voir le docstring de `escrow.py`).
+    """
+    manager = _require_escrow(ctx)
+    org_id = _resolve_target_org(ctx, params)
+    amount = params.get("amount")
+    if not amount:
+        raise AdminError("amount requis.")
+    currency = params.get("currency", "USD")
+    try:
+        new_balance = manager.ledger.grant(org_id, float(amount), currency)
+    except EscrowError as exc:
+        raise AdminError(str(exc)) from exc
+    return {"org_id": org_id, "currency": currency, "balance": new_balance, "simulated": True}
+
+
+def _escrow_list(ctx: AdminContext, params: dict) -> dict:
+    manager = _require_escrow(ctx)
+    org_id = ctx.caller_org if ctx.scoped else params.get("org_id")
+    holds = manager.list_holds(org_id)
+    return {"holds": [h.to_dict() for h in holds], "total": len(holds)}
+
+
+def _check_hold_in_scope(ctx: AdminContext, hold) -> None:
+    if ctx.scoped and ctx.caller_org not in (hold.payer_org, hold.payee_org):
+        raise AdminError("Ce séquestre est hors de votre organisation.")
+
+
+def _escrow_release(ctx: AdminContext, params: dict) -> dict:
+    manager = _require_escrow(ctx)
+    task_id = params.get("task_id")
+    hold = manager.get(task_id) if task_id else None
+    if hold is None:
+        raise AdminError("Aucun séquestre pour cette tâche.")
+    _check_hold_in_scope(ctx, hold)
+    try:
+        released = manager.release(task_id)
+    except EscrowError as exc:
+        raise AdminError(str(exc)) from exc
+    return released.to_dict()
+
+
+def _escrow_refund(ctx: AdminContext, params: dict) -> dict:
+    manager = _require_escrow(ctx)
+    task_id = params.get("task_id")
+    hold = manager.get(task_id) if task_id else None
+    if hold is None:
+        raise AdminError("Aucun séquestre pour cette tâche.")
+    _check_hold_in_scope(ctx, hold)
+    try:
+        refunded = manager.refund(task_id)
+    except EscrowError as exc:
+        raise AdminError(str(exc)) from exc
+    return refunded.to_dict()
+
+
 HANDLERS: dict[str, Callable[..., Any]] = {
     "hub.info": _hub_info,
     "agents.list": _agents_list,
@@ -419,6 +549,13 @@ HANDLERS: dict[str, Callable[..., Any]] = {
     "apikeys.list": _apikeys_list,
     "apikey.create": _apikey_create,
     "apikey.revoke": _apikey_revoke,
+    "guardrails.policy": _guardrails_policy,
+    "guardrails.set_policy": _guardrails_set_policy,
+    "escrow.balance": _escrow_balance,
+    "escrow.grant": _escrow_grant,
+    "escrow.list": _escrow_list,
+    "escrow.release": _escrow_release,
+    "escrow.refund": _escrow_refund,
 }
 
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nexus-mesh"
-version = "0.1.1"
+version = "0.2.0"
 description = "Universal coordination protocol for AI agents — E2E encrypted, cross-language, federated"
 readme = "README.md"
 license = {text = "Apache-2.0"}

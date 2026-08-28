@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import json
 import sys
-from typing import Callable, Optional, List, Any
+from typing import Callable, Optional, List, Any, Union
 
 import websockets
 
@@ -10,6 +10,7 @@ from nexus_sdk.message import MessageType, NexusMessage
 from nexus_sdk.identity import AgentIdentity
 from nexus_sdk.task import NexusTask, TaskStatus
 from nexus_sdk.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
+from nexus_sdk.schema import SchemaRegistry, default_registry
 
 
 class NexusAgent:
@@ -22,22 +23,35 @@ class NexusAgent:
         roles: Optional[List[str]] = None,
         permissions: Optional[List[str]] = None,
         metadata: Optional[dict] = None,
-        hub_url: str = "ws://localhost:8765",
-        encrypt: bool = True
+        hub_url: Union[str, List[str]] = "ws://localhost:8765",
+        encrypt: bool = True,
+        auto_reconnect: bool = False,
+        reconnect_backoff: float = 0.5,
+        reconnect_max_backoff: float = 15.0,
+        schema: Optional[str] = None,
+        schema_registry: Optional[SchemaRegistry] = None,
     ):
         self.org_id = org_id
         self.name = name
         self.api_key = api_key
-        self.hub_url = hub_url
+        self._hub_candidates: List[str] = [hub_url] if isinstance(hub_url, str) else list(hub_url)
+        self.hub_url = self._hub_candidates[0]
         self.ws = None
         self.token: Optional[str] = None
         self.encrypt = encrypt
+        self.auto_reconnect = auto_reconnect
+        self._reconnect_backoff = reconnect_backoff
+        self._reconnect_max_backoff = reconnect_max_backoff
+        self._closing = False
+        self._on_failover_handler: Optional[Callable] = None
         self._message_handler: Optional[Callable] = None
         self._request_handler: Optional[Callable] = None
         self._task_handler: Optional[Callable] = None
         self._pending_requests: dict[str, asyncio.Future] = {}
         self._pending_tasks: dict[str, asyncio.Future] = {}
         self._public_key_cache: dict[str, str] = {}
+        self.schema_registry = schema_registry or default_registry()
+        self._target_schema_cache: dict[str, Optional[str]] = {}
 
         self._private_key = generate_keypair()
         self._public_key_pem = get_public_key_pem(self._private_key)
@@ -49,7 +63,8 @@ class NexusAgent:
             roles=roles or ["standard"],
             permissions=permissions or [],
             metadata=metadata or {},
-            public_key=self._public_key_pem
+            public_key=self._public_key_pem,
+            schema=schema
         )
         self.qualified_name = self.identity.qualified_name
 
@@ -69,17 +84,28 @@ class NexusAgent:
     def on_request(self, handler: Callable): self._request_handler = handler
     def on_task(self, handler: Callable): self._task_handler = handler
 
-    async def connect(self):
-        self.ws = await websockets.connect(self.hub_url)
+    def on_failover(self, handler: Callable):
+        """
+        Appelé après une reconnexion automatique réussie sur un Hub différent
+        du précédent : `handler(old_url, new_url)`. N'a d'effet qu'avec
+        `auto_reconnect=True`.
+        """
+        self._on_failover_handler = handler
+
+    async def _register_on(self, url: str) -> None:
+        """Connexion + REGISTER sur une URL donnée. Lève sur refus ou échec réseau."""
+        ws = await websockets.connect(url)
         reg_payload = self.identity.to_dict()
         if self.api_key:
             reg_payload["api_key"] = self.api_key
 
         reg_msg = NexusMessage(type=MessageType.REGISTER, sender=self.name, content=reg_payload)
-        await self.ws.send(reg_msg.to_json())
-        res = NexusMessage.from_json(await self.ws.recv())
+        await ws.send(reg_msg.to_json())
+        res = NexusMessage.from_json(await ws.recv())
 
         if res.type == MessageType.REGISTERED:
+            self.ws = ws
+            self.hub_url = url
             self.token = res.content.get("token")
             self.qualified_name = res.content.get("qualified_name", self.name)
             if "roles" in res.content: self.identity.roles = res.content["roles"]
@@ -87,13 +113,83 @@ class NexusAgent:
             if "org_id" in res.content:
                 self.identity.org_id = res.content["org_id"]
                 self.org_id = res.content["org_id"]
-            print(f"✅ [{self.qualified_name}] Connecté sur {self.hub_url} | E2E: {'🔒 ON' if self.encrypt else '🔓 OFF'}")
+            print(f"✅ [{self.qualified_name}] Connecté sur {url} | E2E: {'🔒 ON' if self.encrypt else '🔓 OFF'}")
         elif res.type == MessageType.ERROR:
             print(f"❌ [{self.name}] Refusé : {res.content}")
-            await self.ws.close()
+            await ws.close()
             raise PermissionError(res.content)
 
+    async def connect(self):
+        """
+        Connexion initiale. Avec plusieurs URLs de Hub, essaie chacune dans
+        l'ordre — un Hub injoignable (réseau) passe au suivant, un refus
+        explicite (`PermissionError`) est propagé tel quel : ce n'est pas un
+        problème de disponibilité, réessayer ailleurs ne changerait rien.
+        """
+        last_exc: Optional[Exception] = None
+        for url in self._hub_candidates:
+            try:
+                await self._register_on(url)
+                break
+            except PermissionError:
+                raise
+            except Exception as exc:
+                last_exc = exc
+                continue
+        else:
+            raise ConnectionError(
+                f"Impossible de joindre un Hub parmi {self._hub_candidates} : {last_exc}"
+            )
+
         asyncio.create_task(self._listen_loop())
+
+    async def close(self):
+        """Déconnexion volontaire : n'entraîne jamais de reconnexion automatique."""
+        self._closing = True
+        if self.ws is not None:
+            await self.ws.close()
+
+    def _fail_pending(self, reason: str) -> None:
+        error = ConnectionError(reason)
+        for future in list(self._pending_requests.values()):
+            if not future.done():
+                future.set_exception(error)
+        self._pending_requests.clear()
+        for future in list(self._pending_tasks.values()):
+            if not future.done():
+                future.set_exception(error)
+        self._pending_tasks.clear()
+
+    async def _reconnect_loop(self):
+        """
+        Tente de rejoindre un Hub (le même, ou un autre candidat de la liste)
+        avec un recul exponentiel, jusqu'à réussite ou fermeture volontaire.
+
+        Ceci suppose que les Hubs candidats sont des répliques opérationnelles
+        de la même organisation (même backend d'état partagé côté Hub) — ce
+        module ne fait pas d'élection de leader ni de promotion automatique
+        d'un Hub de secours : c'est un mécanisme de reconnexion côté client,
+        pas un orchestrateur de cluster.
+        """
+        old_url = self.hub_url
+        attempt = 0
+        while not self._closing:
+            for url in self._hub_candidates:
+                try:
+                    await self._register_on(url)
+                    if self._on_failover_handler and url != old_url:
+                        result = self._on_failover_handler(old_url, url)
+                        if inspect.isawaitable(result):
+                            await result
+                    asyncio.create_task(self._listen_loop())
+                    return
+                except PermissionError:
+                    raise
+                except Exception:
+                    continue
+            attempt += 1
+            backoff = min(self._reconnect_max_backoff, self._reconnect_backoff * (2 ** min(attempt, 5)))
+            await asyncio.sleep(backoff)
 
     async def _fetch_public_key(self, agent_name: str) -> Optional[str]:
         if agent_name in self._public_key_cache:
@@ -107,6 +203,34 @@ class NexusAgent:
         except Exception:
             pass
         return None
+
+    async def _fetch_target_schema(self, agent_name: str) -> Optional[str]:
+        if agent_name in self._target_schema_cache:
+            return self._target_schema_cache[agent_name]
+        try:
+            data = await self.who_is(agent_name, timeout=3.0)
+            target_schema = data.get("schema") if isinstance(data, dict) else None
+        except Exception:
+            target_schema = None
+        self._target_schema_cache[agent_name] = target_schema
+        return target_schema
+
+    async def _translate_for(self, target: str, payload):
+        """
+        Traduit `payload` vers le schéma déclaré par `target`, si on connaît
+        le nôtre et le sien et qu'ils diffèrent. Sans schéma déclaré des deux
+        côtés, ou si le payload n'est pas un dict, rien n'est modifié — la
+        traduction n'invente jamais de structure.
+        """
+        if not self.identity.schema or not isinstance(payload, dict):
+            return payload
+        target_schema = await self._fetch_target_schema(target)
+        if not target_schema or target_schema == self.identity.schema:
+            return payload
+        try:
+            return self.schema_registry.translate(payload, target_schema, self.identity.schema)
+        except Exception:
+            return payload
 
     def _encrypt_content(self, recipient_pk: str, content) -> str:
         plaintext = json.dumps(content) if not isinstance(content, str) else content
@@ -126,7 +250,7 @@ class NexusAgent:
             async for raw in self.ws:
                 msg = NexusMessage.from_json(raw)
 
-                if msg.type in (MessageType.RESPONSE, MessageType.IDENTITY, MessageType.DISCOVER_RESULT) and msg.reply_to in self._pending_requests:
+                if msg.type in (MessageType.RESPONSE, MessageType.IDENTITY, MessageType.DISCOVER_RESULT, MessageType.ADMIN_RESULT) and msg.reply_to in self._pending_requests:
                     future = self._pending_requests.pop(msg.reply_to)
                     if not future.done():
                         content = msg.content
@@ -176,14 +300,27 @@ class NexusAgent:
                     print(f"❌ [{self.qualified_name}] {msg.content}")
                     if msg.reply_to and msg.reply_to in self._pending_requests:
                         future = self._pending_requests.pop(msg.reply_to)
-                        if not future.done(): future.set_exception(RuntimeError(msg.content))
+                        if not future.done():
+                            if isinstance(msg.content, str) and msg.content.startswith("ADMIN_DENIED"):
+                                future.set_exception(PermissionError(msg.content))
+                            else:
+                                future.set_exception(RuntimeError(msg.content))
                     for tid, fut in list(self._pending_tasks.items()):
                         if not fut.done():
                             fut.set_exception(RuntimeError(msg.content))
                             self._pending_tasks.pop(tid)
 
         except websockets.ConnectionClosed:
+            pass
+        finally:
+            # La boucle `async for` sort SANS exception sur une fermeture
+            # normale (code 1000/1001) — le nettoyage doit donc tourner ici,
+            # pas seulement dans le except, sinon une déconnexion propre
+            # laisse les appels en attente bloqués jusqu'à leur propre timeout.
             print(f"⚠️  [{self.qualified_name}] Déconnecté.")
+            self._fail_pending("Connexion au Hub perdue.")
+            if self.auto_reconnect and not self._closing:
+                asyncio.create_task(self._reconnect_loop())
 
     async def _execute_assigned_task(self, task: NexusTask):
         print(f"⚙️  [{self.qualified_name}] Tâche: '{task.title}' de {task.orchestrator}")
@@ -199,10 +336,10 @@ class NexusAgent:
                 output = await self._task_handler(decrypted_input, task) if inspect.iscoroutinefunction(self._task_handler) else self._task_handler(decrypted_input, task)
             else:
                 raise NotImplementedError("Aucun handler.")
-            encrypted_output = output
+            encrypted_output = await self._translate_for(task.orchestrator, output)
             if self.encrypt:
                 pk = await self._fetch_public_key(task.orchestrator)
-                if pk: encrypted_output = self._encrypt_content(pk, output)
+                if pk: encrypted_output = self._encrypt_content(pk, encrypted_output)
             task.update_status(TaskStatus.COMPLETED, output_data=encrypted_output)
         except Exception as e:
             task.update_status(TaskStatus.FAILED, error_message=str(e))
@@ -211,17 +348,17 @@ class NexusAgent:
         print(f"✅ [{self.qualified_name}] Tâche terminée: {task.status.value.upper()}")
 
     async def send(self, to: str, content):
-        ec = content
+        ec = await self._translate_for(to, content)
         if self.encrypt:
             pk = await self._fetch_public_key(to)
-            if pk: ec = self._encrypt_content(pk, content)
+            if pk: ec = self._encrypt_content(pk, ec)
         await self.ws.send(NexusMessage(type=MessageType.MESSAGE, sender=self.qualified_name, to=to, content=ec, token=self.token).to_json())
 
     async def ask(self, to: str, content, timeout: float = 10.0):
-        ec = content
+        ec = await self._translate_for(to, content)
         if self.encrypt:
             pk = await self._fetch_public_key(to)
-            if pk: ec = self._encrypt_content(pk, content)
+            if pk: ec = self._encrypt_content(pk, ec)
         msg = NexusMessage(type=MessageType.REQUEST, sender=self.qualified_name, to=to, content=ec, token=self.token)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
@@ -233,16 +370,25 @@ class NexusAgent:
             self._pending_requests.pop(msg.id, None)
             raise TimeoutError(f"Timeout {timeout}s.")
 
-    async def submit_task(self, title: str, assignee: str, input_data, timeout: float = 15.0):
-        ei = input_data
+    async def submit_task(self, title: str, assignee: str, input_data, timeout: float = 15.0,
+                          estimated_cost: float = 0.0, parent_task_id: Optional[str] = None,
+                          escrow: Optional[dict] = None):
+        ei = await self._translate_for(assignee, input_data)
         if self.encrypt:
             pk = await self._fetch_public_key(assignee)
-            if pk: ei = self._encrypt_content(pk, input_data)
+            if pk: ei = self._encrypt_content(pk, ei)
         task = NexusTask(title=title, orchestrator=self.qualified_name, assignee=assignee, input_data=ei)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_tasks[task.task_id] = future
-        await self.ws.send(NexusMessage(type=MessageType.TASK_SUBMIT, sender=self.qualified_name, to=assignee, content=task.to_dict(), token=self.token).to_json())
+        content = task.to_dict()
+        if estimated_cost:
+            content["estimated_cost"] = estimated_cost
+        if parent_task_id:
+            content["parent_task_id"] = parent_task_id
+        if escrow:
+            content["escrow"] = escrow
+        await self.ws.send(NexusMessage(type=MessageType.TASK_SUBMIT, sender=self.qualified_name, to=assignee, content=content, token=self.token).to_json())
         print(f"📝 [{self.qualified_name}] Tâche ➜ {assignee}")
         try:
             return await asyncio.wait_for(future, timeout=timeout)
@@ -265,8 +411,8 @@ class NexusAgent:
             self._pending_requests.pop(msg.id, None)
             raise TimeoutError("Who_is timeout.")
 
-    async def discover(self, timeout: float = 5.0) -> dict:
-        msg = NexusMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content={}, token=self.token)
+    async def discover(self, timeout: float = 5.0, **query) -> dict:
+        msg = NexusMessage(type=MessageType.DISCOVER, sender=self.qualified_name, content=query, token=self.token)
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self._pending_requests[msg.id] = future
@@ -276,3 +422,28 @@ class NexusAgent:
         except asyncio.TimeoutError:
             self._pending_requests.pop(msg.id, None)
             raise TimeoutError("Discover timeout.")
+
+    async def admin(self, command: str, **params) -> dict:
+        """
+        Envoie une commande à la console d'administration du Hub.
+
+        Raises:
+            PermissionError: la commande a été refusée par `authorize()`
+                (identité non authentifiée par clé d'API, ou rôle
+                insuffisant) — message préfixé par `ADMIN_DENIED:`.
+            RuntimeError: la commande a été exécutée mais refusée par le
+                gestionnaire lui-même (ex: hors du périmètre de l'org).
+        """
+        msg = NexusMessage(
+            type=MessageType.ADMIN_REQUEST, sender=self.qualified_name,
+            content={"command": command, "params": params}, token=self.token,
+        )
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self._pending_requests[msg.id] = future
+        await self.ws.send(msg.to_json())
+        try:
+            return await asyncio.wait_for(future, timeout=15.0)
+        except asyncio.TimeoutError:
+            self._pending_requests.pop(msg.id, None)
+            raise TimeoutError(f"Commande admin '{command}' expirée.")
