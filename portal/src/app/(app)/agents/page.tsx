@@ -10,6 +10,7 @@ import {
   Search, 
   SlidersHorizontal 
 } from 'lucide-react';
+import { HUB_URL } from '@/lib/hub';
 
 interface RealAgent {
   id: string;
@@ -36,7 +37,7 @@ export default function AgentsDirectoryPage() {
 
     const connect = () => {
       if (stopped) return;
-      const ws = new WebSocket('ws://localhost:8765');
+      const ws = new WebSocket(HUB_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {

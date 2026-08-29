@@ -10,6 +10,7 @@ import {
   Lock, 
   AlertTriangle 
 } from 'lucide-react';
+import { HUB_URL } from '@/lib/hub';
 
 interface AuditBlock {
   index: number;
@@ -35,7 +36,7 @@ export default function SecurityPage() {
 
     const connect = () => {
       if (stopped) return;
-      const ws = new WebSocket('ws://localhost:8765');
+      const ws = new WebSocket(HUB_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
