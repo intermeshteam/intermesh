@@ -15,6 +15,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
+import { HUB_URL } from '@/lib/hub';
 
 type NodeStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
@@ -41,31 +42,16 @@ type LogLine = { id: number; ts: string; level: 'INFO' | 'WARN' | 'ERROR'; msg: 
 const W = 1100;
 const H = 720;
 
+// The real topology of an InterMesh deployment is a hub and the agents
+// registered with it. What used to be drawn here — API Gateway, Auth Service,
+// Quota Enforcer, State Cache, Registry, Event Bus — are not components of
+// this system. They were nine invented boxes with invented latencies and
+// request rates, wired into a diagram that claimed to be live.
 const INFRA_NODES: TopoNode[] = [
-  { id: 'hub', label: 'InterMesh Hub', sub: 'ws://localhost:8765', x: 550, y: 120, status: 'healthy', kind: 'hub', latency: 5, rps: 0 },
-  { id: 'api', label: 'API Gateway', sub: 'control-plane', x: 250, y: 80, status: 'healthy', kind: 'infra', latency: 12, rps: 120 },
-  { id: 'auth', label: 'Auth Service', sub: 'jwt/rbac', x: 400, y: 80, status: 'healthy', kind: 'infra', latency: 8, rps: 90 },
-  { id: 'quota', label: 'Quota Enforcer', sub: 'limit-10', x: 700, y: 80, status: 'healthy', kind: 'infra', latency: 6, rps: 40 },
-  { id: 'audit', label: 'Audit Log', sub: 'merkle-log', x: 850, y: 80, status: 'healthy', kind: 'infra', latency: 10, rps: 30 },
-  { id: 'router', label: 'Task Router', sub: 'assign/update', x: 250, y: 220, status: 'healthy', kind: 'infra', latency: 15, rps: 200 },
-  { id: 'crypto', label: 'E2E Crypto', sub: 'RSA+AES-GCM', x: 850, y: 220, status: 'healthy', kind: 'infra', latency: 4, rps: 300 },
-  { id: 'redis', label: 'State Cache', sub: 'ephemeral', x: 300, y: 620, status: 'healthy', kind: 'infra', latency: 3, rps: 400 },
-  { id: 'pg', label: 'Registry', sub: 'identities', x: 500, y: 620, status: 'healthy', kind: 'infra', latency: 12, rps: 80 },
-  { id: 'bus', label: 'Event Bus', sub: 'telemetry', x: 700, y: 620, status: 'healthy', kind: 'infra', latency: 7, rps: 250 },
+  { id: 'hub', label: 'InterMesh Hub', sub: HUB_URL, x: 550, y: 150, status: 'healthy', kind: 'hub', latency: 0, rps: 0 },
 ];
 
-const INFRA_EDGES: TopoEdge[] = [
-  { from: 'api', to: 'hub' },
-  { from: 'auth', to: 'hub' },
-  { from: 'quota', to: 'hub' },
-  { from: 'audit', to: 'hub' },
-  { from: 'hub', to: 'router' },
-  { from: 'hub', to: 'crypto' },
-  { from: 'router', to: 'bus' },
-  { from: 'crypto', to: 'bus' },
-  { from: 'hub', to: 'pg' },
-  { from: 'hub', to: 'redis' },
-];
+const INFRA_EDGES: TopoEdge[] = [];
 
 function nowTs() {
   return new Date().toLocaleTimeString('en-GB', { hour12: false });
@@ -99,7 +85,7 @@ function layoutAgents(agents: any[]): TopoNode[] {
       y,
       status,
       kind: 'agent' as const,
-      latency: status === 'unhealthy' ? 999 : 20 + Math.round(Math.random() * 40),
+      latency: 0, // not measured by the hub
       rps: status === 'unhealthy' ? 0 : a.msg_count || 0,
       real: true,
       roles: a.roles || [],
@@ -120,10 +106,13 @@ export default function TopologyPage() {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hubConnected, setHubConnected] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [logs, setLogs] = useState<LogLine[]>([
-    { id: 1, ts: nowTs(), level: 'INFO', msg: 'Topology initialized. Awaiting live hub stream...' },
-  ]);
+  // Calling nowTs() during the initial render produces one timestamp on the
+  // server and another on the client a second later, which is precisely the
+  // hydration mismatch React was reporting. The first line is pushed from an
+  // effect instead, where only the client runs.
+  const [logs, setLogs] = useState<LogLine[]>([]);
   const [filters, setFilters] = useState({ healthy: true, degraded: true, unhealthy: true, unknown: true });
+  const bootLogged = useRef(false);
   const [lastUpdate, setLastUpdate] = useState('');
   const dragRef = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 });
   const packetsRef = useRef<Packet[]>([]);
@@ -154,6 +143,12 @@ export default function TopologyPage() {
     setLogs((prev) => [{ id: logIdRef.current, ts: nowTs(), level, msg }, ...prev].slice(0, 60));
   }, []);
 
+  useEffect(() => {
+    if (bootLogged.current) return;
+    bootLogged.current = true;
+    pushLog('INFO', 'Topology initialised — waiting for the hub stream.');
+  }, [pushLog]);
+
   const toggleFullscreen = async () => {
     const el = shellRef.current;
     if (!el) return;
@@ -183,12 +178,12 @@ export default function TopologyPage() {
 
     const connect = () => {
       if (stopped) return;
-      const ws = new WebSocket('ws://localhost:8765');
+      const ws = new WebSocket(HUB_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setHubConnected(true);
-        pushLog('INFO', 'Hub connected (ws://localhost:8765)');
+        pushLog('INFO', `Hub connected (${HUB_URL})`);
         ws.send(
           JSON.stringify({
             id: crypto.randomUUID(),
@@ -255,6 +250,13 @@ export default function TopologyPage() {
   }, [pushLog]);
 
   useEffect(() => {
+    // With no agent registered there is no edge to travel along, and the old
+    // `edges[i % 0]` resolved to undefined. No traffic is also the honest
+    // picture of an idle mesh.
+    if (edges.length === 0) {
+      packetsRef.current = [];
+      return;
+    }
     packetsRef.current = Array.from({ length: Math.min(30, Math.max(8, edges.length)) }, (_, i) => {
       const e = edges[i % edges.length];
       return { id: i, from: e.from, to: e.to, t: Math.random(), speed: 0.003 + Math.random() * 0.005 };

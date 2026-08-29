@@ -1,31 +1,44 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Users, 
-  Zap, 
-  Cpu, 
-  TrendingUp, 
-  Terminal, 
-  Pause, 
-  Play, 
-  Lock, 
-  Copy, 
-  Check, 
-  ShieldAlert, 
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Activity,
+  ArrowUpRight,
   KeyRound,
+  ListChecks,
+  Pause,
+  Play,
   RefreshCw,
-  SlidersHorizontal,
+  ShieldAlert,
+  Terminal,
+  Users,
 } from 'lucide-react';
+import { HUB_URL } from '@/lib/hub';
 
-interface RealAgent {
+/**
+ * Overview.
+ *
+ * Everything rendered here comes from the hub's telemetry stream. The previous
+ * version drew hardcoded SVG curves that trended upward regardless of the
+ * value beside them — a chart climbing next to "0 agents" — and invented CPU,
+ * memory and GPU figures by hashing each agent's name. Both are gone: a
+ * console that shows numbers nobody can trace is worse than one that shows
+ * fewer numbers.
+ *
+ * Counters are scoped to the lifetime of this view, and say so. The hub
+ * reports current state, not history, so anything cumulative starts at zero
+ * when the page opens.
+ */
+
+interface Agent {
   id: string;
   name: string;
-  status: string;
+  org: string;
   roles: string[];
   capabilities: string[];
-  uptime: string;
-  hardware: { cpu: string; mem: string; gpu: string };
+  connectedAt: number | null;
+  messages: number;
+  status: string;
 }
 
 interface LogEntry {
@@ -36,184 +49,223 @@ interface LogEntry {
   message: string;
 }
 
-function nowTs() {
-  return new Date().toISOString();
+const SAMPLE_MS = 3000;
+const SERIES_LEN = 40;
+
+function relativeTime(epochSeconds: number | null): string {
+  if (!epochSeconds) return '—';
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  return `${Math.floor(s / 86400)}d`;
 }
 
-// Génère des fausses stats matérielles stables basées sur le nom de l'agent pour le tableau
-function generateHardwareStats(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  const seed = Math.abs(hash);
-  return {
-    cpu: (10 + (seed % 30) + (seed % 10) / 10).toFixed(1),
-    mem: (20 + (seed % 40) + (seed % 10) / 10).toFixed(1),
-    gpu: (seed % 2 === 0 ? (30 + (seed % 50)).toFixed(1) : '0.0'),
-  };
+/**
+ * Sampled series. Draws nothing until it has two real points — a single
+ * sample cannot describe a trend, and inventing the rest is what made the
+ * old cards untrustworthy.
+ */
+function Sparkline({ points, live }: { points: number[]; live: boolean }) {
+  if (points.length < 2) {
+    return (
+      <div className="flex h-12 items-center text-[10px] font-mono text-zinc-600">
+        {live ? 'collecting…' : 'no data'}
+      </div>
+    );
+  }
+
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const span = max - min || 1;
+  const step = 200 / (points.length - 1);
+
+  const coords = points.map((v, i) => [i * step, 38 - ((v - min) / span) * 34]);
+  const line = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const area = `0,40 ${line} 200,40`;
+  const [lastX, lastY] = coords[coords.length - 1];
+
+  return (
+    <div className="space-y-1">
+      <svg className="h-12 w-full" viewBox="0 0 200 40" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#00D4FF" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#00D4FF" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon points={area} fill="url(#sparkFill)" />
+        <polyline points={line} fill="none" stroke="#00D4FF" strokeWidth="1.75" vectorEffect="non-scaling-stroke" />
+        <circle cx={lastX} cy={lastY} r="2.5" fill="#00D4FF" />
+      </svg>
+      <div className="flex justify-between font-mono text-[9px] text-zinc-600">
+        <span>{Math.round(min)}</span>
+        <span>{(points.length * SAMPLE_MS) / 1000}s window</span>
+        <span>{Math.round(max)}</span>
+      </div>
+    </div>
+  );
 }
 
-export default function MissionControlDashboard() {
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [simulating, setSimulating] = useState(false);
-  const [simResult, setSimResult] = useState<any>(null);
-  const [generatedLicense, setGeneratedLicense] = useState<string>('');
+function Metric({
+  label,
+  value,
+  note,
+  icon: Icon,
+  series,
+  live,
+}: {
+  label: string;
+  value: React.ReactNode;
+  note: string;
+  icon: React.ElementType;
+  series: number[];
+  live: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-zinc-800/80 bg-[#121215] p-5">
+      <div className="flex items-center justify-between font-mono text-[11px] text-zinc-400">
+        <span className="font-semibold tracking-wider">{label}</span>
+        <Icon className="h-3.5 w-3.5 stroke-[1.5]" />
+      </div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="font-mono text-3xl font-bold tracking-tight text-white">{value}</span>
+      </div>
+      <div className="mt-1 text-[11px] text-zinc-500">{note}</div>
+      <div className="mt-3">
+        <Sparkline points={series} live={live} />
+      </div>
+    </div>
+  );
+}
 
-  // --- REAL-TIME STATE ---
+export default function OverviewPage() {
   const [isLive, setIsLive] = useState(true);
   const [logFilter, setLogFilter] = useState<string>('ALL');
   const [hubConnected, setHubConnected] = useState(false);
-  const [agents, setAgents] = useState<RealAgent[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [taskCount, setTaskCount] = useState(0);
-  const [msgCount, setMsgCount] = useState(0);
-  
+  const [tasksSubmitted, setTasksSubmitted] = useState(0);
+  const [tasksCompleted, setTasksCompleted] = useState(0);
+  const [events, setEvents] = useState(0);
+
+  const [agentSeries, setAgentSeries] = useState<number[]>([]);
+  const [taskSeries, setTaskSeries] = useState<number[]>([]);
+  const [doneSeries, setDoneSeries] = useState<number[]>([]);
+  const [eventSeries, setEventSeries] = useState<number[]>([]);
+
+  const [generatedLicense, setGeneratedLicense] = useState('');
+  const [simulating, setSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<any>(null);
+
   const logIdRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const latest = useRef({ agents: 0, tasks: 0, done: 0, events: 0 });
 
-  const sampleApiKey = "nx_live_acme_9f8a2c1b4e7d3f6a5b8c9d0e1f2a3b4c";
-
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(sampleApiKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
-  };
-
-  const handleGenerateLicense = async () => {
-    try {
-      const res = await fetch('/api/license/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ org_name: 'acme_corp', plan: 'free', max_agents: 10 })
-      });
-      const data = await res.json();
-      if (data.success) setGeneratedLicense(data.license_key);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleSimulate11thAgent = async () => {
-    setSimulating(true);
-    setSimResult(null);
-    try {
-      const res = await fetch('/api/agents/verify-slot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_active_agents: 10, max_allowed: 10 })
-      });
-      const data = await res.json();
-      setSimResult({ status: res.status, data });
-    } catch (err: any) {
-      setSimResult({ status: 500, error: err.message });
-    } finally {
-      setSimulating(false);
-    }
-  };
+  latest.current = { agents: agents.length, tasks: tasksSubmitted, done: tasksCompleted, events };
 
   const pushLog = useCallback((level: LogEntry['level'], source: string, message: string) => {
     logIdRef.current += 1;
-    const newLog: LogEntry = {
-      id: logIdRef.current,
-      time: nowTs(),
-      level,
-      source,
-      message,
-    };
-    setLogs((prev) => [newLog, ...prev].slice(0, 50));
+    setLogs((prev) => [{ id: logIdRef.current, time: new Date().toISOString(), level, source, message }, ...prev].slice(0, 60));
   }, []);
 
-  // --- WEBSOCKET CONNECTION TO HUB ---
+  /* ---------------- Telemetry ---------------- */
+
   useEffect(() => {
     let stopped = false;
-    let retryTimer: any;
+    let retry: ReturnType<typeof setTimeout>;
 
     const connect = () => {
       if (stopped) return;
-      const ws = new WebSocket('ws://localhost:8765');
+      const ws = new WebSocket(HUB_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setHubConnected(true);
-        pushLog('INFO', 'System', 'Control Plane connected to InterMesh Hub (ws://localhost:8765)');
-        ws.send(JSON.stringify({
-          id: crypto.randomUUID(),
-          version: 'intermesh/v1',
-          type: 'register',
-          sender: `dashboard_main_${Math.random().toString(36).slice(2, 7)}`,
-          content: { name: 'dashboard_main', roles: ['observer', 'admin'] },
-        }));
+        pushLog('INFO', 'System', `Connected to hub ${HUB_URL}`);
+        ws.send(
+          JSON.stringify({
+            id: crypto.randomUUID(),
+            version: 'intermesh/v1',
+            type: 'register',
+            sender: `dashboard_main_${Math.random().toString(36).slice(2, 7)}`,
+            content: { name: 'dashboard_main', roles: ['observer', 'admin'] },
+          }),
+        );
       };
 
       ws.onmessage = (ev) => {
-        if (!isLive) return; // Si en pause, on ignore l'affichage
+        if (!isLive) return;
         try {
           const msg = JSON.parse(ev.data);
-          if (msg.type === 'telemetry_event') {
-            const c = msg.content || {};
-            setMsgCount(m => m + 1);
+          if (msg.type !== 'telemetry_event') return;
+          const c = msg.content || {};
+          setEvents((n) => n + 1);
 
-            if (c.event === 'snapshot') {
-              const list = (c.agents || []).filter((a: any) => a.online !== false);
-              const mapped = list.map((a: any) => ({
-                id: a.agent_id ? a.agent_id.substring(0, 8) : 'unknown',
-                name: a.name || a.qualified_name,
-                status: 'ONLINE',
-                roles: a.roles || ['worker'],
+          if (c.event === 'snapshot') {
+            const mapped: Agent[] = (c.agents || [])
+              .filter((a: any) => a.online !== false)
+              .map((a: any) => ({
+                id: a.agent_id || a.name,
+                name: a.name,
+                org: String(a.name || '').includes('/') ? String(a.name).split('/')[0] : 'default',
+                roles: a.roles || [],
                 capabilities: a.capabilities || [],
-                uptime: '0m',
-                hardware: generateHardwareStats(a.name || 'agent')
+                connectedAt: a.connected_at ?? null,
+                messages: a.msg_count ?? 0,
+                status: a.status || 'healthy',
               }));
-              setAgents(mapped);
-              pushLog('INFO', 'Registry', `Snapshot loaded: ${list.length} active agent(s)`);
-            }
-
-            if (c.event === 'agent_connected' && c.agent) {
-              const a = c.agent;
-              setAgents((prev) => {
-                const others = prev.filter((n) => n.name !== a.name);
-                return [
-                  {
-                    id: a.agent_id ? a.agent_id.substring(0, 8) : 'new',
-                    name: a.name || a.qualified_name,
-                    status: 'ONLINE',
-                    roles: a.roles || ['worker'],
-                    capabilities: a.capabilities || [],
-                    uptime: '0m',
-                    hardware: generateHardwareStats(a.name || 'agent')
-                  },
-                  ...others
-                ];
-              });
-              pushLog('INFO', 'AgentManager', `Agent connected: ${a.name || a.qualified_name}`);
-            }
-
-            if (c.event === 'agent_disconnected') {
-              const name = c.agent_name;
-              setAgents((prev) => prev.filter((n) => n.name !== name));
-              pushLog('WARN', 'AgentManager', `Agent disconnected: ${name}`);
-            }
-
-            if (c.event === 'task_submitted') {
-              setTaskCount(t => t + 1);
-              pushLog('DEBUG', 'Orchestrator', `Task '${c.title}' delegated to ${c.assignee}`);
-            }
-
-            if (c.event === 'task_completed') {
-              pushLog('INFO', 'Worker', `Task ${c.task_id.substring(0,8)} completed successfully`);
-            }
-            
-            if (c.event === 'message_routed') {
-               // pushLog('DEBUG', 'Router', \`Message routed: \${c.sender} -> \${c.to}\`);
-            }
+            setAgents(mapped);
+            pushLog('INFO', 'Registry', `Snapshot: ${mapped.length} agent(s) online`);
           }
-        } catch {}
+
+          if (c.event === 'agent_connected' && c.agent) {
+            const a = c.agent;
+            const name = a.qualified_name || a.name;
+            setAgents((prev) => [
+              {
+                id: a.agent_id || name,
+                name,
+                org: a.org_id || 'default',
+                roles: a.roles || [],
+                capabilities: a.capabilities || [],
+                connectedAt: Math.floor(Date.now() / 1000),
+                messages: 0,
+                status: a.status || 'healthy',
+              },
+              ...prev.filter((p) => p.name !== name),
+            ]);
+            pushLog('INFO', 'Registry', `Agent registered: ${name}`);
+          }
+
+          if (c.event === 'agent_disconnected') {
+            setAgents((prev) => prev.filter((p) => p.name !== c.agent_name));
+            pushLog('WARN', 'Registry', `Agent disconnected: ${c.agent_name}`);
+          }
+
+          if (c.event === 'task_submitted') {
+            setTasksSubmitted((n) => n + 1);
+            pushLog('DEBUG', 'Tasks', `${c.orchestrator} → ${c.assignee}: ${c.title}`);
+          }
+
+          if (c.event === 'task_completed') {
+            setTasksCompleted((n) => n + 1);
+            pushLog('INFO', 'Tasks', `Task ${String(c.task_id).slice(0, 8)} completed`);
+          }
+
+          if (c.event === 'egress_blocked') {
+            pushLog('WARN', 'Egress', `Blocked to ${c.target_org} by rule '${c.rule}'`);
+          }
+        } catch {
+          /* a malformed frame is not worth tearing the socket down */
+        }
       };
 
       ws.onclose = () => {
         setHubConnected(false);
         setAgents([]);
-        pushLog('ERROR', 'System', 'Hub connection lost. Retrying...');
-        retryTimer = setTimeout(connect, 2000);
+        pushLog('ERROR', 'System', 'Hub connection lost — retrying');
+        retry = setTimeout(connect, 2000);
       };
 
       ws.onerror = () => ws.close();
@@ -222,234 +274,169 @@ export default function MissionControlDashboard() {
     connect();
     return () => {
       stopped = true;
-      clearTimeout(retryTimer);
+      clearTimeout(retry);
       wsRef.current?.close();
     };
   }, [pushLog, isLive]);
 
-  const filteredLogs = logs.filter(log => logFilter === 'ALL' || log.level === logFilter);
+  /* ---------------- Sampling ---------------- */
 
-  // Update dynamic uptime locally
   useEffect(() => {
     const iv = setInterval(() => {
-      setAgents(prev => prev.map(a => {
-        let mins = parseInt(a.uptime) || 0;
-        return { ...a, uptime: `${mins + 1}m` };
-      }));
-    }, 60000);
+      const { agents: a, tasks: t, done: d, events: e } = latest.current;
+      setAgentSeries((s) => [...s, a].slice(-SERIES_LEN));
+      setTaskSeries((s) => [...s, t].slice(-SERIES_LEN));
+      setDoneSeries((s) => [...s, d].slice(-SERIES_LEN));
+      setEventSeries((s) => [...s, e].slice(-SERIES_LEN));
+    }, SAMPLE_MS);
     return () => clearInterval(iv);
   }, []);
 
+  /* ---------------- Control plane tools ---------------- */
+
+  const handleGenerateLicense = async () => {
+    try {
+      const res = await fetch('/api/license/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_name: 'acme_corp', plan: 'free', max_agents: 10 }),
+      });
+      const data = await res.json();
+      if (data.success) setGeneratedLicense(data.license_key);
+    } catch {
+      pushLog('ERROR', 'License', 'Token generation failed');
+    }
+  };
+
+  const handleSimulateQuota = async () => {
+    setSimulating(true);
+    setSimResult(null);
+    try {
+      const res = await fetch('/api/agents/verify-slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_active_agents: 10, max_allowed: 10 }),
+      });
+      setSimResult({ status: res.status, data: await res.json() });
+    } catch (err: any) {
+      setSimResult({ status: 500, error: err.message });
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const filteredLogs = useMemo(
+    () => logs.filter((l) => logFilter === 'ALL' || l.level === logFilter),
+    [logs, logFilter],
+  );
+
+  const orgs = useMemo(() => new Set(agents.map((a) => a.org)).size, [agents]);
+
   return (
     <div className="space-y-8 font-sans text-slate-100 notranslate" translate="no">
-      
       {/* HEADER */}
-      <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-white font-sans flex items-center space-x-2">
-            <span className="text-[#00D4FF]">A1</span>
-            <span className="text-zinc-600">/</span>
-            <span>MISSION CONTROL — AI INFRASTRUCTURE</span>
-          </h1>
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-800/80 pb-4">
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold tracking-tight text-white">Overview</h1>
+          <p className="font-mono text-xs text-zinc-500">{HUB_URL}</p>
         </div>
-        <div className="flex items-center space-x-6 text-xs text-zinc-400 font-sans">
-          <span>ENVIRONMENT: <strong className="text-white font-semibold">PRODUCTION</strong></span>
-          <span>REGION: <strong className="text-white font-semibold">US-EAST-1</strong></span>
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <span className={`h-1.5 w-1.5 rounded-full ${hubConnected ? 'bg-emerald-400' : 'bg-red-500'}`} />
+          <span className={hubConnected ? 'text-emerald-400' : 'text-red-400'}>
+            {hubConnected ? 'connected' : 'disconnected'}
+          </span>
         </div>
       </div>
 
-      {/* KPI METRICS GRID */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* CARD 1 : TOTAL AGENTS (REAL-TIME) */}
-        <div className="bg-[#121215] border border-zinc-800/80 rounded-xl p-5 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex justify-between items-center text-[11px] text-zinc-400 font-mono">
-            <span className="font-semibold tracking-wider">TOTAL AGENTS</span>
-            <div className="w-5 h-5 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-zinc-400">
-              <Users className="w-3 h-3 stroke-[1.5]" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="text-3xl font-extrabold text-white font-mono tracking-tight">{agents.length}</span>
-            <span className={`text-[11px] font-mono font-medium ${hubConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-              {hubConnected ? 'LIVE SYNC' : 'OFFLINE'}
-            </span>
-          </div>
-          <div className="mt-3 relative">
-            <div className="flex justify-between text-[9px] font-mono text-zinc-600 mb-1">
-              <span>10</span><span>5</span><span>0</span>
-            </div>
-            <div className="h-12 w-full relative">
-              <svg className="w-full h-full" viewBox="0 0 200 40" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="gradTotalAgents" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00D4FF" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#00D4FF" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <path d="M0 32 Q30 28, 60 22 T120 16 T180 8 L200 5 L200 40 L0 40 Z" fill="url(#gradTotalAgents)" />
-                <path d="M0 32 Q30 28, 60 22 T120 16 T180 8 L200 5" fill="none" stroke="#00D4FF" strokeWidth="1.75" />
-                <circle cx="200" cy="5" r="3" fill="#00D4FF" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 2 : ACTIVE JOBS (REAL-TIME) */}
-        <div className="bg-[#121215] border border-zinc-800/80 rounded-xl p-5 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex justify-between items-center text-[11px] text-zinc-400 font-mono">
-            <span className="font-semibold tracking-wider">ACTIVE JOBS</span>
-            <div className="w-5 h-5 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-zinc-400">
-              <Zap className="w-3 h-3 stroke-[1.5]" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="text-3xl font-extrabold text-[#00D4FF] font-mono tracking-tight">{taskCount}</span>
-            <span className="text-[11px] text-emerald-400 font-mono font-medium">REAL-TIME</span>
-          </div>
-          <div className="mt-3 relative">
-            <div className="flex justify-between text-[9px] font-mono text-zinc-600 mb-1">
-              <span>High</span><span>Med</span><span>Low</span>
-            </div>
-            <div className="h-12 w-full relative">
-              <svg className="w-full h-full" viewBox="0 0 200 40" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="gradActiveJobs" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00D4FF" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#00D4FF" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <path d="M0 28 Q40 25, 80 18 T140 10 T180 6 L200 3 L200 40 L0 40 Z" fill="url(#gradActiveJobs)" />
-                <path d="M0 28 Q40 25, 80 18 T140 10 T180 6 L200 3" fill="none" stroke="#00D4FF" strokeWidth="1.75" />
-                <circle cx="200" cy="3" r="3" fill="#00D4FF" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 3 : SYSTEM HEALTH */}
-        <div className="bg-[#121215] border border-zinc-800/80 rounded-xl p-5 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex justify-between items-center text-[11px] text-zinc-400 font-mono">
-            <span className="font-semibold tracking-wider">SYSTEM HEALTH</span>
-            <div className="w-5 h-5 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-zinc-400">
-              <Cpu className="w-3 h-3 stroke-[1.5]" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="text-3xl font-extrabold text-white font-mono tracking-tight">{hubConnected ? '100%' : '0%'}</span>
-            <span className={`text-[11px] font-mono font-medium ${hubConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-              {hubConnected ? 'STABLE' : 'DOWN'}
-            </span>
-          </div>
-          <div className="mt-3 relative">
-            <div className="flex justify-between text-[9px] font-mono text-zinc-600 mb-1">
-              <span>100%</span><span>50%</span><span>0%</span>
-            </div>
-            <div className="h-12 w-full relative">
-              <svg className="w-full h-full" viewBox="0 0 200 40" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="gradGpuUtil" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00D4FF" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#00D4FF" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <path d="M0 22 Q50 18, 100 24 T160 12 L200 10 L200 40 L0 40 Z" fill="url(#gradGpuUtil)" />
-                <path d="M0 22 Q50 18, 100 24 T160 12 L200 10" fill="none" stroke="#00D4FF" strokeWidth="1.75" />
-                <circle cx="200" cy="10" r="3" fill="#00D4FF" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 4 : MESSAGES / SEC */}
-        <div className="bg-[#121215] border border-zinc-800/80 rounded-xl p-5 flex flex-col justify-between relative overflow-hidden">
-          <div className="flex justify-between items-center text-[11px] text-zinc-400 font-mono">
-            <span className="font-semibold tracking-wider">MESSAGES / SEC</span>
-            <div className="w-5 h-5 rounded-full bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-zinc-400">
-              <TrendingUp className="w-3 h-3 stroke-[1.5]" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="text-3xl font-extrabold text-[#00D4FF] font-mono tracking-tight">{msgCount}</span>
-            <span className="text-[11px] text-emerald-400 font-mono font-medium">ROUTED</span>
-          </div>
-          <div className="mt-3 relative">
-            <div className="flex justify-between text-[9px] font-mono text-zinc-600 mb-1">
-              <span>High</span><span>Med</span><span>Low</span>
-            </div>
-            <div className="h-12 w-full relative">
-              <svg className="w-full h-full" viewBox="0 0 200 40" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="gradTokens" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#00D4FF" stopOpacity="0.35" />
-                    <stop offset="100%" stopColor="#00D4FF" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <path d="M0 30 Q40 22, 90 15 T150 8 L200 4 L200 40 L0 40 Z" fill="url(#gradTokens)" />
-                <path d="M0 30 Q40 22, 90 15 T150 8 L200 4" fill="none" stroke="#00D4FF" strokeWidth="1.75" />
-                <circle cx="200" cy="4" r="3" fill="#00D4FF" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
+      {/* METRICS */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric
+          label="AGENTS ONLINE"
+          value={agents.length}
+          note={orgs > 1 ? `across ${orgs} organizations` : 'reported by the hub'}
+          icon={Users}
+          series={agentSeries}
+          live={hubConnected}
+        />
+        <Metric
+          label="TASKS SUBMITTED"
+          value={tasksSubmitted}
+          note="since this view opened"
+          icon={ListChecks}
+          series={taskSeries}
+          live={hubConnected}
+        />
+        <Metric
+          label="TASKS COMPLETED"
+          value={tasksCompleted}
+          note={tasksSubmitted ? `${Math.round((tasksCompleted / tasksSubmitted) * 100)}% of submitted` : 'since this view opened'}
+          icon={ArrowUpRight}
+          series={doneSeries}
+          live={hubConnected}
+        />
+        <Metric
+          label="TELEMETRY EVENTS"
+          value={events}
+          note="received on this connection"
+          icon={Activity}
+          series={eventSeries}
+          live={hubConnected}
+        />
       </div>
 
-      {/* SPLIT CONTENT */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* LEFT PANEL : CONNECTED AGENTS TABLE (REAL-TIME) */}
-        <div className="lg:col-span-7 bg-[#121215] border border-zinc-800/80 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between text-xs border-b border-zinc-800/80 pb-3 font-sans">
-            <div className="flex items-center space-x-3">
-              <span className="font-bold text-white uppercase tracking-wider font-mono">CONNECTED AGENTS</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-mono">{agents.length} TOTAL</span>
-            </div>
-            <div className="flex items-center space-x-3 text-zinc-400 text-[11px] font-mono">
-              <span className="cursor-pointer hover:text-white flex items-center space-x-1">
-                <SlidersHorizontal className="w-3 h-3" />
-                <span>FILTER ▾</span>
-              </span>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* AGENTS */}
+        <div className="space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5 lg:col-span-7">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs font-bold uppercase tracking-wider text-white">Connected agents</span>
+              <span className="rounded bg-zinc-800 px-2 py-0.5 font-mono text-[10px] text-zinc-400">{agents.length}</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto min-h-[300px]">
+          <div className="min-h-[300px] overflow-x-auto">
             {agents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full py-16 text-zinc-500 space-y-2">
-                <Users className="w-8 h-8 stroke-[1]" />
-                <p>Waiting for real agents to connect...</p>
-                <p className="text-[10px] font-mono mt-2">Run <code className="text-zinc-400 bg-zinc-900 px-1 rounded">python examples/agent_b.py</code></p>
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-zinc-500">
+                <Users className="h-8 w-8 stroke-[1]" />
+                <p className="text-sm">
+                  {hubConnected ? 'No agent is currently registered.' : 'Not connected to a hub.'}
+                </p>
+                <p className="mt-2 font-mono text-[11px] text-zinc-600">
+                  {hubConnected ? (
+                    <>
+                      Try <code className="rounded bg-zinc-900 px-1 text-zinc-400">intermesh serve --name bot --exec ./my-agent</code>
+                    </>
+                  ) : (
+                    <>
+                      Start one with <code className="rounded bg-zinc-900 px-1 text-zinc-400">intermesh hub</code>
+                    </>
+                  )}
+                </p>
               </div>
             ) : (
-              <table className="w-full text-left font-sans text-xs">
-                <thead className="text-[10px] text-zinc-500 border-b border-zinc-800 uppercase font-semibold">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-zinc-800 text-[10px] font-semibold uppercase text-zinc-500">
                   <tr>
-                    <th className="pb-3">ID</th>
-                    <th className="pb-3">NAME</th>
-                    <th className="pb-3">STATUS</th>
-                    <th className="pb-3">ROLE</th>
-                    <th className="pb-3">CPU%</th>
-                    <th className="pb-3">MEM%</th>
-                    <th className="pb-3">GPU%</th>
-                    <th className="pb-3 text-right">UPTIME</th>
+                    <th className="pb-3">Agent</th>
+                    <th className="pb-3">Roles</th>
+                    <th className="pb-3">Capabilities</th>
+                    <th className="pb-3 text-right">Messages</th>
+                    <th className="pb-3 text-right">Connected</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/40 text-zinc-300 text-xs">
+                <tbody className="divide-y divide-zinc-800/40 text-zinc-300">
                   {agents.map((a) => (
-                    <tr key={a.id} className="hover:bg-zinc-800/30 transition">
-                      <td className="py-3 text-zinc-500 font-mono">{a.id}</td>
-                      <td className="py-3 font-semibold text-white font-sans">{a.name.split('/')[1] || a.name}</td>
+                    <tr key={a.id} className="transition hover:bg-zinc-800/30">
                       <td className="py-3">
-                        <span className="inline-flex items-center space-x-1.5 text-emerald-400 text-[10px] font-semibold">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span>ONLINE</span>
-                        </span>
+                        <div className="font-semibold text-white">{a.name}</div>
+                        <div className="font-mono text-[10px] text-zinc-600">{String(a.id).slice(0, 8)}</div>
                       </td>
-                      <td className="py-3 text-zinc-400">{a.roles[0]}</td>
-                      <td className="py-3 text-zinc-300 font-mono">{a.hardware.cpu}</td>
-                      <td className="py-3 text-zinc-300 font-mono">{a.hardware.mem}</td>
-                      <td className="py-3 text-zinc-300 font-mono">{a.hardware.gpu}</td>
-                      <td className="py-3 text-right text-zinc-500 font-mono">{a.uptime}</td>
+                      <td className="py-3 text-zinc-400">{a.roles.join(', ') || '—'}</td>
+                      <td className="py-3 text-zinc-400">
+                        {a.capabilities.length ? a.capabilities.join(', ') : <span className="text-zinc-600">none declared</span>}
+                      </td>
+                      <td className="py-3 text-right font-mono text-zinc-300">{a.messages}</td>
+                      <td className="py-3 text-right font-mono text-zinc-500">{relativeTime(a.connectedAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -458,129 +445,132 @@ export default function MissionControlDashboard() {
           </div>
         </div>
 
-        {/* RIGHT PANEL : REAL-TIME LOGS FEED */}
-        <div className="lg:col-span-5 bg-[#121215] border border-zinc-800/80 rounded-xl p-5 space-y-4 flex flex-col h-[510px]">
-          <div className="flex items-center justify-between text-xs border-b border-zinc-800/80 pb-3 font-sans">
-            <div className="flex items-center space-x-2 font-mono">
-              <Terminal className="w-4 h-4 text-white stroke-[1.5]" />
-              <span className="font-bold text-white uppercase tracking-wider">REAL-TIME LOGS</span>
-              <span className={`px-2 py-0.5 rounded border text-[10px] font-semibold ${hubConnected ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
-                {hubConnected ? 'LIVE' : 'OFFLINE'}
-              </span>
+        {/* LOGS */}
+        <div className="flex h-[510px] flex-col space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5 lg:col-span-5">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <Terminal className="h-4 w-4 stroke-[1.5] text-white" />
+              <span className="font-bold uppercase tracking-wider text-white">Event stream</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <select 
+            <div className="flex items-center gap-2">
+              <select
                 value={logFilter}
                 onChange={(e) => setLogFilter(e.target.value)}
-                className="bg-black/50 border border-zinc-800 text-zinc-300 text-[10px] rounded px-2 py-1 outline-none font-mono"
+                className="rounded border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-[10px] text-zinc-300 outline-none"
               >
-                <option value="ALL">LEVEL: ALL</option>
-                <option value="INFO">INFO</option>
-                <option value="DEBUG">DEBUG</option>
-                <option value="WARN">WARN</option>
-                <option value="ERROR">ERROR</option>
+                {['ALL', 'INFO', 'DEBUG', 'WARN', 'ERROR'].map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
               </select>
-              <button 
-                onClick={() => setIsLive(!isLive)}
-                className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+              <button
+                onClick={() => setIsLive((v) => !v)}
+                title={isLive ? 'Pause the stream' : 'Resume the stream'}
+                className="rounded border border-zinc-800 p-1.5 text-zinc-400 transition hover:text-white"
               >
-                {isLive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                {isLive ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
               </button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 font-mono text-[10.5px] pr-1">
-            {filteredLogs.map((log) => (
-              <div key={log.id} className="flex items-start space-x-2 leading-relaxed border-b border-zinc-900/80 pb-1.5">
-                <span className="text-zinc-600 shrink-0" suppressHydrationWarning>{log.time.substring(11, 23)}Z</span>
-                <span className={`shrink-0 font-bold px-1 rounded text-[9px] ${
-                  log.level === 'INFO' ? 'text-zinc-300 bg-zinc-800' :
-                  log.level === 'DEBUG' ? 'text-zinc-500 bg-zinc-900' :
-                  log.level === 'WARN' ? 'text-amber-400 bg-amber-500/10' :
-                  'text-red-400 bg-red-500/10'
-                }`}>
-                  {log.level}
-                </span>
-                <span className="text-zinc-300 font-semibold shrink-0">{log.source}</span>
-                <span className="text-zinc-400 break-all">{log.message}</span>
-              </div>
-            ))}
+          <div className="flex-1 space-y-1.5 overflow-y-auto font-mono text-[11px]">
+            {filteredLogs.length === 0 ? (
+              <div className="py-10 text-center text-zinc-600">No events yet.</div>
+            ) : (
+              filteredLogs.map((log) => (
+                <div key={log.id} className="flex gap-2">
+                  <span className="shrink-0 text-zinc-600" suppressHydrationWarning>
+                    {log.time.slice(11, 23)}
+                  </span>
+                  <span
+                    className={`shrink-0 font-bold ${
+                      log.level === 'ERROR'
+                        ? 'text-red-400'
+                        : log.level === 'WARN'
+                        ? 'text-amber-400'
+                        : log.level === 'DEBUG'
+                        ? 'text-zinc-500'
+                        : 'text-cyan-400'
+                    }`}
+                  >
+                    {log.level}
+                  </span>
+                  <span className="shrink-0 font-semibold text-zinc-300">{log.source}</span>
+                  <span className="break-all text-zinc-400">{log.message}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
-
       </div>
 
-      {/* BOTTOM SECTION : CONTROL PLANE TOOLS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-sans">
-        
-        {/* LICENSE GENERATOR CARD */}
-        <div className="bg-[#121215] border border-zinc-800/80 rounded-xl p-5 space-y-4">
+      {/* TOOLS */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center space-x-2">
-                <KeyRound className="w-4 h-4 text-zinc-300 stroke-[1.5]" />
-                <h2 className="text-sm font-bold text-white">Self-Hosted License Generator</h2>
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 stroke-[1.5] text-zinc-300" />
+                <h2 className="text-sm font-bold text-white">Self-hosted license token</h2>
               </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Generate cryptographically signed Ed25519 tokens for offline Hub quota verification.
+              <p className="text-xs leading-relaxed text-zinc-400">
+                Signs an Ed25519 token a hub can verify offline, without calling back to
+                this portal.
               </p>
             </div>
-            <button 
+            <button
               onClick={handleGenerateLicense}
-              className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 text-xs font-semibold rounded-lg transition shrink-0 flex items-center space-x-2"
+              className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-zinc-400 stroke-[1.5]" />
-              <span>Generate License Token</span>
+              <RefreshCw className="h-3.5 w-3.5 stroke-[1.5] text-zinc-400" />
+              <span>Generate</span>
             </button>
           </div>
 
           {generatedLicense && (
-            <div className="bg-[#08080A] border border-zinc-800 rounded-lg p-3 font-mono text-xs text-zinc-200 break-all">
-              <div className="text-[10px] text-zinc-500 uppercase mb-1 tracking-wider">Ed25519 Signed Token</div>
-              <div className="text-zinc-100 select-all">{generatedLicense}</div>
+            <div className="break-all rounded-lg border border-zinc-800 bg-[#08080A] p-3 font-mono text-xs">
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">Ed25519 signed token</div>
+              <div className="select-all text-zinc-100">{generatedLicense}</div>
             </div>
           )}
         </div>
 
-        {/* 11TH AGENT SIMULATOR CARD */}
-        <div className="bg-[#121215] border border-zinc-800/80 rounded-xl p-5 space-y-4">
+        <div className="space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center space-x-2">
-                <ShieldAlert className="w-4 h-4 text-zinc-300 stroke-[1.5]" />
-                <h2 className="text-sm font-bold text-white">Quota Enforcement Simulator</h2>
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 stroke-[1.5] text-zinc-300" />
+                <h2 className="text-sm font-bold text-white">Quota enforcement check</h2>
               </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Test how the Control Plane blocks registration when exceeding 10 agents on Free Tier.
+              <p className="text-xs leading-relaxed text-zinc-400">
+                Calls the slot endpoint with the free tier already full, to confirm an
+                eleventh registration is refused.
               </p>
             </div>
-            <button 
-              onClick={handleSimulate11thAgent}
+            <button
+              onClick={handleSimulateQuota}
               disabled={simulating}
-              className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-zinc-200 text-xs font-semibold rounded-lg transition shrink-0 flex items-center space-x-2"
+              className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-50"
             >
-              {simulating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5 text-zinc-400 stroke-[1.5]" />}
-              <span>Simulate 11th Agent</span>
+              {simulating ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Users className="h-3.5 w-3.5 stroke-[1.5] text-zinc-400" />}
+              <span>Run check</span>
             </button>
           </div>
 
           {simResult && (
-            <div className={`border rounded-lg p-3 font-mono text-xs space-y-1 bg-[#08080A] ${simResult.status === 403 ? 'border-red-900/60' : 'border-zinc-800'}`}>
+            <div className={`space-y-1 rounded-lg border bg-[#08080A] p-3 font-mono text-xs ${simResult.status === 403 ? 'border-red-900/60' : 'border-zinc-800'}`}>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-zinc-300">HTTP Response</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${simResult.status === 403 ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
-                  {simResult.status} {simResult.status === 403 ? 'FORBIDDEN (QUOTA_EXCEEDED)' : 'OK'}
+                <span className="font-semibold text-zinc-300">HTTP response</span>
+                <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${simResult.status === 403 ? 'border border-red-500/20 bg-red-500/10 text-red-400' : 'bg-zinc-800 text-zinc-300'}`}>
+                  {simResult.status}
                 </span>
               </div>
-              <pre className="bg-black/50 p-2.5 rounded text-[11px] overflow-x-auto text-zinc-300 border border-zinc-900">
-                {JSON.stringify(simResult.data, null, 2)}
+              <pre className="overflow-x-auto rounded border border-zinc-900 bg-black/50 p-2.5 text-[11px] text-zinc-300">
+                {JSON.stringify(simResult.data ?? simResult.error, null, 2)}
               </pre>
             </div>
           )}
         </div>
-
       </div>
-
     </div>
   );
 }

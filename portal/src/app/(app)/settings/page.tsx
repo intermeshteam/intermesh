@@ -34,19 +34,20 @@ type Toast = {
 
 const STORAGE_KEY = 'intermesh_workspace_settings_v1';
 
-const DEFAULT_MEMBERS: Member[] = [
-  { id: 'm1', name: 'M. Lomemba', email: 'mrlomemba@gmail.com', role: 'Owner', status: 'Active' },
-  { id: 'm2', name: 'Équipe DevOps', email: 'devops@acme.com', role: 'Admin', status: 'Active' },
-  { id: 'm3', name: 'Auditeur de sécurité', email: 'security@acme.com', role: 'Viewer', status: 'Pending' },
-];
+// The three seeded teammates were invented, down to their addresses at a
+// company that does not exist. Without a backend there is no membership to
+// show, so the table starts empty and says so.
+const DEFAULT_MEMBERS: Member[] = [];
 
 export default function SettingsPage() {
-  const [orgName, setOrgName] = useState('Acme Corp');
-  const [orgSlug, setOrgSlug] = useState('acme_corp_main');
-  const [region, setRegion] = useState('us-east-1');
-  const [webhookUrl, setWebhookUrl] = useState('https://api.acme.com/intermesh/events');
-  const [webhookSecret, setWebhookSecret] = useState('whsec_intermesh_99a8b7c6d5e4f3a2b109876543210fed');
-  const [webhookEnabled, setWebhookEnabled] = useState(true);
+  const [orgName, setOrgName] = useState('');
+  const [orgSlug, setOrgSlug] = useState('default');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  // A signing secret shown in the interface is either real — and must never
+  // be rendered — or fake, and teaches the reader to ignore secrets. Empty
+  // until a backend issues one.
+  const [webhookSecret, setWebhookSecret] = useState('');
+  const [webhookEnabled, setWebhookEnabled] = useState(false);
   const [events, setEvents] = useState({
     agent_connected: true,
     quota_alert: true,
@@ -79,7 +80,6 @@ export default function SettingsPage() {
       const data = JSON.parse(raw);
       if (data.orgName) setOrgName(data.orgName);
       if (data.orgSlug) setOrgSlug(data.orgSlug);
-      if (data.region) setRegion(data.region);
       if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
       if (data.webhookSecret) setWebhookSecret(data.webhookSecret);
       if (typeof data.webhookEnabled === 'boolean') setWebhookEnabled(data.webhookEnabled);
@@ -98,7 +98,6 @@ export default function SettingsPage() {
   const persist = (next?: Partial<{
     orgName: string;
     orgSlug: string;
-    region: string;
     webhookUrl: string;
     webhookSecret: string;
     webhookEnabled: boolean;
@@ -108,7 +107,6 @@ export default function SettingsPage() {
     const payload = {
       orgName,
       orgSlug,
-      region,
       webhookUrl,
       webhookSecret,
       webhookEnabled,
@@ -127,7 +125,7 @@ export default function SettingsPage() {
     }
     setSaving(true);
     await new Promise((r) => setTimeout(r, 700));
-    persist({ orgName: orgName.trim(), orgSlug: orgSlug.trim(), region });
+    persist({ orgName: orgName.trim(), orgSlug: orgSlug.trim() });
     setSaving(false);
     setSaved(true);
     showToast('success', 'Paramètres généraux enregistrés.');
@@ -300,22 +298,6 @@ export default function SettingsPage() {
             />
           </div>
 
-          <div className="space-y-1.5 md:col-span-2">
-            <label className="block font-medium text-slate-300">Région par défaut</label>
-            <div className="relative">
-              <Globe className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <select
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                className="w-full bg-[#08080A] border border-slate-800 focus:border-white/40 rounded-lg pl-10 pr-3.5 py-2.5 text-slate-200 outline-none transition appearance-none"
-              >
-                <option value="us-east-1">us-east-1 (N. Virginia - Low Latency)</option>
-                <option value="us-west-2">us-west-2 (Oregon)</option>
-                <option value="eu-west-1">eu-west-1 (Ireland)</option>
-                <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
-              </select>
-            </div>
-          </div>
         </div>
       </form>
 
@@ -349,6 +331,13 @@ export default function SettingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-300">
+              {members.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-10 text-center text-slate-500">
+                    No teammates yet. Membership needs a backend, which this build does not have.
+                  </td>
+                </tr>
+              )}
               {members.map((m) => (
                 <tr key={m.id} className="hover:bg-white/[0.02] transition">
                   <td className="py-3.5">

@@ -27,24 +27,11 @@ interface ApiKey {
 
 const STORAGE_KEY = 'intermesh_api_keys_v1';
 
-const INITIAL_KEYS: ApiKey[] = [
-  {
-    id: 'k1',
-    name: 'Production Backend Primary',
-    rawKey: 'nx_live_acme_super_secret_key_123',
-    created: '2026-02-10',
-    role: 'admin',
-    lastUsed: '2 mins ago'
-  },
-  {
-    id: 'k2',
-    name: 'Staging Environment Worker',
-    rawKey: 'nx_live_acme_staging_key_998877',
-    created: '2026-03-01',
-    role: 'worker',
-    lastUsed: '1 hour ago'
-  }
-];
+// No seeded keys. Two fake ones used to sit here — `nx_live_acme_super_
+// secret_key_123` and a staging twin, with invented creation dates and a
+// "2 mins ago" last-used stamp. Displaying credential-shaped strings that
+// authenticate nothing teaches people to trust the wrong thing.
+const INITIAL_KEYS: ApiKey[] = [];
 
 export default function KeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>(INITIAL_KEYS);

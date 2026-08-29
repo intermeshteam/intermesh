@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { HUB_URL } from '@/lib/hub';
 import {
   Search,
   Bell,
@@ -97,11 +98,11 @@ type Notification = {
   unread: boolean;
 };
 
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  { id: 'n1', title: 'Agent connecté', body: 'acme/lead_orchestrator est en ligne.', time: '2m', unread: true },
-  { id: 'n2', title: 'Quota proche', body: '4/10 agents actifs. 6 slots restants.', time: '15m', unread: true },
-  { id: 'n3', title: 'Nouvelle clé API', body: 'Production Backend Primary créée.', time: '1h', unread: false },
-];
+// Notifications start empty. The three that used to sit here were invented —
+// a fictional agent connecting, a fictional quota warning — and a badge
+// showing unread items nobody had received is exactly the kind of detail that
+// makes a console feel staged.
+const INITIAL_NOTIFICATIONS: Notification[] = [];
 
 export default function DashboardTopbar() {
   const router = useRouter();
@@ -202,12 +203,8 @@ export default function DashboardTopbar() {
   return (
     <>
       <header className="h-14 border-b border-white/10 bg-[#09090b]/90 backdrop-blur px-6 md:px-8 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center space-x-3 text-xs">
-          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded font-mono font-medium text-[10px] uppercase tracking-wider">
-            LIVE MODE
-          </span>
-          <span className="text-slate-600">/</span>
-          <span className="text-slate-300 font-medium">ACME_CORP_MAIN</span>
+        <div className="flex items-center space-x-2 text-xs">
+          <span className="text-slate-500 font-mono">{HUB_URL}</span>
         </div>
 
         <div className="flex items-center space-x-3 md:space-x-4">
@@ -299,8 +296,8 @@ export default function DashboardTopbar() {
             {profileOpen && (
               <div className="absolute right-0 mt-2 w-64 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-white/10">
-                  <div className="text-sm font-semibold text-white">Acme Corp</div>
-                  <div className="text-[11px] text-slate-500 font-mono mt-0.5">mrlomemba@gmail.com</div>
+                  <div className="text-sm font-semibold text-white">Local workspace</div>
+                  <div className="text-[11px] text-slate-500 font-mono mt-0.5">self-hosted</div>
                 </div>
                 <div className="p-2 space-y-0.5">
                   <Link href="/dashboard" onClick={() => setProfileOpen(false)} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition">
