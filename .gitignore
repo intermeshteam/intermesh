@@ -16,3 +16,6 @@ build/
 *.node
 .npmrc
 **/.npmrc
+
+# TypeScript build cache
+*.tsbuildinfo

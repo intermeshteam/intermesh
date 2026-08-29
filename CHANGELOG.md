@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.3.0]
+## [0.3.0] — 2026-08-29
 
 **Renamed: Nexus is now InterMesh.** The `nexus` name was unavailable across
 most domains and already crowded on both registries, so the project moved
@@ -16,6 +16,21 @@ before it had users to strand.
 Both SDKs ship as `0.3.0`. The JavaScript SDK jumps from `0.1.1` to keep the
 two languages on one number — under a brand-new package name, two different
 versions would say nothing about which pairs speak to which.
+
+**Federation now actually runs.** Two hub implementations had diverged, and
+the one everything started — documentation, Dockerfile, tests — parsed
+`--peer` without ever reading it. `peered_hubs` stayed empty for the life of
+the process, task routing consulted only local agents, and discovery filtered
+hard on the caller's organization: crossing an organizational boundary was
+impossible by construction. The working implementation lived in a second file
+nobody launched. It went unnoticed because the federation test contained no
+`test_` function and was never collected by pytest.
+
+Merging the two hubs exposed what federation depended on and did not have —
+verifiable cross-organization identity, a tamper-proof channel to exchange
+keys over, and control of what leaves an organization. Each is addressed
+below. This release also makes `pip install intermesh` deliver a server,
+which it previously did not.
 
 ### Changed — breaking
 
@@ -31,6 +46,14 @@ versions would say nothing about which pairs speak to which.
   while the protocol has no deployed users and the change costs nothing.
 - Prometheus metrics are `intermesh_*`; the snapshot format is
   `intermesh-snapshot/1`.
+- **`server/hub_telemetry.py` is removed.** It held the only working
+  federation code, but no documentation, container image or test ever started
+  it. Deployments that did must switch to `intermesh hub` or `server/hub.py`,
+  which now carry federation and telemetry together.
+- **Tokens are signed with EdDSA, not HS256.** A hub that has issued tokens
+  under 0.2.x will not validate them after upgrading; agents reconnect and are
+  re-issued. The signing secret itself is unchanged and still resolved the
+  same way, so no configuration moves.
 
 The old `nexus-mesh` packages remain on PyPI and npm for the published 0.1.x
 and 0.2.x versions. They are not maintained.
@@ -50,7 +73,28 @@ and 0.2.x versions. They are not maintained.
   `EscrowManager.export_state` / `import_state`,
   `AsimovGuardrailEngine.export_policies` / `import_policies`.
 - Health probes (`/healthz`, `/readyz`, `/metrics`) served on the hub's
-  WebSocket port.
+  WebSocket port, now also reporting `intermesh_peered_hubs` and
+  `intermesh_observers`.
+- **Working hub-to-hub federation.** `--peer ORG=wss://host:port` opens a
+  link that reconnects on its own; messages, tasks and their results are
+  relayed to the peer that owns the target agent. Tenant isolation remains the
+  default and is lifted only towards an explicitly peered organization — with
+  no peering, cross-organization addressing is still refused.
+- **An agent written in any language, with no SDK.** `intermesh serve --exec`
+  turns any executable into an agent: the task arrives as JSON on stdin, the
+  answer is read from stdout. `--http` adapts a service already online instead
+  of restarting it. Non-JSON stdout is wrapped as `{"output": "..."}` so a
+  shell `echo` is a valid agent; demanding well-formed JSON would have killed
+  the use case. From Python, `InterMeshAgent.from_command(...)` and
+  `.from_http(...)`.
+- **`agent.run()` and `serve_forever()`.** Without them the "one-line
+  integration" still required writing the asyncio loop that keeps an agent
+  alive.
+- **The CLI gained the commands the README already documented**: `hub`,
+  `ping`, `ask`, `task`, `keygen`. `hub` is dispatched before argument parsing
+  and receives the hub's own options untouched, so the two cannot drift apart.
+- `InterMeshAgent(ssl=...)` to reach a hub over `wss://` presenting a
+  certificate from a private authority.
 
 ### Security
 
@@ -61,6 +105,34 @@ and 0.2.x versions. They are not maintained.
 - `replace_identities` and `replace_tasks` run their `DELETE` and `INSERT` in a
   single transaction. A crash between the two would leave a hub with no
   persisted identities at all — worse than the state being restored.
+- **Cross-organization identity is verifiable, not assumed.** Tokens are now
+  signed with an Ed25519 private key that never leaves its hub, and peers
+  exchange public keys when they pair. Under HS256 two federated hubs had to
+  share their signing secret, so either could mint tokens in the other's name
+  — unacceptable between organizations that, by definition, do not trust each
+  other. A relayed message is checked against the issuing hub's published key:
+  signature, expiry, and originating organization. A peering request carrying
+  no public key is refused rather than trusted blindly.
+- **The peering link must be tamper-proof.** `--tls-cert` / `--tls-key` serve
+  `wss://`; `--peer-ca` accepts a partner's private authority without ever
+  relaxing certificate or hostname verification. Plaintext peering to a remote
+  host is refused: the handshake carries the public keys, so an in-path
+  attacker could substitute them and leave the signature checks looking intact.
+  Loopback stays exempt for local development, and
+  `--allow-insecure-peering` is the explicit way out.
+- **Egress filtering.** Peering governs who may talk to whom; it says nothing
+  about what may leave. A per-organization policy can `drop` a field at any
+  depth, `redact` a pattern, or `block` the payload outright. It is enforced in
+  two places because they see different things: the sending agent filters
+  before encryption — the only point where plaintext exists while E2E is on —
+  and the hub filters at relay time, catching an agent that carries no policy
+  but able to inspect only what is not end-to-end encrypted. Neither stops a
+  malicious insider who encrypts before sending; this addresses leaks by
+  negligence. Policies are opt-in, and the audit log records rule names, never
+  the values they removed.
+- `intermesh keygen` never prints the private key, which would land in shell
+  history; with `--out` the file is created `0600` directly, leaving no window
+  where it is world-readable.
 
 ### Fixed
 
@@ -69,6 +141,31 @@ and 0.2.x versions. They are not maintained.
   the adapters package was flattened — and raised `ModuleNotFoundError` on the
   first line. See the notes below for the blocking-call caveat that came with
   the rewrite.
+- **`pip install intermesh` now delivers a hub.** The server lived in
+  `server/`, outside the packaged tree, so the published wheel contained a SDK
+  and a CLI but no server — and `intermesh hub`, documented since 0.1.0, could
+  not exist. It moved to `intermesh/hub.py`; `python3 server/hub.py` still
+  works through a thin launcher.
+- **The federation test is collected.** It was written as a `main()` script,
+  so pytest ignored it: the only test covering the flagship feature never ran.
+- **A foreign program that overruns its timeout is killed with its children.**
+  Killing only the shell left descendants holding the pipes open, so the call
+  blocked until they finished on their own and the timeout protected nothing.
+- Agents may be addressed as `x` or `default/x`; the SDK used both while the
+  hub registered only the short form.
+- `intermesh ping` on an unknown agent reports it plainly instead of surfacing
+  a raw `TimeoutError` — a hub answering nothing *is* the answer.
+
+### Tests
+
+- 171 passing with 1 failure before, 231 passing with none after. No existing
+  test was modified to accommodate the new code.
+- New coverage for the properties that matter and could silently regress: a
+  peer cannot impersonate a third organization, certificate verification is
+  genuinely enforced (with the matching positive case, so a hub that refused
+  everything would not pass), egress filtering under active E2E encryption, a
+  Node agent driven by a Python orchestrator, and the README quick start run
+  end to end through the CLI.
 
 ---
 
@@ -204,5 +301,7 @@ First public release, on PyPI and npm as `intermesh`.
 - `nexus` developer CLI and Mission Control dashboard
 - Docker Compose stack
 
+[0.3.0]: https://github.com/intermeshteam/intermesh/releases/tag/v0.3.0
+[0.2.0]: https://github.com/intermeshteam/intermesh/releases/tag/v0.2.0
 [0.1.1]: https://github.com/intermeshteam/intermesh/releases/tag/v0.1.1
 [0.1.0]: https://github.com/intermeshteam/intermesh/releases/tag/v0.1.0
