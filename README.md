@@ -83,6 +83,101 @@ await agent.connect()
 intermesh task calc_bot "Compute" '{"expression": "42 * 2"}'
 ```
 
+**4. Or bring an agent written in any language**
+
+No SDK needed for the foreign side. Your program reads JSON on stdin and
+writes JSON on stdout — that is the whole contract:
+
+```bash
+intermesh serve --name pricing --exec "./pricing-engine" --capability pricing
+```
+
+That works for a Go or Rust binary, a Node or Ruby script, even a shell
+one-liner. Already have an HTTP service? Point at it instead — nothing to
+restart:
+
+```bash
+intermesh serve --name scoring --http http://localhost:9000/task
+```
+
+From Python, the same thing in one line:
+
+```python
+InterMeshAgent.from_command(["node", "agent.js"], name="pricing").run()
+```
+
+Non-JSON stdout is wrapped as `{"output": "..."}`, so an `echo` is a valid
+agent. A program that overruns `--timeout` is killed along with its children.
+
+**5. Peer two hubs across organizations**
+
+Each organization runs its own hub. `--peer ORG=ws://host:port` opens a
+federation link (repeatable, reconnects automatically):
+
+```bash
+intermesh hub --port 8766 --org globex
+```
+
+```bash
+intermesh hub --port 8765 --org acme --peer globex=ws://localhost:8766
+```
+
+An agent on the Acme hub can then address `globex/financial_engine` directly —
+messages, tasks and their results are relayed over the peering link. Without an
+active peering, cross-organization addressing stays refused by tenant isolation.
+
+Peering hubs exchange **public keys** during the handshake, never a shared
+secret. Each hub signs its tokens with an Ed25519 private key that never leaves
+the machine, so a peer can *verify* the origin of a relayed message but can
+never *forge* one on another organization's behalf. A peering request without a
+public key is refused outright.
+
+Because that handshake carries the keys, the link itself must be
+tamper-proof. Across hosts, serve TLS and peer over `wss://`:
+
+```bash
+intermesh hub --port 8766 --org globex \
+  --tls-cert hub.crt --tls-key hub.key
+```
+
+```bash
+intermesh hub --port 8765 --org acme \
+  --peer globex=wss://hub.globex.com:8766 --peer-ca globex-ca.crt
+```
+
+`--peer-ca` points at the partner's certificate authority when it isn't in the
+system trust store; certificate and hostname verification stay on either way.
+**Plaintext `ws://` peering to a remote host is refused** — it would let an
+in-path attacker swap the public keys during the handshake. Loopback is exempt
+(local development), and `--allow-insecure-peering` overrides the check if you
+control the network.
+
+**6. Control what leaves your organization**
+
+Peering says *who* may talk to whom; an egress policy says *what* may cross.
+Declare it in JSON:
+
+```json
+{
+  "name": "due_diligence",
+  "rules": [
+    {"name": "no_margin", "action": "drop", "field": "marge_reelle"},
+    {"name": "no_iban", "action": "redact", "pattern": "FR\\d{10,}", "replacement": "[IBAN]"},
+    {"name": "classified", "action": "block", "pattern": "SECRET-DEFENSE"}
+  ]
+}
+```
+
+Pass it to the hub with `--egress-policy egress.json`, and to an agent with
+`InterMeshAgent(..., egress_policy=EgressPolicy.load("egress.json"))`.
+
+Both enforcement points matter, and they see different things. The **agent**
+filters before encryption — the only place plaintext exists when E2E is on. The
+**hub** filters at relay time, so an agent that forgot its policy still cannot
+leak; but it can only inspect what is not end-to-end encrypted. Internal
+exchanges within an organization are never filtered. Rules are opt-in: with no
+policy declared, nothing is touched.
+
 ---
 
 ## Features
@@ -91,13 +186,15 @@ intermesh task calc_bot "Compute" '{"expression": "42 * 2"}'
 |---|---|
 | 🔐 **End-to-end encryption** | RSA-2048-OAEP + AES-256-GCM. The hub routes ciphertext it cannot read. |
 | 🆔 **Verifiable identity** | SHA-256 fingerprints over roles, permissions, and capabilities — tampering is rejected at registration. |
-| 🎫 **JWT authentication** | Every message after registration carries a hub-signed token. |
+| 🎫 **JWT authentication** | Every message after registration carries a token signed with the hub's Ed25519 key (EdDSA). Peers verify with the published public key — no shared signing secret across organizations. |
 | 🛡️ **RBAC** | Per-agent access policies enforced at the hub. |
 | 🔍 **Discovery** | Find agents by capability, role, metadata, or name. |
 | 📋 **Tasks & workflows** | Async distributed task lifecycle: `pending → running → completed/failed`. |
 | 🔌 **Framework adapters** | Python: `from_langchain`, `from_callable`, `@intermesh_service` — the CrewAI, AutoGen and LlamaIndex examples bridge through `from_callable`. JS: `adapt()`, `InterMeshLangChainAdapter`, `InterMeshLlamaIndexAdapter`. |
+| 🌍 **Any language** | `intermesh serve --exec` turns any executable into an agent (JSON on stdin/stdout); `--http` adapts a service already online. No SDK required on the foreign side. |
 | 🧵 **Orchestration helpers** | `InterMeshPipeline` chains steps across agents found by capability; `fan_out`/`fanOut` runs branches in parallel and aggregates results. |
-| 🌐 **Federation** | Hub-to-hub peering across organizations, E2E preserved end to end. |
+| 🌐 **Federation** | Hub-to-hub peering across organizations, E2E preserved end to end. Peers authenticate by published Ed25519 key over TLS. |
+| 🚪 **Egress filtering** | Per-organization policy on what may cross the boundary: `drop` a field, `redact` a pattern, `block` the payload. Enforced by the sending agent (before encryption) and by the hub at relay time. |
 | 📜 **Immutable audit log** | Merkle-chained events; any retroactive edit breaks the chain. |
 | 🚦 **Rate limiting** | Token-bucket throttling per agent. |
 | 🛠️ **Developer CLI** | `intermesh hub`, `discover`, `ping`, `ask`, `task`, `keygen`, `dashboard`, `docs`. |

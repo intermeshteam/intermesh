@@ -3,6 +3,8 @@ import os
 import sys
 import subprocess
 
+import pytest
+
 from intermesh import InterMeshAgent
 
 
@@ -16,7 +18,8 @@ async def compute_globex_handler(input_data, task):
     }
 
 
-async def main():
+@pytest.mark.asyncio
+async def test_federation_acme_to_globex():
     print("\n========================================================")
     print("   TEST AUTOMATISÉ DE FÉDÉRATION ACME ➜ GLOBEX          ")
     print("========================================================\n")
@@ -90,4 +93,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(test_federation_acme_to_globex())

@@ -26,7 +26,8 @@ async def test_quota_15_agents_enforcement():
     os.system("fuser -k 8765/tcp || true")
     await asyncio.sleep(0.5)
 
-    hub_proc = subprocess.Popen([sys.executable, "server/hub_telemetry.py"])
+    hub_proc = subprocess.Popen([sys.executable, "server/hub.py",
+                                  "--ephemeral-state", "--ephemeral-secret"])
     await asyncio.sleep(1.0)
 
     connected_agents = []

@@ -5,6 +5,11 @@ from intermesh.task import InterMeshTask, TaskStatus
 from intermesh.audit import ImmutableAuditLog, AuditEntry
 from intermesh.ratelimit import RateLimiter, TokenBucket
 from intermesh.adapters import from_callable, from_langchain, intermesh_service
+from intermesh.bridge import (
+    BridgeError, exec_handler, from_command, from_http, http_handler,
+    post_task, run_command,
+)
+from intermesh.egress import EgressBlocked, EgressPolicy, EgressRule, apply_egress
 from intermesh.guardrails import AsimovGuardrailEngine, GuardrailPolicy, PolicyViolationError, CircuitBreaker
 
 # Imports optionnels pour la rétro-compatibilité complète

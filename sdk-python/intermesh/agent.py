@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 import sys
+from ssl import SSLContext
 from typing import Callable, Optional, List, Any, Union
 
 import websockets
@@ -10,6 +11,7 @@ from intermesh.message import MessageType, InterMeshMessage
 from intermesh.identity import AgentIdentity
 from intermesh.task import InterMeshTask, TaskStatus
 from intermesh.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
+from intermesh.egress import EgressPolicy, apply_egress
 from intermesh.schema import SchemaRegistry, default_registry
 
 
@@ -30,6 +32,8 @@ class InterMeshAgent:
         reconnect_max_backoff: float = 15.0,
         schema: Optional[str] = None,
         schema_registry: Optional[SchemaRegistry] = None,
+        ssl: Optional[SSLContext] = None,
+        egress_policy: Optional[EgressPolicy] = None,
     ):
         self.org_id = org_id
         self.name = name
@@ -39,6 +43,13 @@ class InterMeshAgent:
         self.ws = None
         self.token: Optional[str] = None
         self.encrypt = encrypt
+        # Contexte TLS pour joindre un Hub en wss://. Utile lorsque le Hub
+        # présente un certificat d'une autorité privée, absente du magasin
+        # système : voir intermesh.peering.build_peer_ssl_context.
+        self._ssl = ssl
+        # Politique de sortie appliquée avant chiffrement : c'est le seul
+        # point du chemin nominal où le contenu est encore en clair.
+        self.egress_policy = egress_policy
         self.auto_reconnect = auto_reconnect
         self._reconnect_backoff = reconnect_backoff
         self._reconnect_max_backoff = reconnect_max_backoff
@@ -80,6 +91,18 @@ class InterMeshAgent:
         from intermesh.adapters import from_langchain as _from_langchain
         return _from_langchain(chain_or_runnable=chain_or_runnable, name=name, capabilities=capabilities, **kwargs)
 
+    @classmethod
+    def from_command(cls, command, name: str, capabilities: Optional[List[str]] = None, **kwargs):
+        """1-LINE INTEGRATION: n'importe quel exécutable, dans n'importe quel langage."""
+        from intermesh.bridge import from_command as _from_command
+        return _from_command(command=command, name=name, capabilities=capabilities, **kwargs)
+
+    @classmethod
+    def from_http(cls, url: str, name: str, capabilities: Optional[List[str]] = None, **kwargs):
+        """1-LINE INTEGRATION: n'importe quel service HTTP déjà en ligne."""
+        from intermesh.bridge import from_http as _from_http
+        return _from_http(url=url, name=name, capabilities=capabilities, **kwargs)
+
     def on_message(self, handler: Callable): self._message_handler = handler
     def on_request(self, handler: Callable): self._request_handler = handler
     def on_task(self, handler: Callable): self._task_handler = handler
@@ -94,7 +117,7 @@ class InterMeshAgent:
 
     async def _register_on(self, url: str) -> None:
         """Connexion + REGISTER sur une URL donnée. Lève sur refus ou échec réseau."""
-        ws = await websockets.connect(url)
+        ws = await websockets.connect(url, ssl=self._ssl)
         reg_payload = self.identity.to_dict()
         if self.api_key:
             reg_payload["api_key"] = self.api_key
@@ -142,6 +165,30 @@ class InterMeshAgent:
             )
 
         asyncio.create_task(self._listen_loop())
+
+    async def serve_forever(self):
+        """Se connecte et reste en service jusqu'à interruption.
+
+        Sans ça, une intégration « en une ligne » n'en est pas une : il
+        fallait encore écrire la boucle asyncio qui maintient l'agent en vie.
+        """
+        await self.connect()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await self.close()
+
+    def run(self):
+        """Version bloquante de `serve_forever`, pour un script sans asyncio.
+
+            InterMeshAgent.from_callable(ma_fonction, name="bot").run()
+        """
+        try:
+            asyncio.run(self.serve_forever())
+        except KeyboardInterrupt:
+            print(f"\n[{self.qualified_name}] arrêt demandé.")
 
     async def close(self):
         """Déconnexion volontaire : n'entraîne jamais de reconnexion automatique."""
@@ -215,6 +262,25 @@ class InterMeshAgent:
         self._target_schema_cache[agent_name] = target_schema
         return target_schema
 
+    def _apply_egress(self, target: str, payload):
+        """Filtre un contenu sortant s'il quitte l'organisation.
+
+        Les échanges internes ne sont pas filtrés : la politique décrit ce
+        qui ne doit pas franchir la frontière, pas ce que les départements
+        d'une même entreprise ont le droit de se dire.
+        """
+        if self.egress_policy is None or self.egress_policy.is_empty:
+            return payload
+        target_org = target.split("/")[0] if target and "/" in target else "default"
+        if target_org == self.org_id:
+            return payload
+
+        filtered, triggered = apply_egress(payload, target_org, self.egress_policy)
+        if triggered:
+            print(f"🛡️  [{self.qualified_name}] Egress vers '{target_org}' : "
+                  f"{', '.join(triggered)}")
+        return filtered
+
     async def _translate_for(self, target: str, payload):
         """
         Traduit `payload` vers le schéma déclaré par `target`, si on connaît
@@ -283,6 +349,7 @@ class InterMeshAgent:
                     msg.content = content
                     if self._request_handler:
                         reply = await self._request_handler(msg) if inspect.iscoroutinefunction(self._request_handler) else self._request_handler(msg)
+                        reply = self._apply_egress(msg.sender, reply)
                         if self.encrypt:
                             pk = await self._fetch_public_key(msg.sender)
                             if pk: reply = self._encrypt_content(pk, reply)
@@ -337,6 +404,7 @@ class InterMeshAgent:
             else:
                 raise NotImplementedError("Aucun handler.")
             encrypted_output = await self._translate_for(task.orchestrator, output)
+            encrypted_output = self._apply_egress(task.orchestrator, encrypted_output)
             if self.encrypt:
                 pk = await self._fetch_public_key(task.orchestrator)
                 if pk: encrypted_output = self._encrypt_content(pk, encrypted_output)
@@ -349,6 +417,7 @@ class InterMeshAgent:
 
     async def send(self, to: str, content):
         ec = await self._translate_for(to, content)
+        ec = self._apply_egress(to, ec)
         if self.encrypt:
             pk = await self._fetch_public_key(to)
             if pk: ec = self._encrypt_content(pk, ec)
@@ -356,6 +425,7 @@ class InterMeshAgent:
 
     async def ask(self, to: str, content, timeout: float = 10.0):
         ec = await self._translate_for(to, content)
+        ec = self._apply_egress(to, ec)
         if self.encrypt:
             pk = await self._fetch_public_key(to)
             if pk: ec = self._encrypt_content(pk, ec)
@@ -374,6 +444,7 @@ class InterMeshAgent:
                           estimated_cost: float = 0.0, parent_task_id: Optional[str] = None,
                           escrow: Optional[dict] = None):
         ei = await self._translate_for(assignee, input_data)
+        ei = self._apply_egress(assignee, ei)
         if self.encrypt:
             pk = await self._fetch_public_key(assignee)
             if pk: ei = self._encrypt_content(pk, ei)

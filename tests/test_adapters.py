@@ -46,7 +46,8 @@ async def test_1line_integration_live_execution():
     os.system("fuser -k 8765/tcp || true")
     await asyncio.sleep(0.5)
 
-    hub_proc = subprocess.Popen([sys.executable, "server/hub_telemetry.py"])
+    hub_proc = subprocess.Popen([sys.executable, "server/hub.py",
+                                  "--ephemeral-state", "--ephemeral-secret"])
     await asyncio.sleep(1.0)
 
     try:

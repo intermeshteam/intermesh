@@ -100,10 +100,12 @@ async def test_full_b2b_6_agents_negotiation():
     os.system("fuser -k 8765/tcp 8766/tcp || true")
     await asyncio.sleep(0.5)
 
-    hub_globex = subprocess.Popen([sys.executable, "server/hub_telemetry.py", "--port", "8766", "--org", "globex"])
+    hub_globex = subprocess.Popen([sys.executable, "server/hub.py", "--port", "8766", "--org", "globex",
+                                    "--ephemeral-state", "--ephemeral-secret"])
     await asyncio.sleep(1.0)
 
-    hub_acme = subprocess.Popen([sys.executable, "server/hub_telemetry.py", "--port", "8765", "--org", "acme", "--peer", "globex=ws://localhost:8766"])
+    hub_acme = subprocess.Popen([sys.executable, "server/hub.py", "--port", "8765", "--org", "acme", "--peer", "globex=ws://localhost:8766",
+                                  "--ephemeral-state", "--ephemeral-secret"])
     await asyncio.sleep(1.5)
 
     try:

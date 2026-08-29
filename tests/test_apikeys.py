@@ -138,12 +138,18 @@ def test_no_hardcoded_key_remains_in_the_hub_source():
     """Régression : les clés étaient publiées avec le dépôt."""
     from pathlib import Path
 
-    source = Path(__file__).resolve().parent.parent / "server" / "hub.py"
-    text = source.read_text(encoding="utf-8")
+    # Le Hub vit dans le paquet ; `server/hub.py` n'en est plus que le
+    # lanceur historique. Les deux sont vérifiés : c'est le fichier publié
+    # sur PyPI qui compte le plus.
+    root = Path(__file__).resolve().parent.parent
+    sources = [root / "sdk-python" / "intermesh" / "hub.py", root / "server" / "hub.py"]
 
-    assert "nx_live_" not in text, "une clé d'API est de nouveau en dur dans le Hub"
-    assert "ENTERPRISE_API_KEYS" not in text
-    print("✓ Aucune clé en dur dans server/hub.py")
+    for source in sources:
+        assert source.is_file(), f"{source} est introuvable"
+        text = source.read_text(encoding="utf-8")
+        assert "nx_live_" not in text, f"une clé d'API est de nouveau en dur dans {source.name}"
+        assert "ENTERPRISE_API_KEYS" not in text
+    print("✓ Aucune clé en dur dans le Hub")
 
 
 if __name__ == "__main__":

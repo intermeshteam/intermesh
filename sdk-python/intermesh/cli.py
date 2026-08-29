@@ -114,6 +114,100 @@ async def run_discover(args):
     await agent.ws.close()
 
 
+def _parse_json_arg(raw: str, label: str):
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(f"\033[31m✗ {label} n'est pas du JSON valide : {exc}\033[0m")
+        sys.exit(2)
+
+
+async def run_ping(args):
+    """Vérifie qu'un agent est joignable et mesure le temps d'aller-retour."""
+    agent = InterMeshAgent(name="cli_ping", roles=["admin"], hub_url=args.hub, encrypt=False)
+    await agent.connect()
+    try:
+        started = time.monotonic()
+        # Un agent inconnu, ou d'une autre organisation, n'obtient aucune
+        # réponse du Hub : l'absence de réponse *est* le résultat.
+        try:
+            identity = await agent.who_is(args.agent, timeout=args.timeout)
+        except (TimeoutError, asyncio.TimeoutError):
+            identity = None
+        elapsed = (time.monotonic() - started) * 1000
+        if not identity:
+            print(f"\033[31m✗ '{args.agent}' est introuvable ou hors ligne.\033[0m")
+            await agent.close()
+            sys.exit(1)
+        caps = ", ".join(identity.get("capabilities", [])) or "aucune"
+        print(f"\n\033[32m✓ {args.agent} répond en {elapsed:.0f} ms\033[0m")
+        print(f"  rôles     : {', '.join(identity.get('roles', [])) or 'standard'}")
+        print(f"  capacités : {caps}")
+        print(f"  E2E       : {'🔒 oui' if identity.get('public_key') else '🔓 non'}\n")
+    finally:
+        await agent.close()
+
+
+async def run_ask(args):
+    """Pose une question à un agent et affiche sa réponse."""
+    content = _parse_json_arg(args.content, "Le contenu")
+    agent = InterMeshAgent(name="cli_asker", roles=["admin"], hub_url=args.hub)
+    await agent.connect()
+    try:
+        print(f"\033[33m💬 Question à '{args.agent}'...\033[0m")
+        reply = await agent.ask(to=args.agent, content=content, timeout=args.timeout)
+        print(f"\n\033[32m✓ Réponse :\033[0m\n{json.dumps(reply, indent=2, ensure_ascii=False)}\n")
+    finally:
+        await agent.close()
+
+
+async def run_task(args):
+    """Délègue une tâche à un agent et attend son résultat."""
+    input_data = _parse_json_arg(args.input, "Les données d'entrée")
+    agent = InterMeshAgent(name="cli_orchestrator", roles=["admin"], hub_url=args.hub)
+    await agent.connect()
+    try:
+        print(f"\033[33m📝 Tâche '{args.title}' ➜ {args.assignee}...\033[0m")
+        result = await agent.submit_task(title=args.title, assignee=args.assignee,
+                                         input_data=input_data, timeout=args.timeout)
+        print(f"\n\033[32m✓ Résultat :\033[0m\n{json.dumps(result, indent=2, ensure_ascii=False)}\n")
+    finally:
+        await agent.close()
+
+
+def run_keygen(args):
+    """Génère une paire de clés RSA pour un agent."""
+    private_key = generate_keypair()
+    public_pem = get_public_key_pem(private_key)
+
+    if not args.out:
+        print(f"\n\033[32m✓ Clé publique (RSA-2048) :\033[0m\n{public_pem}")
+        print("\033[33mℹ️  Sans --out, la clé privée n'est pas affichée ni conservée : "
+              "elle ne doit pas transiter par un terminal ou un historique.\033[0m\n")
+        return
+
+    from cryptography.hazmat.primitives import serialization
+
+    private_path = args.out
+    public_path = f"{args.out}.pub"
+    private_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    # 0600 dès la création : pas de fenêtre où la clé privée serait lisible.
+    fd = os.open(private_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, private_bytes)
+    finally:
+        os.close(fd)
+    with open(public_path, "w", encoding="utf-8") as handle:
+        handle.write(public_pem)
+
+    print(f"\n\033[32m✓ Clé privée : {private_path} (0600)\033[0m")
+    print(f"\033[32m✓ Clé publique : {public_path}\033[0m\n")
+
+
 async def _admin_call(args, command: str, **params) -> dict:
     """
     Ouvre une session d'administration éphémère et exécute une commande.
@@ -220,10 +314,51 @@ def run_dashboard(args):
         except KeyboardInterrupt: pass
 
 
+def run_serve(args):
+    """Expose un programme externe comme agent, sans écrire une ligne de code."""
+    from intermesh.bridge import from_command, from_http
+
+    common = dict(
+        name=args.name,
+        capabilities=args.capability or ["compute"],
+        org_id=args.org,
+        hub_url=args.hub,
+        encrypt=not args.no_encrypt,
+        timeout=args.timeout,
+    )
+    if args.exec_command:
+        agent = from_command(args.exec_command, **common)
+        source = f"exec « {args.exec_command} »"
+    else:
+        agent = from_http(args.http_url, **common)
+        source = f"http {args.http_url}"
+
+    print(f"\033[32m✓ Agent '{args.name}' ({source}) → {args.hub}\033[0m")
+    print(f"  capacités : {', '.join(common['capabilities'])}")
+    print("  Ctrl+C pour arrêter.\n")
+    agent.run()
+
+
 def main():
     print_banner()
+
+    # `hub` est interceptée avant argparse : le Hub a sa propre douzaine
+    # d'options (TLS, pairage, egress…) et les redéclarer ici garantirait
+    # qu'elles divergent tôt ou tard.
+    if len(sys.argv) > 1 and sys.argv[1] == "hub":
+        from intermesh.hub import main as hub_main
+        try:
+            asyncio.run(hub_main(sys.argv[2:]))
+        except KeyboardInterrupt:
+            print("\nHub arrêté.")
+        return
+
     parser = argparse.ArgumentParser(description="InterMesh Protocol Developer CLI")
     subparsers = parser.add_subparsers(dest="command", help="Commandes disponibles")
+
+    # Command: hub (traitée plus haut ; déclarée pour l'aide)
+    subparsers.add_parser("hub", add_help=False,
+                          help="Démarrer un Hub (voir `intermesh hub --help`)")
 
     # Command: security-check
     subparsers.add_parser("security-check", help="Auditer la sécurité de votre installation locale")
@@ -250,6 +385,50 @@ def main():
     dash_parser = subparsers.add_parser("dashboard", help="Lancer Dashboard")
     dash_parser.add_argument("--port", type=int, default=8080, help="Port Web")
 
+    # Command: serve — intégration en une ligne, quel que soit le langage
+    serve_parser = subparsers.add_parser(
+        "serve", help="Exposer un programme existant comme agent InterMesh")
+    serve_parser.add_argument("--name", "-n", type=str, required=True, help="Nom de l'agent")
+    source = serve_parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--exec", dest="exec_command", type=str,
+                        help="Commande à lancer par tâche (JSON sur stdin, JSON sur stdout)")
+    source.add_argument("--http", dest="http_url", type=str,
+                        help="URL recevant la tâche en POST JSON")
+    serve_parser.add_argument("--capability", "-c", action="append", default=[],
+                              help="Capacité annoncée (répétable)")
+    serve_parser.add_argument("--org", type=str, default="default", help="Organisation")
+    serve_parser.add_argument("--hub", type=str, default="ws://localhost:8765", help="URL du Hub")
+    serve_parser.add_argument("--timeout", type=float, default=30.0,
+                              help="Délai maximal accordé au programme externe")
+    serve_parser.add_argument("--no-encrypt", action="store_true",
+                              help="Désactive le chiffrement E2E (débogage)")
+
+    # Command: ping
+    ping_parser = subparsers.add_parser("ping", help="Vérifier qu'un agent répond")
+    ping_parser.add_argument("agent", type=str, help="Nom de l'agent")
+    ping_parser.add_argument("--hub", type=str, default="ws://localhost:8765")
+    ping_parser.add_argument("--timeout", type=float, default=5.0)
+
+    # Command: ask
+    ask_parser = subparsers.add_parser("ask", help="Poser une question à un agent")
+    ask_parser.add_argument("agent", type=str, help="Nom de l'agent")
+    ask_parser.add_argument("content", type=str, help="Contenu JSON de la question")
+    ask_parser.add_argument("--hub", type=str, default="ws://localhost:8765")
+    ask_parser.add_argument("--timeout", type=float, default=10.0)
+
+    # Command: task
+    task_parser = subparsers.add_parser("task", help="Déléguer une tâche à un agent")
+    task_parser.add_argument("assignee", type=str, help="Agent exécutant")
+    task_parser.add_argument("title", type=str, help="Intitulé de la tâche")
+    task_parser.add_argument("input", type=str, help="Données d'entrée en JSON")
+    task_parser.add_argument("--hub", type=str, default="ws://localhost:8765")
+    task_parser.add_argument("--timeout", type=float, default=15.0)
+
+    # Command: keygen
+    key_parser = subparsers.add_parser("keygen", help="Générer une paire de clés RSA")
+    key_parser.add_argument("--out", "-o", type=str, default=None,
+                            help="Chemin du fichier de clé privée (la publique reçoit .pub)")
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -263,6 +442,11 @@ def main():
     elif args.command == "discover": asyncio.run(run_discover(args))
     elif args.command == "snapshot": asyncio.run(run_snapshot(args))
     elif args.command == "dashboard": run_dashboard(args)
+    elif args.command == "serve": run_serve(args)
+    elif args.command == "ping": asyncio.run(run_ping(args))
+    elif args.command == "ask": asyncio.run(run_ask(args))
+    elif args.command == "task": asyncio.run(run_task(args))
+    elif args.command == "keygen": run_keygen(args)
 
 
 if __name__ == "__main__":

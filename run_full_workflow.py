@@ -15,8 +15,8 @@ async def run_all():
     await asyncio.sleep(1.0)
 
     # 2. Démarrer le nouveau Hub de télémétrie en arrière-plan
-    print("2. Démarrage du Hub mis à jour (server/hub_telemetry.py)...")
-    hub = subprocess.Popen([sys.executable, "server/hub_telemetry.py"])
+    print("2. Démarrage du Hub (server/hub.py)...")
+    hub = subprocess.Popen([sys.executable, "server/hub.py"])
     await asyncio.sleep(1.5)
 
     # 3. Démarrer l'Agent Traducteur (agent_c)
