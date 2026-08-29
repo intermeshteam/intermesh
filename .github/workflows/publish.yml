@@ -1,0 +1,166 @@
+name: Publish to PyPI
+
+# Publication déclenchée par un tag de version (v0.3.0, v0.4.0…).
+#
+# L'authentification passe par le Trusted Publishing de PyPI (OIDC) : aucun
+# jeton n'est stocké, ni dans le dépôt, ni sur une machine de développement.
+# L'envoi part des runners GitHub, ce qui évite aussi les limites de débit
+# que PyPI applique par adresse IP.
+#
+# Prérequis, à déclarer une seule fois sur pypi.org (Publishing → Add a new
+# pending publisher) :
+#   Project name    : intermesh
+#   Owner           : intermeshteam
+#   Repository name : intermesh
+#   Workflow name   : publish.yml
+#   Environment     : pypi
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Index visé"
+        required: true
+        default: testpypi
+        type: choice
+        options: [testpypi, pypi]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Tests et cohérence de version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Installer les dépendances
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq psmisc
+          python -m pip install --upgrade pip
+          pip install -e ./sdk-python
+          pip install pytest pytest-asyncio
+
+      - name: Vérifier que le tag correspond à la version du paquet
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(python -c "import tomllib;print(tomllib.load(open('sdk-python/pyproject.toml','rb'))['project']['version'])")
+          echo "tag=$tag  pyproject=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Le tag v$tag ne correspond pas à la version $version du pyproject."
+            exit 1
+          fi
+
+      - name: Suite de tests
+        run: pytest -q
+
+  build:
+    name: Construction et contrôle des artefacts
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Construire le sdist et le wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          cd sdk-python
+          rm -rf dist build *.egg-info
+          python -m build
+
+      - name: Contrôler les métadonnées
+        run: twine check sdk-python/dist/*
+
+      - name: Vérifier que les modules critiques sont bien empaquetés
+        # Régression réelle : le Hub vivait hors du paquet, donc le wheel
+        # publié ne contenait pas de serveur. Un paquet qui s'installe n'est
+        # pas nécessairement un paquet complet.
+        run: |
+          python - <<'PY'
+          import glob, sys, tarfile, zipfile
+
+          required = ["hub.py", "cli.py", "agent.py", "bridge.py",
+                      "egress.py", "peering.py", "signing.py"]
+
+          wheel = glob.glob("sdk-python/dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          missing = [m for m in required if f"intermesh/{m}" not in names]
+
+          sdist = glob.glob("sdk-python/dist/*.tar.gz")[0]
+          entries = tarfile.open(sdist).getnames()
+          missing += [f"{m} (sdist)" for m in required
+                      if not any(e.endswith(f"intermesh/{m}") for e in entries)]
+
+          if missing:
+              print("::error::Modules absents des artefacts : " + ", ".join(missing))
+              sys.exit(1)
+          print(f"OK — {len(required)} modules critiques présents dans le wheel et le sdist.")
+          PY
+
+      - name: Vérifier l'installation depuis le wheel, hors de l'arbre source
+        # Installer puis importer depuis /tmp : si le paquet dépend
+        # implicitement du dépôt, ça se voit ici et pas chez l'utilisateur.
+        run: |
+          python -m venv /tmp/cleanenv
+          /tmp/cleanenv/bin/pip install --quiet sdk-python/dist/*.whl
+          cd /tmp
+          /tmp/cleanenv/bin/python -c "import intermesh, intermesh.hub; print('import OK', intermesh.__version__)"
+          /tmp/cleanenv/bin/intermesh hub --help > /dev/null
+          echo "CLI OK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: sdk-python/dist/
+
+  publish-testpypi:
+    name: Publication sur TestPyPI
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    name: Publication sur PyPI
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
