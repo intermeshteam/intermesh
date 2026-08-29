@@ -2,530 +2,684 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowRight, 
-  Copy, 
-  Check, 
-  Terminal, 
-  Zap, 
-  ShieldCheck, 
-  Globe, 
-  BookOpen, 
+import {
+  ArrowRight,
+  Copy,
+  Check,
+  Terminal,
+  ShieldCheck,
+  Globe,
   Lock,
   Layers,
   Network,
-  Cpu,
-  GitBranch,
   ShieldAlert,
-  CheckCircle2,
   Building2,
   ArrowLeftRight,
-  Printer,
-  FileText,
-  Clock,
+  FileSearch,
+  Headphones,
   Search,
   KeyRound,
   Send,
   ScrollText,
-  AlertTriangle
+  Fingerprint,
+  Filter,
 } from 'lucide-react';
 import NetworkBackground from '@/components/NetworkBackground';
-import AnimatedCodeEditor from '@/components/AnimatedCodeEditor';
+import CodeShowcase from '@/components/CodeShowcase';
 import InterMeshLogo from '@/components/InterMeshLogo';
+import AngledBand from '@/components/AngledBand';
+import ThemeToggle from '@/components/ThemeToggle';
+
+/* ------------------------------------------------------------------ */
+/* Primitives                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Shared surface tokens.
+ *
+ * Kept in one place rather than repeated inline: a light theme goes wrong the
+ * moment one card keeps a hardcoded dark border, and that is impossible to
+ * spot by eye across a page this long.
+ */
+const HAIRLINE = 'border-slate-200 dark:border-white/[0.07]';
+const ALT_SURFACE = 'bg-slate-50 dark:bg-white/[0.015]';
+const HEADING = 'text-slate-900 dark:text-white';
+const BODY = 'text-slate-600 dark:text-slate-400';
+const MUTED = 'text-slate-500 dark:text-slate-500';
+
+/** Small uppercase label above a heading, in the brand gradient. */
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="bg-gradient-to-r from-cyan-600 to-violet-600 bg-clip-text text-xs font-semibold uppercase tracking-[0.18em] text-transparent dark:from-cyan-300 dark:to-violet-300">
+      {children}
+    </span>
+  );
+}
+
+function SectionHead({
+  eyebrow,
+  title,
+  lead,
+}: {
+  eyebrow: string;
+  title: string;
+  lead?: string;
+}) {
+  return (
+    <div className="max-w-2xl space-y-4">
+      <Eyebrow>{eyebrow}</Eyebrow>
+      <h2 className={`text-[2rem] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[2.6rem] ${HEADING}`}>
+        {title}
+      </h2>
+      {lead && <p className={`text-base leading-relaxed ${BODY}`}>{lead}</p>}
+    </div>
+  );
+}
+
+/** Flat card that lifts on hover. Shadow in light, border glow in dark. */
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={`rounded-xl border bg-white p-6 transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-900/[0.06] dark:bg-white/[0.02] dark:hover:border-white/[0.14] dark:hover:bg-white/[0.04] dark:hover:shadow-none ${HAIRLINE} ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function IconChip({ icon: Icon, tone = 'cyan' }: { icon: React.ElementType; tone?: 'cyan' | 'violet' }) {
+  const tones = {
+    cyan: 'from-cyan-500/15 to-cyan-500/5 text-cyan-600 ring-cyan-500/20 dark:text-cyan-300 dark:ring-cyan-400/20',
+    violet: 'from-violet-500/15 to-violet-500/5 text-violet-600 ring-violet-500/20 dark:text-violet-300 dark:ring-violet-400/20',
+  };
+  return (
+    <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ring-1 ${tones[tone]}`}>
+      <Icon className="h-[18px] w-[18px] stroke-[1.6]" />
+    </div>
+  );
+}
+
+function PrimaryButton({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_8px_30px_-10px_rgba(0,212,255,0.6)] transition hover:brightness-110 dark:from-cyan-400 dark:to-violet-400 dark:text-[#08080A]"
+    >
+      {children}
+      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
+function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="group inline-flex items-center gap-1.5 text-sm font-semibold text-cyan-600 transition hover:text-cyan-500 dark:text-cyan-300 dark:hover:text-cyan-200"
+    >
+      {children}
+      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Content                                                             */
+/* ------------------------------------------------------------------ */
+
+const PROOF = [
+  { value: '231', label: 'tests, zero failures' },
+  { value: 'Ed25519', label: 'federated identity' },
+  { value: 'RSA + AES', label: 'end-to-end encryption' },
+  { value: 'Apache-2.0', label: 'fully open source' },
+];
+
+const LANGUAGES = [
+  {
+    id: 'go',
+    label: 'Go',
+    command: 'intermesh serve --name pricing --exec ./pricing-engine',
+    code: `// pricing-engine — no InterMesh SDK
+func main() {
+    var in map[string]any
+    json.NewDecoder(os.Stdin).Decode(&in)
+
+    out := map[string]any{
+        "total": in["quantity"].(float64) * in["unit_price"].(float64),
+    }
+    json.NewEncoder(os.Stdout).Encode(out)
+}`,
+  },
+  {
+    id: 'node',
+    label: 'Node.js',
+    command: 'intermesh serve --name pricing --exec "node agent.js"',
+    code: `// agent.js — no InterMesh SDK
+let data = '';
+process.stdin.on('data', c => data += c);
+process.stdin.on('end', () => {
+  const input = JSON.parse(data);
+  process.stdout.write(JSON.stringify({
+    total: input.quantity * input.unit_price,
+  }));
+});`,
+  },
+  {
+    id: 'shell',
+    label: 'Shell',
+    command: 'intermesh serve --name echo --exec ./agent.sh',
+    code: `#!/bin/bash
+# Non-JSON stdout is wrapped as {"output": "..."}
+# An echo is enough to make an agent.
+read -r payload
+echo "{\\"received\\": $payload}"`,
+  },
+  {
+    id: 'http',
+    label: 'HTTP service',
+    command: 'intermesh serve --name scoring --http http://localhost:9000/task',
+    code: `# Nothing to rewrite, nothing to restart.
+# The task arrives as a JSON POST on your endpoint,
+# the JSON reply goes back into the mesh.
+
+POST /task  { "quantity": 1000, "unit_price": 115 }
+200 OK      { "total": 115000 }`,
+  },
+];
+
+const STEPS = [
+  { icon: KeyRound, n: '01', title: 'Signed identity', body: 'An agent declares its capabilities. The hub returns a token carrying a SHA-256 fingerprint of its roles and permissions — tampering with either breaks the other.' },
+  { icon: Search, n: '02', title: 'Discovery by capability', body: 'Agents are found by what they do, not by a hardcoded address that breaks the moment something moves.' },
+  { icon: Send, n: '03', title: 'Sealed delegation', body: "The payload is encrypted with a single-use AES-256-GCM key, sealed with the recipient's RSA-2048 public key. The hub routes ciphertext." },
+  { icon: ScrollText, n: '04', title: 'Everything chains in', body: 'Registration, delegation and completion append to a Merkle-chained log. Edit one entry in the database and the chain breaks, loudly.' },
+];
+
+const FEATURES = [
+  { icon: Lock, tone: 'cyan' as const, title: 'End-to-end encryption', body: 'RSA-2048-OAEP and AES-256-GCM, client side. The hub routes without ever reading a plaintext payload.' },
+  { icon: Globe, tone: 'violet' as const, title: 'Cross-language mesh', body: 'Native Python and Node.js SDKs, plus a universal bridge for everything else. A Python agent delegates to a Go binary transparently.' },
+  { icon: ShieldCheck, tone: 'cyan' as const, title: 'Immutable Merkle audit', body: 'A SHA-256 chained event log, replayed and verified at startup: an entry edited directly in the database is detected.' },
+  { icon: Network, tone: 'violet' as const, title: 'Hub-to-hub federation', body: 'Cross-organization peering with automatic reconnection, Ed25519 identity and verified TLS transport.' },
+  { icon: ShieldAlert, tone: 'cyan' as const, title: 'Runaway guardrails', body: 'Capped delegation depth, per-agent rate limiting, and a circuit breaker that isolates an agent after repeated violations.' },
+  { icon: Layers, tone: 'violet' as const, title: 'Orchestration', body: 'Pipelines chaining steps by capability, parallel fan-out, payment escrow, and encrypted state snapshots.' },
+];
+
+const LIMITS = [
+  { title: 'Peering is manual', body: 'Each organization declares its peers by hand. There is no directory: ten partners means forty-five links to maintain.' },
+  { title: 'No shared memory', body: 'Every task is an isolated request/response. Context travels only through the payloads you pass explicitly.' },
+  { title: 'Egress filtering has a limit', body: 'It addresses leaks by negligence, not deliberate exfiltration. An insider agent that encrypts before sending gets through.' },
+  { title: 'Resumed tasks can run twice', body: 'A task interrupted by a restart is reassigned on reconnect. Your executors must be idempotent.' },
+];
+
+/* ------------------------------------------------------------------ */
 
 export default function LandingPage() {
-  const installCommand = "pip install intermesh";
+  const installCommand = 'pip install intermesh';
+  const [copied, setCopied] = useState(false);
+  const [lang, setLang] = useState(LANGUAGES[0].id);
+
+  const active = LANGUAGES.find((l) => l.id === lang) ?? LANGUAGES[0];
 
   const handleCopyCmd = () => {
     navigator.clipboard.writeText(installCommand);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
   };
 
   return (
-    <div className="relative min-h-screen bg-[#08080A] text-slate-50 font-sans selection:bg-zinc-800 selection:text-white notranslate" translate="no" suppressHydrationWarning>
-      
-      {/* Background Effect */}
-      <NetworkBackground />
-
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          zIndex: 1,
-          background:
-            'radial-gradient(ellipse 80% 70% at 50% 45%, rgba(8,8,10,0.55) 0%, rgba(8,8,10,0.78) 55%, rgba(8,8,10,0.92) 100%)',
-        }}
-      />
-
-      <div className="relative z-10 min-h-screen flex flex-col justify-between p-6 sm:p-8 lg:p-12 max-w-[1500px] mx-auto font-sans space-y-20">
-        
-        {/* TOPBAR NAVIGATION */}
-        <header className="flex items-center justify-between py-2">
-          <Link
-            href="/"
-            className="flex items-center space-x-3 text-xl font-extrabold tracking-widest hover:opacity-80 transition notranslate font-sans"
-            translate="no"
-          >
-            <InterMeshLogo className="w-6 h-6 shrink-0" />
+    <div className="relative min-h-screen bg-white font-sans text-slate-900 selection:bg-cyan-500/25 dark:bg-[#08080A] dark:text-slate-50 notranslate" translate="no" suppressHydrationWarning>
+      {/* ================= NAV ================= */}
+      <header className={`sticky top-0 z-50 border-b bg-white/80 backdrop-blur-xl dark:bg-[#08080A]/80 ${HAIRLINE}`}>
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-4">
+          <Link href="/" className={`flex items-center gap-2.5 text-lg font-bold tracking-[0.18em] transition hover:opacity-80 notranslate ${HEADING}`} translate="no">
+            <InterMeshLogo className="h-5 w-5 shrink-0" />
             <span>INTERMESH</span>
           </Link>
 
-          <nav className="hidden md:flex items-center space-x-8 text-xs text-slate-400 font-medium">
-            <Link href="/dashboard" className="hover:text-white transition">Control Plane</Link>
-            <Link href="/docs" className="hover:text-white transition">Docs (RFC-001)</Link>
-            <Link href="/pricing" className="hover:text-white transition">Pricing</Link>
-            <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="hover:text-white transition">GitHub</a>
+          <nav className={`hidden items-center gap-8 text-sm font-medium md:flex ${BODY}`}>
+            <Link href="/dashboard" className="transition hover:text-slate-900 dark:hover:text-white">Control Plane</Link>
+            <Link href="/docs" className="transition hover:text-slate-900 dark:hover:text-white">Docs</Link>
+            <Link href="/pricing" className="transition hover:text-slate-900 dark:hover:text-white">Pricing</Link>
+            <a href="https://github.com/intermeshteam/intermesh" target="_blank" rel="noreferrer" className="transition hover:text-slate-900 dark:hover:text-white">GitHub</a>
           </nav>
 
-          <div className="flex items-center space-x-6 text-xs">
-            <Link href="/auth" className="text-slate-200 hover:text-white transition font-medium">Log in</Link>
-            <Link href="/auth" className="px-4 py-2.5 border border-slate-600 hover:border-white rounded-md font-medium text-white flex items-center space-x-2 transition bg-black/70 backdrop-blur-sm">
-              <span>Start building</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-3 text-sm">
+            <ThemeToggle />
+            <Link href="/auth" className={`hidden font-medium transition hover:text-slate-900 sm:block dark:hover:text-white ${BODY}`}>Log in</Link>
+            <Link href="/signup" className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-white dark:text-[#08080A] dark:hover:bg-slate-200">
+              Start building
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* HERO SECTION */}
-        <main className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center py-6">
-          
-          <div className="lg:col-span-6 space-y-8">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded bg-white/5 border border-white/10 text-[11px] font-mono text-zinc-300">
-              <Clock className="w-3.5 h-3.5 text-zinc-300 stroke-[1.5]" />
-              <span>24/7 AUTONOMOUS INTERNAL WORKFLOWS READY</span>
-            </div>
+      {/* ================= HERO ================= */}
+      <section className="relative overflow-hidden">
+        {/* The particle field only reads on a dark backdrop; on light it is
+            noise over white, so it is hidden rather than dimmed. */}
+        <div className="absolute inset-0 hidden opacity-50 dark:block">
+          <NetworkBackground />
+        </div>
+        <AngledBand variant="bottom-right" />
 
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter leading-[0.95] text-white uppercase">
-              BUILD. SCALE.<br />INTELLIGENCE.
+        <div className="relative mx-auto grid max-w-[1180px] grid-cols-1 items-center gap-14 px-6 pb-28 pt-20 lg:grid-cols-2 lg:pb-36 lg:pt-28">
+          <div className="space-y-8">
+            <Eyebrow>The coordination protocol for AI agents</Eyebrow>
+
+            <h1 className={`text-[3.1rem] font-bold leading-[1.02] tracking-[-0.045em] sm:text-[3.9rem] lg:text-[4.3rem] ${HEADING}`}>
+              Agents that
+              <br />
+              <span className="bg-gradient-to-r from-cyan-600 via-cyan-500 to-violet-600 bg-clip-text text-transparent dark:from-cyan-300 dark:via-cyan-400 dark:to-violet-400">
+                work together.
+              </span>
             </h1>
 
-            <p className="text-sm text-slate-200 max-w-md leading-relaxed">
-              INTERMESH is the open protocol for AI infrastructure. Connect internal workers like <strong>Data Intake & Print Fulfillment agents</strong> to automate 24/7 workflows seamlessly.
+            <p className={`max-w-lg text-lg leading-relaxed ${BODY}`}>
+              Let AI agents discover each other, talk, and delegate work — across
+              teams inside one company, and across the boundary between two
+              organizations that do not trust each other.
             </p>
 
-            {/* QUICK INSTALL COMMAND BAR */}
-            <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-lg p-3 flex items-center justify-between font-mono text-xs max-w-md">
-              <div className="flex items-center space-x-2 text-zinc-300">
-                <Terminal className="w-4 h-4 text-zinc-500 stroke-[1.5]" />
-                <span className="text-zinc-500">$</span>
-                <span className="text-white font-bold">{installCommand}</span>
+            <div className={`flex max-w-md items-center justify-between rounded-xl border bg-slate-50 px-4 py-3 font-mono text-sm dark:bg-white/[0.03] ${HAIRLINE}`}>
+              <div className="flex items-center gap-2.5">
+                <Terminal className="h-4 w-4 stroke-[1.6] text-cyan-600 dark:text-cyan-400" />
+                <span className={MUTED}>$</span>
+                <span className={`font-semibold ${HEADING}`}>{installCommand}</span>
               </div>
-              <button 
+              <button
                 onClick={handleCopyCmd}
-                className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[11px] flex items-center space-x-1 transition font-sans"
+                className={`rounded-md p-1.5 transition hover:bg-slate-900/[0.06] hover:text-slate-900 dark:hover:bg-white/5 dark:hover:text-white ${MUTED}`}
+                aria-label="Copy install command"
               >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy</span>
+                {copied ? <Check className="h-4 w-4 text-cyan-600 dark:text-cyan-400" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
 
-            <div className="pt-2 flex items-center space-x-4">
-              <Link href="/auth" className="inline-flex items-center space-x-3 px-6 py-3.5 border border-slate-500 hover:border-white rounded-md text-xs font-semibold text-white transition bg-black/75 backdrop-blur-sm group">
-                <span>Open Control Plane</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Link>
-              <Link href="/docs" className="inline-flex items-center space-x-2 px-5 py-3.5 text-xs font-medium text-slate-200 hover:text-white transition">
-                <span>Read RFC-001 Spec</span>
-              </Link>
+            <div className="flex flex-wrap items-center gap-6 pt-1">
+              <PrimaryButton href="/signup">Open Control Plane</PrimaryButton>
+              <TextLink href="/docs">Read RFC-001</TextLink>
             </div>
           </div>
 
-          {/* RIGHT: ANIMATED CODE EDITOR */}
-          <div className="lg:col-span-6">
-            <AnimatedCodeEditor />
+          <div className="lg:pl-4">
+            <CodeShowcase />
+          </div>
+        </div>
+      </section>
+
+      {/* ================= PROOF ================= */}
+      <section className={`relative border-y ${HAIRLINE} ${ALT_SURFACE}`}>
+        <div className="mx-auto grid max-w-[1180px] grid-cols-2 px-6 lg:grid-cols-4">
+          {PROOF.map((s, i) => (
+            <div
+              key={s.label}
+              className={`py-9 pl-6 lg:pl-8 ${i % 2 === 1 ? `border-l ${HAIRLINE}` : ''} ${i >= 2 ? `border-t lg:border-t-0 ${HAIRLINE}` : ''} ${i > 0 ? `lg:border-l ${HAIRLINE}` : ''}`}
+            >
+              <div className="bg-gradient-to-r from-cyan-600 to-violet-600 bg-clip-text font-mono text-xl font-bold text-transparent dark:from-cyan-300 dark:to-violet-300">
+                {s.value}
+              </div>
+              <div className={`mt-1.5 text-sm ${BODY}`}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ================= ANY LANGUAGE ================= */}
+      <section className="relative overflow-hidden py-24">
+        <AngledBand variant="bottom-left" opacity={0.07} />
+
+        <div className="relative mx-auto max-w-[1180px] space-y-12 px-6">
+          <div className="grid grid-cols-1 items-end gap-8 lg:grid-cols-[1fr_auto]">
+            <SectionHead
+              eyebrow="One-line integration"
+              title="Your agent already exists. Plug it in."
+              lead="No SDK to learn on the foreign side. Your program reads JSON on stdin and writes JSON on stdout — that is the entire contract. A Go binary, a Node script, a shell one-liner, or an HTTP service already running."
+            />
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              {LANGUAGES.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => setLang(l.id)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    lang === l.id
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-[#08080A]'
+                      : `bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] dark:hover:text-white ${BODY}`
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-        </main>
+          {/* Code stays dark in both themes: a terminal that turns white reads
+              as a document, and syntax colours stop working. */}
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0B0C10] dark:border-white/[0.08]">
+            <div className="flex items-center gap-3 border-b border-white/[0.06] bg-white/[0.02] px-5 py-3.5 font-mono text-sm">
+              <span className="text-cyan-400">$</span>
+              <span className="overflow-x-auto whitespace-nowrap text-slate-200">{active.command}</span>
+            </div>
+            <pre className="overflow-x-auto p-6 font-mono text-[12.5px] leading-relaxed text-slate-300">
+              {active.code}
+            </pre>
+          </div>
 
-        {/* HOW IT WORKS */}
-        <section className="relative z-10 border-t border-zinc-900 bg-[#08080A] py-20 px-6">
-          <div className="max-w-6xl mx-auto space-y-12">
+          <p className={`max-w-2xl text-sm leading-relaxed ${MUTED}`}>
+            The agent inherits end-to-end encryption, capability discovery and the
+            audit log without a line of integration code. A program that overruns its
+            timeout is killed along with its children.
+          </p>
+        </div>
+      </section>
 
-            <div className="text-center space-y-3 max-w-3xl mx-auto">
-              <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold">HOW IT WORKS</span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                Four Steps From "Two Scripts" to a Coordinated Mesh
-              </h2>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                InterMesh is the layer underneath your framework of choice, not a replacement for it.
-                A central <strong className="text-slate-200">Hub</strong> routes messages between agents —
-                it never reads their contents.
+      {/* ================= CROSS-ORG ================= */}
+      <section className={`relative border-t py-24 ${HAIRLINE} ${ALT_SURFACE}`}>
+        <div className="mx-auto max-w-[1180px] space-y-14 px-6">
+          <SectionHead
+            eyebrow="Cross-organization federation"
+            title="Two companies. No mutual trust required."
+            lead="Each organization keeps its own hub. Peering opens a verifiable link between them, without ever sharing a signing secret."
+          />
+
+          <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-[1fr_auto_1fr]">
+            <Card>
+              <div className={`flex items-center gap-2 border-b pb-3 ${HAIRLINE}`}>
+                <Building2 className="h-4 w-4 stroke-[1.6] text-cyan-600 dark:text-cyan-400" />
+                <span className={`text-sm font-semibold ${HEADING}`}>Acme Corp</span>
+                <span className="ml-auto font-mono text-xs text-cyan-600/80 dark:text-cyan-400/80">acme/hub</span>
+              </div>
+              <p className={`mt-4 text-sm leading-relaxed ${BODY}`}>
+                Its procurement agent addresses <code className="text-cyan-600 dark:text-cyan-300">globex/pricing_engine</code>{' '}
+                as if it were local. The hub relays; the answer comes back.
               </p>
+              <div className={`mt-5 space-y-1.5 font-mono text-xs ${MUTED}`}>
+                <div>acme/procurement_lead</div>
+                <div>acme/finance_approver</div>
+                <div>acme/legal_auditor</div>
+              </div>
+            </Card>
+
+            <div className="flex items-center justify-center py-2 lg:flex-col lg:py-0">
+              <div className="hidden w-px flex-1 bg-gradient-to-b from-transparent to-cyan-500/40 lg:block" />
+              <div className={`flex items-center gap-2 rounded-full border bg-white px-3.5 py-1.5 font-mono text-xs text-violet-600 dark:bg-[#0B0C10] dark:text-violet-300 ${HAIRLINE}`}>
+                <Lock className="h-3 w-3" />
+                wss:// + Ed25519
+              </div>
+              <div className="hidden w-px flex-1 bg-gradient-to-b from-violet-500/40 to-transparent lg:block" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-left">
-
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                    <KeyRound className="w-4 h-4 stroke-[1.5]" />
-                  </div>
-                  <span className="text-[10px] font-mono text-zinc-600">STEP 1</span>
-                </div>
-                <h3 className="text-sm font-bold text-white">Register &amp; get a signed identity</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  An agent connects to the Hub and declares its capabilities. The Hub returns a
-                  JWT carrying a SHA-256 fingerprint of its roles and permissions — tampering with
-                  either breaks the fingerprint and is rejected before the agent does anything.
-                </p>
+            <Card>
+              <div className={`flex items-center gap-2 border-b pb-3 ${HAIRLINE}`}>
+                <Building2 className="h-4 w-4 stroke-[1.6] text-violet-600 dark:text-violet-400" />
+                <span className={`text-sm font-semibold ${HEADING}`}>Globex Inc.</span>
+                <span className="ml-auto font-mono text-xs text-violet-600/80 dark:text-violet-400/80">globex/hub</span>
               </div>
-
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                    <Search className="w-4 h-4 stroke-[1.5]" />
-                  </div>
-                  <span className="text-[10px] font-mono text-zinc-600">STEP 2</span>
-                </div>
-                <h3 className="text-sm font-bold text-white">Discover, by capability not address</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  <code className="text-cyan-400">discover(capabilities=[&quot;translate&quot;])</code> finds
-                  agents by what they do, not where they happen to be running — no hardcoded
-                  addresses that break the moment something moves.
-                </p>
-              </div>
-
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                    <Send className="w-4 h-4 stroke-[1.5]" />
-                  </div>
-                  <span className="text-[10px] font-mono text-zinc-600">STEP 3</span>
-                </div>
-                <h3 className="text-sm font-bold text-white">Delegate, sealed end-to-end</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  A task's payload is wrapped in a per-message AES-256-GCM key, itself sealed with
-                  the recipient's RSA-2048-OAEP public key. The Hub forwards ciphertext — it
-                  physically cannot read what it's routing.
-                </p>
-              </div>
-
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                    <ScrollText className="w-4 h-4 stroke-[1.5]" />
-                  </div>
-                  <span className="text-[10px] font-mono text-zinc-600">STEP 4</span>
-                </div>
-                <h3 className="text-sm font-bold text-white">Every step chains into an audit log</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Registration, delegation, and completion are appended to a Merkle-chained log.
-                  Edit one entry directly in the database and the chain breaks — loudly, at the
-                  next integrity check, not silently forever.
-                </p>
-              </div>
-
-            </div>
-          </div>
-        </section>
-
-        {/* SECTION 24/7 INTERNAL AUTOMATION (SAISIE ➜ IMPRESSION) */}
-        <section className="relative z-10 border-t border-zinc-900 bg-[#0A0A0C] py-20 px-6">
-          <div className="max-w-6xl mx-auto space-y-12">
-            
-            <div className="text-center space-y-3 max-w-3xl mx-auto">
-              <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold flex items-center justify-center space-x-2">
-                <Clock className="w-4 h-4 stroke-[1.5]" />
-                <span>24/7 AUTONOMOUS INTERNAL OPERATIONS</span>
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                How Internal Agents Work Together Non-Stop
-              </h2>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Connect specialized internal daemons like Data Intake & Print Fulfillment agents to automate corporate operations 24 hours a day, 7 days a week.
+              <p className={`mt-4 text-sm leading-relaxed ${BODY}`}>
+                Verifies every relayed message against the public key Acme published.
+                It can authenticate, never impersonate.
               </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-left">
-              
-              {/* AGENT 1 : SAISIE (DATA INTAKE) */}
-              <div className="bg-[#0D0E12] border border-zinc-800 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 font-sans text-xs">
-                  <span className="text-white font-bold flex items-center space-x-2">
-                    <FileText className="w-4 h-4 text-zinc-400 stroke-[1.5]" />
-                    <span>AGENT 1: DATA INTAKE (SAISIE 24/7)</span>
-                  </span>
-                  <span className="text-cyan-400 font-mono text-[10px]">acme/data_intake</span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  Captures incoming invoice documents 24/7 and delegates print fulfillment tasks.
-                </p>
-                <pre className="bg-[#050507] p-4 rounded-xl font-mono text-[11px] text-slate-300 border border-zinc-800/80 overflow-x-auto">
-{`from intermesh import InterMeshAgent
-
-# 24/7 Data Intake Daemon
-intake_agent = InterMeshAgent(name="data_intake", org_id="acme")
-await intake_agent.connect()
-
-# Delegate print task to Print Fulfillment Agent
-result = await intake_agent.submit_task(
-    title="Print Invoice INV-2026-1001",
-    assignee="acme/print_fulfillment",
-    input_data={"document_id": "INV-1001", "format": "PDF/A"}
-)
-
-print(result) # -> {"status": "PRINTED", "pages": 3}`}
-                </pre>
+              <div className={`mt-5 space-y-1.5 font-mono text-xs ${MUTED}`}>
+                <div>globex/sales_director</div>
+                <div>globex/pricing_engine</div>
+                <div>globex/contract_signer</div>
               </div>
-
-              {/* AGENT 2 : IMPRESSION (PRINT FULFILLMENT) */}
-              <div className="bg-[#0D0E12] border border-zinc-800 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3 font-sans text-xs">
-                  <span className="text-white font-bold flex items-center space-x-2">
-                    <Printer className="w-4 h-4 text-zinc-400 stroke-[1.5]" />
-                    <span>AGENT 2: PRINT FULFILLMENT (IMPRESSION 24/7)</span>
-                  </span>
-                  <span className="text-emerald-400 font-mono text-[10px]">acme/print_fulfillment</span>
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  Receives print tasks 24/7, generates PDF/A documents, and triggers physical/digital printing.
-                </p>
-                <pre className="bg-[#050507] p-4 rounded-xl font-mono text-[11px] text-slate-300 border border-zinc-800/80 overflow-x-auto">
-{`from intermesh import InterMeshAgent
-
-print_agent = InterMeshAgent(name="print_fulfillment", org_id="acme")
-
-@print_agent.on_task
-async def handle_print_task(input_data, task):
-    # Process PDF generation & print queue 24/7
-    return {
-        "status": "PRINTED",
-        "document_id": input_data["document_id"],
-        "pages": 3
-    }
-
-await print_agent.connect()`}
-                </pre>
-              </div>
-
-            </div>
-
+            </Card>
           </div>
-        </section>
 
-        {/* WHY INTERMESH EXISTS */}
-        <section className="relative z-10 border-t border-zinc-900 bg-[#08080A] py-20 px-6">
-          <div className="max-w-6xl mx-auto space-y-12">
-            
-            <div className="text-center space-y-3 max-w-3xl mx-auto">
-              <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold">THE PROBLEM & OUR MISSION</span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-sans">
-                Why AI Agents Needed a Universal Standard
-              </h2>
-              <p className="text-sm text-slate-400 leading-relaxed font-normal font-sans">
-                By 2030, billions of autonomous AI agents will operate across the global economy. Without an open, neutral protocol, agent networks face catastrophic fragmentation and security risks.
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            <Card>
+              <IconChip icon={Fingerprint} tone="cyan" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>Verifiable, unforgeable identity</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${BODY}`}>
+                Tokens are signed with an Ed25519 private key that never leaves its
+                hub. Peers exchange public keys, never a shared secret — otherwise
+                either side could sign in the other&apos;s name.
               </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-4 hover:border-zinc-700 transition">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <GitBranch className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white font-sans">The Fragmentation Barrier</h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  Today, agents built in LangChain cannot talk to CrewAI teams or custom TypeScript services without writing fragile, custom glue code for every connection.
-                </p>
-              </div>
-
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-4 hover:border-zinc-700 transition">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <ShieldAlert className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white font-sans">The Security Void</h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  Sending plaintext prompts and confidential enterprise payloads across third-party brokers creates unacceptable data leakage risks for production.
-                </p>
-              </div>
-
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-2xl p-6 space-y-4 hover:border-zinc-700 transition">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <CheckCircle2 className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white font-sans">The InterMesh Solution</h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  RFC-001 gives the world a neutral, open-source protocol. Agents self-discover, negotiate JWT authentication, and execute tasks with zero-trust E2E encryption.
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-        </section>
-
-        {/* CORE CAPABILITIES GRID */}
-        <section className="relative z-10 border-t border-zinc-900 bg-[#0A0A0C] py-20 px-6">
-          <div className="max-w-6xl mx-auto space-y-12">
-            
-            <div className="text-center space-y-3 max-w-2xl mx-auto">
-              <span className="text-xs font-mono uppercase tracking-widest text-zinc-500 font-semibold">ENTERPRISE FEATURES</span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight font-sans">
-                Engineered for Production Scale
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left font-sans">
-              
-              <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <Lock className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white">End-to-End Encryption</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Hybrid RSA-2048-OAEP & AES-256-GCM client-side encryption. The Hub routes messages without ever reading plaintext payloads.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <Globe className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white">Cross-Language Mesh</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Native SDKs for Python and Node.js. A Python agent delegates tasks to a TypeScript worker transparently and securely.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <ShieldCheck className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white">Immutable Merkle Audit</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Cryptographically chained SHA-256 event log for SOC2, HIPAA, and financial compliance audits built-in.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <Network className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white">Hub-to-Hub Federation</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Connect private organization hubs safely across cloud boundaries with zero-trust peering.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <Layers className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white">Distributed Task Engine</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Asynchronous task delegation, heartbeat tracking, and status updates across complex multi-agent workflows.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300">
-                  <Cpu className="w-5 h-5 stroke-[1.5]" />
-                </div>
-                <h3 className="text-base font-bold text-white">Self-Hosted Quota Control</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  10-agent free tier with Ed25519 signed license tokens for offline verification on local hubs.
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-        </section>
-
-        {/* HONEST LIMITATIONS */}
-        <section className="relative z-10 border-t border-zinc-900 bg-[#0A0A0C] py-20 px-6">
-          <div className="max-w-4xl mx-auto space-y-10">
-
-            <div className="text-center space-y-3">
-              <span className="text-xs font-mono uppercase tracking-widest text-amber-500/80 font-semibold flex items-center justify-center space-x-2">
-                <AlertTriangle className="w-3.5 h-3.5 stroke-[1.5]" />
-                <span>WHAT WE'RE NOT CLAIMING</span>
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                RFC-001 Is Real, and It Isn't Finished
-              </h2>
-              <p className="text-sm text-slate-400 leading-relaxed max-w-2xl mx-auto">
-                A protocol page that only lists strengths isn't trustworthy. Here's what to know
-                before you rely on this in production.
+            </Card>
+            <Card>
+              <IconChip icon={Lock} tone="violet" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>The link itself is protected</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${BODY}`}>
+                Plaintext peering to a remote host is refused: the handshake carries
+                the public keys, so an in-path attacker could swap them. TLS with
+                certificate and hostname verification, always on.
               </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-left">
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
-                <h3 className="text-xs font-bold text-white">No TLS by default</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  End-to-end encryption protects payloads, not who's-talking-to-whom metadata. Put
-                  the Hub behind <code className="text-cyan-400">wss://</code> before anything
-                  sensitive touches it.
-                </p>
-              </div>
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
-                <h3 className="text-xs font-bold text-white">State lives in one Hub</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Hubs federate for cross-organization delegation, but multiple hubs sharing one
-                  state store is work we haven't done yet.
-                </p>
-              </div>
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
-                <h3 className="text-xs font-bold text-white">Key rotation ejects agents</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Rotating the Hub's signing key invalidates every issued token immediately —
-                  there's no overlap window yet.
-                </p>
-              </div>
-              <div className="bg-[#0D0E12] border border-zinc-800/80 rounded-xl p-5 space-y-1.5">
-                <h3 className="text-xs font-bold text-white">Resumed tasks can run twice</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  A task interrupted by a restart is reassigned on reconnect. Executors must be
-                  idempotent — that's a real constraint, not a footnote.
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-500 text-center max-w-2xl mx-auto leading-relaxed">
-              The spec is public specifically so it can be argued with.{' '}
-              <Link href="/docs" className="text-slate-300 hover:text-white underline underline-offset-2">
-                Read RFC-001
-              </Link>{' '}
-              and tell us where it's wrong.
-            </p>
-
+            </Card>
+            <Card>
+              <IconChip icon={Filter} tone="cyan" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>You decide what leaves</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${BODY}`}>
+                An egress policy drops a field, redacts a pattern, or blocks the
+                payload. Enforced by the agent before encryption, and by the hub at
+                relay time. Internal exchanges are never filtered.
+              </p>
+            </Card>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* CTA SECTION */}
-        <section className="relative z-10 border-t border-zinc-900 bg-[#0A0A0C] py-20 px-6 text-center font-sans">
-          <div className="max-w-3xl mx-auto space-y-6">
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Ready to Build the Future of AI Infrastructure?
-            </h2>
-            <p className="text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
-              Get started in seconds with our open-source SDK. Free self-hosted tier includes 10 active agent slots.
-            </p>
-            <div className="pt-2 flex justify-center">
-              <Link href="/auth" className="px-8 py-3.5 rounded-full bg-white text-black font-semibold text-sm hover:bg-slate-200 transition shadow-[0_0_40px_rgba(255,255,255,0.2)] flex items-center space-x-2">
-                <span>Open Control Plane</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
+      {/* ================= HOW IT WORKS ================= */}
+      <section className="relative overflow-hidden py-24">
+        <div className="mx-auto max-w-[1180px] space-y-14 px-6">
+          <SectionHead
+            eyebrow="How it works"
+            title="Four steps, from two scripts to a mesh"
+            lead="InterMesh is the layer underneath your framework of choice, not a replacement for it. A central hub routes messages between agents — it never reads their contents."
+          />
+
+          <div className="grid grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
+            {STEPS.map((s) => (
+              <div key={s.n} className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <IconChip icon={s.icon} tone="cyan" />
+                  <span className={`font-mono text-xs ${MUTED}`}>{s.n}</span>
+                </div>
+                <h3 className={`text-base font-semibold ${HEADING}`}>{s.title}</h3>
+                <p className={`text-sm leading-relaxed ${BODY}`}>{s.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================= USE CASES ================= */}
+      <section className={`relative overflow-hidden border-t py-24 ${HAIRLINE}`}>
+        <AngledBand variant="bottom-right" opacity={0.06} />
+
+        <div className="relative mx-auto max-w-[1180px] space-y-14 px-6">
+          <SectionHead
+            eyebrow="What it unlocks"
+            title="Three scenarios, available today"
+            lead="Not projections: each rests on mechanisms that exist in the repository and are covered by tests."
+          />
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            <Card>
+              <IconChip icon={ArrowLeftRight} tone="cyan" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>B2B supply chain</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${BODY}`}>
+                A factory agent detects a stock shortage and negotiates directly with
+                the supplier&apos;s agent: offer, counter-offer, internal budget
+                approval, signature. Payment is held in escrow and released on
+                completion.
+              </p>
+              <div className={`mt-5 border-t pt-4 font-mono text-xs ${HAIRLINE} ${MUTED}`}>
+                6 agents · 2 hubs · tested end to end
+              </div>
+            </Card>
+
+            <Card>
+              <IconChip icon={FileSearch} tone="violet" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>Due diligence and audit</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${BODY}`}>
+                The buyer requests documents; the seller&apos;s agent answers with real
+                margin and bank details stripped out before transfer. The approved
+                figures pass, the rest never crosses the boundary.
+              </p>
+              <div className={`mt-5 border-t pt-4 font-mono text-xs ${HAIRLINE} ${MUTED}`}>
+                filtering active under E2E encryption
+              </div>
+            </Card>
+
+            <Card>
+              <IconChip icon={Headphones} tone="cyan" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>Single point of contact</h3>
+              <p className={`mt-2 text-sm leading-relaxed ${BODY}`}>
+                A refund request pulls in support, finance and logistics in parallel.
+                The pipeline resolves each agent by capability, so replacing one does
+                not break the flow.
+              </p>
+              <div className={`mt-5 border-t pt-4 font-mono text-xs ${HAIRLINE} ${MUTED}`}>
+                pipeline + fan-out, resolved at run time
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= POSITIONING ================= */}
+      <section className={`relative border-t py-24 ${HAIRLINE} ${ALT_SURFACE}`}>
+        <div className="mx-auto max-w-[1180px] space-y-12 px-6">
+          <SectionHead
+            eyebrow="Where InterMesh sits"
+            title="Complementary, not competing"
+            lead="The landscape is crowded, and honesty serves better than a rigged comparison. Here is what each piece actually solves."
+          />
+
+          <div className={`overflow-x-auto rounded-xl border bg-white dark:bg-transparent ${HAIRLINE}`}>
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className={`border-b text-xs uppercase tracking-wider ${HAIRLINE} ${MUTED}`}>
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Layer</th>
+                  <th className="px-6 py-4 font-semibold">Connects</th>
+                  <th className="px-6 py-4 font-semibold">Brings</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-white/[0.06]">
+                <tr>
+                  <td className={`px-6 py-5 font-semibold ${HEADING}`}>MCP</td>
+                  <td className={`px-6 py-5 ${BODY}`}>An agent to tools and data</td>
+                  <td className={`px-6 py-5 ${BODY}`}>Standardized tool access. A client/server relationship — asymmetric by design.</td>
+                </tr>
+                <tr>
+                  <td className={`px-6 py-5 font-semibold ${HEADING}`}>A2A</td>
+                  <td className={`px-6 py-5 ${BODY}`}>Agents to each other</td>
+                  <td className={`px-6 py-5 ${BODY}`}>A peer-to-peer exchange format, backed by a broad coalition.</td>
+                </tr>
+                <tr className="bg-gradient-to-r from-cyan-500/[0.07] to-violet-500/[0.05]">
+                  <td className="px-6 py-5 font-semibold text-cyan-700 dark:text-cyan-300">InterMesh</td>
+                  <td className={`px-6 py-5 ${HEADING}`}>Organizations to each other</td>
+                  <td className={`px-6 py-5 ${HEADING}`}>
+                    The hub, end-to-end encryption, verifiable federated identity,
+                    control over what leaves, and payment escrow.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p className={`max-w-2xl text-sm leading-relaxed ${MUTED}`}>
+            Transport and message format are the easy part — they have been solved
+            several times over. What was missing is identity between organizations,
+            governance of outbound data, and accountability for payment. That is where
+            InterMesh works.
+          </p>
+        </div>
+      </section>
+
+      {/* ================= FEATURES ================= */}
+      <section className="relative py-24">
+        <div className="mx-auto max-w-[1180px] space-y-14 px-6">
+          <SectionHead eyebrow="Built for production" title="What is in the box" />
+
+          <div className="grid grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="space-y-4">
+                <IconChip icon={f.icon} tone={f.tone} />
+                <h3 className={`text-base font-semibold ${HEADING}`}>{f.title}</h3>
+                <p className={`text-sm leading-relaxed ${BODY}`}>{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ================= LIMITATIONS ================= */}
+      <section className={`relative border-t py-24 ${HAIRLINE} ${ALT_SURFACE}`}>
+        <div className="mx-auto max-w-[1180px] space-y-12 px-6">
+          <SectionHead
+            eyebrow="What we are not claiming"
+            title="RFC-001 is real, and it is not finished"
+            lead="A page that only lists strengths is not trustworthy. Here is what to know before relying on this in production."
+          />
+
+          <div className="grid grid-cols-1 gap-x-10 gap-y-9 sm:grid-cols-2">
+            {LIMITS.map((l) => (
+              <div key={l.title} className="border-l-2 border-slate-300 pl-5 dark:border-white/10">
+                <h3 className={`text-sm font-semibold ${HEADING}`}>{l.title}</h3>
+                <p className={`mt-1.5 text-sm leading-relaxed ${BODY}`}>{l.body}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className={`text-sm leading-relaxed ${MUTED}`}>
+            The spec is public precisely so it can be argued with.{' '}
+            <Link href="/docs" className="font-medium text-cyan-600 transition hover:text-cyan-500 dark:text-cyan-300 dark:hover:text-cyan-200">
+              Read RFC-001
+            </Link>{' '}
+            and tell us where it is wrong.
+          </p>
+        </div>
+      </section>
+
+      {/* ================= CTA ================= */}
+      <section className={`relative overflow-hidden border-t py-28 ${HAIRLINE}`}>
+        <AngledBand variant="both" opacity={0.14} />
+
+        <div className="relative mx-auto max-w-[1180px] px-6">
+          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
+            <div className="space-y-6">
+              <h2 className={`text-[2rem] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[2.6rem] ${HEADING}`}>
+                Three commands, and your
+                <br />
+                <span className="bg-gradient-to-r from-cyan-600 to-violet-600 bg-clip-text text-transparent dark:from-cyan-300 dark:to-violet-300">
+                  agents are talking.
+                </span>
+              </h2>
+              <p className={`max-w-md text-base leading-relaxed ${BODY}`}>
+                Open source under Apache-2.0. Free self-hosted tier up to 10 active
+                agents, no account required to try it.
+              </p>
+              <div className="flex flex-wrap items-center gap-6 pt-1">
+                <PrimaryButton href="/signup">Open Control Plane</PrimaryButton>
+                <TextLink href="/docs">Read the spec</TextLink>
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-slate-800 bg-[#0B0C10] p-6 font-mono text-sm dark:border-white/10">
+              <div><span className="text-cyan-400">$</span> <span className="text-slate-200">pip install intermesh</span></div>
+              <div><span className="text-cyan-400">$</span> <span className="text-slate-200">intermesh hub</span></div>
+              <div><span className="text-cyan-400">$</span> <span className="text-slate-200">intermesh serve --name bot --exec ./my-agent</span></div>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* FOOTER */}
-        <footer className="relative z-10 border-t border-zinc-900 bg-[#08080A] py-12 px-6 font-sans">
-          <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
-            <div className="flex items-center space-x-2 font-semibold">
-              <InterMeshLogo className="w-4 h-4 shrink-0" />
-              <span>InterMesh Protocol © 2026 • Apache 2.0 License</span>
-            </div>
-            <div className="flex items-center space-x-6 mt-4 md:mt-0 font-medium text-xs">
-              <Link href="/terms" className="hover:text-slate-300 transition">Terms</Link>
-              <Link href="/privacy" className="hover:text-white transition">Privacy</Link>
-              <Link href="/docs" className="hover:text-white transition">Docs (RFC-001)</Link>
-              <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="hover:text-white transition">GitHub</a>
-            </div>
+      {/* ================= FOOTER ================= */}
+      <footer className={`border-t py-12 ${HAIRLINE}`}>
+        <div className={`mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-4 px-6 text-sm md:flex-row ${MUTED}`}>
+          <div className="flex items-center gap-2 font-medium">
+            <InterMeshLogo className="h-4 w-4 shrink-0" />
+            <span>InterMesh Protocol © 2026 · Apache 2.0</span>
           </div>
-        </footer>
-
-      </div>
+          <div className="flex items-center gap-6">
+            <Link href="/terms" className="transition hover:text-slate-900 dark:hover:text-slate-300">Terms</Link>
+            <Link href="/privacy" className="transition hover:text-slate-900 dark:hover:text-slate-300">Privacy</Link>
+            <Link href="/docs" className="transition hover:text-slate-900 dark:hover:text-slate-300">Docs</Link>
+            <a href="https://github.com/intermeshteam/intermesh" target="_blank" rel="noreferrer" className="transition hover:text-slate-900 dark:hover:text-slate-300">GitHub</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
