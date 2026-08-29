@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import DashboardTopbar from '@/components/DashboardTopbar';
 import InterMeshLogo from '@/components/InterMeshLogo';
+import { HUB_URL } from '@/lib/hub';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -30,7 +31,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex font-sans notranslate" translate="no">
+    // `dark` is pinned here: the Control Plane pages are written with
+    // hardcoded dark colours, so they would render unreadable under the light
+    // theme. Scoping the class to this subtree keeps the toggle working on the
+    // public pages without dragging a half-converted app along with it.
+    <div className="dark min-h-screen bg-[#09090b] text-white flex font-sans notranslate" translate="no">
       {/* SIDEBAR STRIPE / VERCEL STYLE */}
       <aside className="w-64 fixed top-0 left-0 bottom-0 bg-[#0C0D10] border-r border-white/10 flex flex-col justify-between p-4 z-30 shrink-0">
         <div className="space-y-6">
@@ -44,7 +49,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="w-5 h-5 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-[10px] font-mono">
                 A
               </div>
-              <span className="font-medium text-slate-200">Acme Corp</span>
+              <span className="font-medium text-slate-200">Local workspace</span>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
           </div>
@@ -94,12 +99,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <BookOpen className="w-3.5 h-3.5" />
             <span>Docs (RFC-001)</span>
           </Link>
+          {/* "OPERATIONAL" was a static label: it claimed a healthy system even
+              with the hub down. The hub address is a fact; a status is not one
+              unless something measured it. */}
           <div className="flex items-center justify-between text-[11px]">
-            <span>STATUS</span>
-            <span className="flex items-center space-x-1.5 text-emerald-400 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>OPERATIONAL</span>
-            </span>
+            <span>HUB</span>
+            <span className="font-mono text-slate-400">{HUB_URL.replace(/^wss?:\/\//, '')}</span>
           </div>
         </div>
       </aside>
