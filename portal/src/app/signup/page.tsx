@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 
 import AuthShell from '@/components/AuthShell';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { signUp, toSlug } from '@/lib/supabase/account';
 
 /**
  * Sign-up.
@@ -67,61 +69,8 @@ const INPUT =
 
 const LABEL = 'block text-xs font-medium text-slate-700 dark:text-slate-300';
 
-export default function SignupPage() {
-  const router = useRouter();
-
-  const [name, setName] = useState('');
-  const [org, setOrg] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [reveal, setReveal] = useState(false);
-  const [accepted, setAccepted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const strength = useMemo(() => scorePassword(password), [password]);
-
-  // `org_id` namespaces every agent this account registers, so it is worth
-  // showing the normalised value rather than letting it be a surprise later.
-  const orgSlug = useMemo(
-    () => org.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-    [org],
-  );
-
-  const canSubmit =
-    name.trim().length > 1 &&
-    orgSlug.length > 1 &&
-    /\S+@\S+\.\S+/.test(email) &&
-    password.length >= MIN_PASSWORD &&
-    accepted &&
-    !isLoading;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (password.length < MIN_PASSWORD) {
-      setError(`Your password needs at least ${MIN_PASSWORD} characters.`);
-      return;
-    }
-    if (!accepted) {
-      setError('Please accept the terms to continue.');
-      return;
-    }
-
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      router.push('/dashboard');
-    }, 1200);
-  };
-
-  return (
-    <AuthShell
-      title="Create your account"
-      subtitle="Run a hub, connect your first agents, and delegate work across them in minutes."
-      aside={
-        <>
+const ASIDE = (
+<>
           <h2 className="text-2xl font-bold leading-tight tracking-[-0.02em] text-slate-900 dark:text-white">
             Your agents are about to start
             <span className="bg-gradient-to-r from-cyan-600 to-violet-600 bg-clip-text text-transparent dark:from-cyan-300 dark:to-violet-300">
@@ -153,7 +102,118 @@ export default function SignupPage() {
             <div className="mt-1.5"><span className="text-cyan-400">$</span> <span className="text-slate-200">intermesh hub</span></div>
           </div>
         </>
-      }
+);
+
+export default function SignupPage() {
+  const router = useRouter();
+
+  const [name, setName] = useState('');
+  const [org, setOrg] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [reveal, setReveal] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmSent, setConfirmSent] = useState(false);
+  const configured = isSupabaseConfigured();
+
+  const strength = useMemo(() => scorePassword(password), [password]);
+
+  // `org_id` namespaces every agent this account registers, so it is worth
+  // showing the normalised value rather than letting it be a surprise later.
+  const orgSlug = useMemo(() => toSlug(org), [org]);
+
+  const canSubmit =
+    name.trim().length > 1 &&
+    orgSlug.length > 1 &&
+    /\S+@\S+\.\S+/.test(email) &&
+    password.length >= MIN_PASSWORD &&
+    accepted &&
+    !isLoading;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (password.length < MIN_PASSWORD) {
+      setError(`Your password needs at least ${MIN_PASSWORD} characters.`);
+      return;
+    }
+    if (!accepted) {
+      setError('Please accept the terms to continue.');
+      return;
+    }
+    if (!configured) {
+      setError('Supabase is not configured on this deployment, so no account can be created.');
+      return;
+    }
+
+    setIsLoading(true);
+    const result = await signUp({
+      email: email.trim(),
+      password,
+      fullName: name.trim(),
+      orgName: org.trim(),
+      orgSlug,
+    });
+    setIsLoading(false);
+
+    if (!result.ok) {
+      setError(result.error ?? 'Sign-up failed.');
+      return;
+    }
+    if (result.needsEmailConfirmation) {
+      setConfirmSent(true);
+      return;
+    }
+    router.push('/dashboard');
+  };
+
+
+  // Real OAuth rather than a redirect that pretended to authenticate.
+  const handleGithub = async () => {
+    setError(null);
+    if (!configured) {
+      setError('Supabase is not configured on this deployment.');
+      return;
+    }
+    const { signInWithGithub } = await import('@/lib/supabase/account');
+    const result = await signInWithGithub();
+    if (!result.ok) setError(result.error ?? 'GitHub sign-in failed.');
+  };
+
+  if (confirmSent) {
+    return (
+      <AuthShell
+        title="Check your inbox"
+        subtitle={`We sent a confirmation link to ${email}. Your organization is created the first time you sign in.`}
+        aside={ASIDE}
+        footer={
+          <>
+            Wrong address?{' '}
+            <button onClick={() => setConfirmSent(false)} className="font-semibold text-cyan-600 transition hover:text-cyan-500 dark:text-cyan-300">
+              Go back
+            </button>
+          </>
+        }
+      >
+        <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-4 py-3.5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+          The link confirms the address. Nothing is created until you follow it —
+          if it does not arrive, check the spam folder before signing up again.
+        </div>
+        <Link href="/auth" className="flex w-full items-center justify-center rounded-lg bg-gradient-to-r from-cyan-500 to-violet-500 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 dark:from-cyan-400 dark:to-violet-400 dark:text-[#08080A]">
+          Go to sign in
+        </Link>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell
+      title="Create your account"
+      subtitle="Run a hub, connect your first agents, and delegate work across them in minutes."
+      aside={ASIDE}
       footer={
         <>
           Already have an account?{' '}
@@ -163,10 +223,20 @@ export default function SignupPage() {
         </>
       }
     >
+      {!configured && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+          Supabase is not configured on this deployment, so accounts cannot be
+          created or signed into. Set NEXT_PUBLIC_SUPABASE_URL and
+          NEXT_PUBLIC_SUPABASE_ANON_KEY, then run supabase/schema.sql.
+        </p>
+      )}
+
       <button
         type="button"
-        onClick={() => router.push('/dashboard')}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-white/[0.06]"
+        onClick={handleGithub}
+        disabled={!configured}
+        title={configured ? undefined : 'Supabase is not configured on this deployment'}
+        className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-white/[0.06]"
       >
         <Github className="h-4 w-4" />
         <span>Continue with GitHub</span>

@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { createKey, listKeys, revokeKey } from '@/lib/supabase/keys';
 import { 
   Key, 
   Plus, 
@@ -16,14 +18,9 @@ import {
   EyeOff
 } from 'lucide-react';
 
-interface ApiKey {
-  id: string;
-  name: string;
-  rawKey: string;
-  created: string;
-  role: string;
-  lastUsed: string;
-}
+// The stored shape has no plaintext: a digest cannot be turned back into a
+// key, so an existing key can be revoked but never shown again.
+import type { StoredKey as ApiKey } from '@/lib/supabase/keys';
 
 const STORAGE_KEY = 'intermesh_api_keys_v1';
 
@@ -48,30 +45,22 @@ export default function KeysPage() {
   const [deleteKey, setDeleteKey] = useState<ApiKey | null>(null);
   const [showRawMap, setShowRawMap] = useState<Record<string, boolean>>({});
 
-  // Load keys from LocalStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setKeys(parsed);
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const configured = isSupabaseConfigured();
 
-  // Save keys to LocalStorage
-  const saveKeys = (updatedKeys: ApiKey[]) => {
-    setKeys(updatedKeys);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedKeys));
-    } catch (e) {
-      console.error(e);
+  const refresh = useCallback(async () => {
+    if (!configured) return;
+    const { keys: rows, error } = await listKeys();
+    if (error) setLoadError(error);
+    else {
+      setLoadError(null);
+      setKeys(rows);
     }
-  };
+  }, [configured]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const handleCopy = (rawKey: string, id: string) => {
     navigator.clipboard.writeText(rawKey);
@@ -86,34 +75,25 @@ export default function KeysPage() {
     setTimeout(() => setCopiedNewKey(false), 2000);
   };
 
-  const handleCreateKey = (e: React.FormEvent) => {
+  const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newKeyName.trim()) return;
+    if (!configured) {
+      setLoadError('Supabase is not configured on this deployment.');
+      return;
+    }
 
     setCreating(true);
+    const { secret, error } = await createKey(newKeyName, newKeyRole);
+    setCreating(false);
 
-    setTimeout(() => {
-      // Génération d'une vraie clé cryptographique au format nx_live_acme_...
-      const randHex = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-      const generatedKey = `nx_live_acme_${randHex}`;
-
-      const newKeyObj: ApiKey = {
-        id: `k_${Date.now()}`,
-        name: newKeyName.trim(),
-        rawKey: generatedKey,
-        created: new Date().toISOString().split('T')[0],
-        role: newKeyRole,
-        lastUsed: 'Never'
-      };
-
-      const nextKeys = [newKeyObj, ...keys];
-      saveKeys(nextKeys);
-
-      setNewlyCreatedKey(generatedKey);
-      setCreating(false);
-    }, 800);
+    if (error || !secret) {
+      setLoadError(error ?? 'Key creation failed.');
+      return;
+    }
+    // Shown once, here. It is not stored anywhere it could be read back.
+    setNewlyCreatedKey(secret);
+    refresh();
   };
 
   const handleCloseCreateModal = () => {
@@ -124,11 +104,12 @@ export default function KeysPage() {
     setCopiedNewKey(false);
   };
 
-  const handleRevokeKey = () => {
+  const handleRevokeKey = async () => {
     if (!deleteKey) return;
-    const nextKeys = keys.filter(k => k.id !== deleteKey.id);
-    saveKeys(nextKeys);
+    const error = await revokeKey(deleteKey.id);
+    if (error) setLoadError(error);
     setDeleteKey(null);
+    refresh();
   };
 
   const toggleShowRaw = (id: string) => {
@@ -188,7 +169,8 @@ export default function KeysPage() {
                     </span>
                   </div>
                   <div className="text-[11px] text-zinc-500 font-mono mt-1">
-                    Created on {k.created} • Last used: {k.lastUsed}
+                    Created {new Date(k.created_at).toLocaleDateString()}
+                    {k.last_used_at ? ` • last used ${new Date(k.last_used_at).toLocaleDateString()}` : ' • never used'}
                   </div>
                 </div>
 
@@ -201,34 +183,16 @@ export default function KeysPage() {
                 </button>
               </div>
 
-              {/* KEY DISPLAY ROW */}
+              {/* Only the prefix survives creation — the rest is a digest. */}
               <div className="bg-[#08080A] border border-zinc-800 rounded-lg p-3 flex items-center justify-between font-mono text-xs">
                 <div className="flex items-center space-x-3 min-w-0 pr-2">
                   <Lock className="w-4 h-4 text-zinc-500 shrink-0 stroke-[1.5]" />
-                  <span className="text-zinc-300 truncate">
-                    {showRawMap[k.id] ? k.rawKey : maskKey(k.rawKey)}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-                    ACTIVE
+                  <span className="text-zinc-300 truncate">{k.prefix}{'\u2026'}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded shrink-0 border ${k.revoked_at ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-zinc-800 text-zinc-300 border-zinc-700/50'}`}>
+                    {k.revoked_at ? 'REVOKED' : 'ACTIVE'}
                   </span>
                 </div>
-
-                <div className="flex items-center space-x-2 shrink-0">
-                  <button 
-                    onClick={() => toggleShowRaw(k.id)}
-                    className="p-1.5 text-zinc-500 hover:text-zinc-300 transition"
-                    title={showRawMap[k.id] ? "Hide Key" : "Reveal Key"}
-                  >
-                    {showRawMap[k.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                  <button 
-                    onClick={() => handleCopy(k.rawKey, k.id)}
-                    className="px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs flex items-center space-x-1.5 transition font-sans font-medium"
-                  >
-                    {copiedId === k.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 stroke-[1.5]" />}
-                    <span>{copiedId === k.id ? 'Copied' : 'Copy Key'}</span>
-                  </button>
-                </div>
+                <span className="text-[10px] text-zinc-600 shrink-0">shown once at creation</span>
               </div>
             </div>
           ))

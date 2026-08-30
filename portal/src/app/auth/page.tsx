@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Github, Loader2 } from 'lucide-react';
 
 import AuthShell from '@/components/AuthShell';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { signIn } from '@/lib/supabase/account';
 
 const INPUT =
   'w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-slate-600 dark:focus:border-cyan-400';
@@ -18,15 +20,38 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [reveal, setReveal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const configured = isSupabaseConfigured();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!email || !password) return;
+    if (!configured) {
+      setError('Supabase is not configured on this deployment.');
+      return;
+    }
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      router.push('/dashboard');
-    }, 1200);
+    const result = await signIn(email.trim(), password);
+    setIsLoading(false);
+    if (!result.ok) {
+      setError(result.error ?? 'Sign-in failed.');
+      return;
+    }
+    router.push('/dashboard');
+  };
+
+
+  // Real OAuth rather than a redirect that pretended to authenticate.
+  const handleGithub = async () => {
+    setError(null);
+    if (!configured) {
+      setError('Supabase is not configured on this deployment.');
+      return;
+    }
+    const { signInWithGithub } = await import('@/lib/supabase/account');
+    const result = await signInWithGithub();
+    if (!result.ok) setError(result.error ?? 'GitHub sign-in failed.');
   };
 
   return (
@@ -61,10 +86,20 @@ export default function SignInPage() {
         </>
       }
     >
+      {!configured && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+          Supabase is not configured on this deployment, so accounts cannot be
+          created or signed into. Set NEXT_PUBLIC_SUPABASE_URL and
+          NEXT_PUBLIC_SUPABASE_ANON_KEY, then run supabase/schema.sql.
+        </p>
+      )}
+
       <button
         type="button"
-        onClick={() => router.push('/dashboard')}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-white/[0.06]"
+        onClick={handleGithub}
+        disabled={!configured}
+        title={configured ? undefined : 'Supabase is not configured on this deployment'}
+        className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-white/[0.06]"
       >
         <Github className="h-4 w-4" />
         <span>Continue with GitHub</span>
@@ -121,6 +156,12 @@ export default function SignInPage() {
             </button>
           </div>
         </div>
+
+        {error && (
+          <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 px-3.5 py-2.5 text-xs text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"
