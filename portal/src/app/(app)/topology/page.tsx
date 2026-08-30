@@ -36,7 +36,6 @@ type TopoNode = {
 };
 
 type TopoEdge = { from: string; to: string };
-type Packet = { id: number; from: string; to: string; t: number; speed: number };
 type LogLine = { id: number; ts: string; level: 'INFO' | 'WARN' | 'ERROR'; msg: string };
 
 const W = 1100;
@@ -115,7 +114,27 @@ export default function TopologyPage() {
   const bootLogged = useRef(false);
   const [lastUpdate, setLastUpdate] = useState('');
   const dragRef = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 });
-  const packetsRef = useRef<Packet[]>([]);
+  /**
+   * Per-agent "heat": how much traffic that agent has actually exchanged
+   * recently, derived from the hub's own msg_count. It decays on its own, so
+   * an idle mesh settles back to still lines instead of animating forever —
+   * the flow means work is happening, or it means nothing at all.
+   */
+  const heatRef = useRef<Map<string, { last: number; heat: number }>>(new Map());
+
+  /**
+   * Raises an agent's heat when the hub reports work involving it.
+   *
+   * The snapshot's msg_count only arrives once, at registration, so a delta
+   * against it stays at zero forever and nothing ever flowed. Task events are
+   * what actually mark an agent as busy.
+   */
+  const bumpHeat = useCallback((name?: string, amount = 0.55) => {
+    if (!name) return;
+    const id = `agent:${name}`;
+    const prev = heatRef.current.get(id) ?? { last: 0, heat: 0 };
+    heatRef.current.set(id, { last: prev.last, heat: Math.min(1, prev.heat + amount) });
+  }, []);
   const logIdRef = useRef(10);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -220,6 +239,16 @@ export default function TopologyPage() {
               pushLog('INFO', `Agent connected: ${a.name || a.qualified_name}`);
             }
 
+            if (c.event === 'task_submitted') {
+              bumpHeat(c.orchestrator);
+              bumpHeat(c.assignee);
+              pushLog('INFO', `Task '${c.title}' → ${c.assignee}`);
+            }
+
+            if (c.event === 'task_completed') {
+              bumpHeat(c.assignee, 0.4);
+            }
+
             if (c.event === 'agent_disconnected') {
               const name = c.agent_name;
               setRealAgents((prev) =>
@@ -249,19 +278,6 @@ export default function TopologyPage() {
     };
   }, [pushLog]);
 
-  useEffect(() => {
-    // With no agent registered there is no edge to travel along, and the old
-    // `edges[i % 0]` resolved to undefined. No traffic is also the honest
-    // picture of an idle mesh.
-    if (edges.length === 0) {
-      packetsRef.current = [];
-      return;
-    }
-    packetsRef.current = Array.from({ length: Math.min(30, Math.max(8, edges.length)) }, (_, i) => {
-      const e = edges[i % edges.length];
-      return { id: i, from: e.from, to: e.to, t: Math.random(), speed: 0.003 + Math.random() * 0.005 };
-    });
-  }, [edges]);
 
   // Canvas render
   useEffect(() => {
@@ -319,6 +335,23 @@ export default function TopologyPage() {
       ctx.fillText(isFailed ? 'FAILED / OFFLINE' : n.sub, x + 22, y + 30);
     };
 
+    /** Cubic bezier between two nodes; horizontal handles give the fanned look. */
+    const curve = (a: TopoNode, b: TopoNode) => {
+      const dx = Math.abs(b.x - a.x);
+      const bend = Math.max(60, dx * 0.45);
+      return { c1x: a.x + bend, c1y: a.y, c2x: b.x - bend, c2y: b.y };
+    };
+
+    const bezierAt = (t: number, a: TopoNode, b: TopoNode) => {
+      const { c1x, c1y, c2x, c2y } = curve(a, b);
+      const u = 1 - t;
+      const w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t;
+      return {
+        x: w0 * a.x + w1 * c1x + w2 * c2x + w3 * b.x,
+        y: w0 * a.y + w1 * c1y + w2 * c2y + w3 * b.y,
+      };
+    };
+
     const draw = () => {
       const pw = canvas.clientWidth;
       const ph = canvas.clientHeight;
@@ -333,45 +366,74 @@ export default function TopologyPage() {
 
       const visible = (n: TopoNode) => filters[n.status];
 
-      // Draw edges (clean 1px dark lines)
+      // Decay every heat reading, then raise the ones whose agent sent
+      // messages since the previous frame.
+      const now = performance.now();
+      heatRef.current.forEach((v, id) => {
+        heatRef.current.set(id, { last: v.last, heat: v.heat * 0.99 });
+      });
+
+      // Flowing links
       for (const e of edges) {
         const a = nodeMap.get(e.from);
         const b = nodeMap.get(e.to);
         if (!a || !b || !visible(a) || !visible(b)) continue;
-        const isFailed = a.status === 'unhealthy' || b.status === 'unhealthy';
 
-        ctx.strokeStyle = isFailed ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255, 255, 255, 0.08)';
-        ctx.lineWidth = 1;
+        const failed = a.status === 'unhealthy' || b.status === 'unhealthy';
+        const heat = Math.max(
+          heatRef.current.get(a.id)?.heat ?? 0,
+          heatRef.current.get(b.id)?.heat ?? 0,
+        );
+        const { c1x, c1y, c2x, c2y } = curve(a, b);
+
+        // Resting line. Visible enough to read the shape of the mesh, dim
+        // enough that a busy link is unmistakable.
+        const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        if (failed) {
+          grad.addColorStop(0, 'rgba(244, 63, 94, 0.35)');
+          grad.addColorStop(1, 'rgba(244, 63, 94, 0.10)');
+        } else {
+          grad.addColorStop(0, `rgba(34, 211, 238, ${0.10 + heat * 0.45})`);
+          grad.addColorStop(1, `rgba(167, 139, 250, ${0.10 + heat * 0.45})`);
+        }
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1 + heat * 1.6;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
+        ctx.bezierCurveTo(c1x, c1y, c2x, c2y, b.x, b.y);
         ctx.stroke();
-      }
 
-      // Draw subtle white data packets
-      if (running) {
-        for (const p of packetsRef.current) {
-          p.t += p.speed;
-          if (p.t >= 1) {
-            p.t = 0;
-            const e = edges[Math.floor(Math.random() * edges.length)];
-            if (!e) continue;
-            p.from = e.from;
-            p.to = e.to;
-          }
-          const a = nodeMap.get(p.from);
-          const b = nodeMap.get(p.to);
-          if (!a || !b || !visible(a) || !visible(b)) continue;
-          if (a.status === 'unhealthy' || b.status === 'unhealthy') continue;
+        if (!running || failed || heat < 0.02) continue;
 
-          const x = a.x + (b.x - a.x) * p.t;
-          const y = a.y + (b.y - a.y) * p.t;
+        // Comets. Their number and speed follow the traffic, so an idle link
+        // carries none at all.
+        const count = 1 + Math.round(heat * 5);
+        const speed = 0.00018 + heat * 0.00042;
+        ctx.lineCap = 'round';
+        for (let i = 0; i < count; i++) {
+          const t = ((now * speed + i / count) % 1);
+          const head = bezierAt(t, a, b);
+          const tail = bezierAt(Math.max(0, t - 0.06), a, b);
 
+          const cg = ctx.createLinearGradient(tail.x, tail.y, head.x, head.y);
+          cg.addColorStop(0, 'rgba(34, 211, 238, 0)');
+          cg.addColorStop(1, `rgba(186, 250, 255, ${0.5 + heat * 0.5})`);
+          ctx.strokeStyle = cg;
+          ctx.lineWidth = 1.5 + heat * 1.5;
           ctx.beginPath();
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+          ctx.moveTo(tail.x, tail.y);
+          ctx.lineTo(head.x, head.y);
+          ctx.stroke();
+
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = 'rgba(34, 211, 238, 0.8)';
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(224, 252, 255, ${0.7 + heat * 0.3})`;
+          ctx.arc(head.x, head.y, 1.6 + heat, 0, Math.PI * 2);
           ctx.fill();
+          ctx.shadowBlur = 0;
         }
+        ctx.lineCap = 'butt';
       }
 
       // Draw nodes
