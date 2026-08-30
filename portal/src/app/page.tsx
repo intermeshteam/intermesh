@@ -32,6 +32,7 @@ import CodeShowcase from '@/components/CodeShowcase';
 import InterMeshLogo from '@/components/InterMeshLogo';
 import AngledBand from '@/components/AngledBand';
 import ThemeToggle from '@/components/ThemeToggle';
+import NegotiationDemo from '@/components/NegotiationDemo';
 
 /* ------------------------------------------------------------------ */
 /* Primitives                                                          */
@@ -574,6 +575,18 @@ export default function LandingPage() {
               </p>
             </Card>
           </div>
+        </div>
+      </section>
+
+      {/* ================= NEGOTIATION DEMO ================= */}
+      <section className={`relative border-t py-24 ${HAIRLINE}`}>
+        <div className="mx-auto max-w-[1180px] space-y-10 px-6">
+          <SectionHead
+            eyebrow="See it work"
+            title="Watch two mandates negotiate."
+            lead="A distributor and a producer, each with a private mandate — what they want, what they will never cross. No human types the offers. Run it, or try the mandate that does not converge."
+          />
+          <NegotiationDemo />
         </div>
       </section>
 
