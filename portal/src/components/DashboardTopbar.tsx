@@ -2,8 +2,10 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { HUB_URL } from '@/lib/hub';
+import { BORDER, SURFACE_CHROME_BLUR, SURFACE_RAISED, TONE } from '@/lib/ui';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 import {
   Search,
   Bell,
@@ -104,8 +106,20 @@ type Notification = {
 // makes a console feel staged.
 const INITIAL_NOTIFICATIONS: Notification[] = [];
 
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard': 'Overview',
+  '/topology': 'Topology',
+  '/agents': 'Agents',
+  '/keys': 'API keys',
+  '/security': 'Audit log',
+  '/billing': 'Billing',
+  '/settings': 'Settings',
+};
+
 export default function DashboardTopbar() {
   const router = useRouter();
+  const pathname = usePathname();
+  const pageTitle = PAGE_TITLES[pathname] ?? 'Overview';
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [notifOpen, setNotifOpen] = useState(false);
@@ -120,6 +134,15 @@ export default function DashboardTopbar() {
   const profileRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
+
+  const handleSignOut = async () => {
+    setProfileOpen(false);
+    if (isSupabaseConfigured()) {
+      const { signOut } = await import('@/lib/supabase/account');
+      await signOut();
+    }
+    router.push('/auth');
+  };
 
   const filtered = SEARCH_ITEMS.filter((item) => {
     const q = query.toLowerCase().trim();
@@ -202,9 +225,15 @@ export default function DashboardTopbar() {
 
   return (
     <>
-      <header className="h-14 border-b border-white/10 bg-[#09090b]/90 backdrop-blur px-6 md:px-8 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center space-x-2 text-xs">
-          <span className="text-slate-500 font-mono">{HUB_URL}</span>
+      <header className={`sticky top-0 z-20 flex h-14 items-center justify-between border-b px-6 backdrop-blur-xl md:px-8 ${BORDER} ${SURFACE_CHROME_BLUR}`}>
+        {/* L'adresse du Hub etait affichee ici, dans l'en-tete de page et
+            dans le pied de la barre laterale : trois fois le meme fait, et un
+            grand vide au milieu de la barre. Elle ne subsiste qu'en bas de la
+            barre laterale ; cet emplacement dit ou l'on se trouve. */}
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-slate-400">Control plane</span>
+          <span className="text-slate-500">/</span>
+          <span className="font-medium text-white">{pageTitle}</span>
         </div>
 
         <div className="flex items-center space-x-3 md:space-x-4">
@@ -212,8 +241,8 @@ export default function DashboardTopbar() {
             onClick={() => setSearchOpen(true)}
             className="hidden md:flex items-center bg-[#141519] border border-white/10 rounded-md px-3 py-1.5 text-xs text-slate-400 w-64 hover:border-white/20 transition text-left"
           >
-            <Search className="w-3.5 h-3.5 mr-2 text-slate-500" />
-            <span className="flex-1 text-slate-500">Search agents, keys...</span>
+            <Search className="w-3.5 h-3.5 mr-2 text-slate-400" />
+            <span className="flex-1 text-slate-400">Search agents, keys...</span>
             <span className="text-[10px] font-mono border border-white/20 rounded px-1 text-slate-400">⌘K</span>
           </button>
 
@@ -233,14 +262,14 @@ export default function DashboardTopbar() {
             </button>
 
             {helpOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+              <div className="absolute right-0 mt-2 w-64 bg-[#111114] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-white/10">
                   <div className="text-sm font-semibold text-white">Help & Resources</div>
                 </div>
                 <div className="p-2 space-y-0.5">
                   <Link href="/docs" onClick={() => setHelpOpen(false)} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition">
                     <span className="flex items-center space-x-2"><FileText className="w-3.5 h-3.5" /><span>RFC-001 Spec</span></span>
-                    <ExternalLink className="w-3 h-3 text-slate-600" />
+                    <ExternalLink className="w-3 h-3 text-slate-400" />
                   </Link>
                   <a href="https://github.com/intermeshteam/intermesh" target="_blank" className="flex items-center justify-between px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition">
                     <span className="flex items-center space-x-2"><ExternalLink className="w-3.5 h-3.5" /><span>GitHub Repository</span></span>
@@ -264,7 +293,7 @@ export default function DashboardTopbar() {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+              <div className="absolute right-0 mt-2 w-80 bg-[#111114] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                   <div className="text-sm font-semibold text-white">Notifications</div>
                   {unreadCount > 0 && (
@@ -294,10 +323,10 @@ export default function DashboardTopbar() {
             </button>
 
             {profileOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+              <div className="absolute right-0 mt-2 w-64 bg-[#111114] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-white/10">
                   <div className="text-sm font-semibold text-white">Local workspace</div>
-                  <div className="text-[11px] text-slate-500 font-mono mt-0.5">self-hosted</div>
+                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">self-hosted</div>
                 </div>
                 <div className="p-2 space-y-0.5">
                   <Link href="/dashboard" onClick={() => setProfileOpen(false)} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-slate-300 hover:bg-white/5 hover:text-white transition">
@@ -308,9 +337,14 @@ export default function DashboardTopbar() {
                   </Link>
                 </div>
                 <div className="p-2 border-t border-white/10">
-                  <Link href="/auth" onClick={() => setProfileOpen(false)} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition">
+                  {/* Was a link to /auth, which navigated away while leaving
+                      the session intact — the account stayed signed in. */}
+                  <button
+                    onClick={handleSignOut}
+                    className="flex w-full items-center space-x-2 px-3 py-2 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition"
+                  >
                     <LogOut className="w-3.5 h-3.5" /><span>Log out</span>
-                  </Link>
+                  </button>
                 </div>
               </div>
             )}
@@ -321,9 +355,9 @@ export default function DashboardTopbar() {
       {searchOpen && (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSearchOpen(false)} />
-          <div className="relative w-full max-w-xl bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+          <div className="relative w-full max-w-xl bg-[#111114] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
             <div className="flex items-center px-4 border-b border-white/10">
-              <Search className="w-4 h-4 text-slate-500 mr-3" />
+              <Search className="w-4 h-4 text-slate-400 mr-3" />
               <input
                 ref={searchInputRef}
                 value={query}
@@ -333,20 +367,20 @@ export default function DashboardTopbar() {
                 }}
                 onKeyDown={onSearchKeyDown}
                 placeholder="Search agents, keys, settings..."
-                className="flex-1 bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-slate-600"
+                className="flex-1 bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-slate-400"
               />
-              <button onClick={() => setSearchOpen(false)} className="text-slate-500 hover:text-white p-1">
+              <button onClick={() => setSearchOpen(false)} className="text-slate-400 hover:text-white p-1">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="max-h-80 overflow-y-auto p-2">
               {filtered.length === 0 ? (
-                <div className="px-3 py-8 text-center text-xs text-slate-500">Aucun résultat pour “{query}”</div>
+                <div className="px-3 py-8 text-center text-xs text-slate-400">Aucun résultat pour “{query}”</div>
               ) : (
                 Object.entries(grouped).map(([group, items]) => (
                   <div key={group} className="mb-2">
-                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-600">{group}</div>
+                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400">{group}</div>
                     {items.map((item) => {
                       const globalIndex = filtered.findIndex((f) => f.id === item.id);
                       const Icon = item.icon;
@@ -360,10 +394,10 @@ export default function DashboardTopbar() {
                             active ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5'
                           }`}
                         >
-                          <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-slate-500'}`} />
+                          <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-medium truncate">{item.label}</div>
-                            <div className="text-[11px] text-slate-500 truncate">{item.description}</div>
+                            <div className="text-[11px] text-slate-400 truncate">{item.description}</div>
                           </div>
                           {active && <Check className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                         </button>

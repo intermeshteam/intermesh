@@ -5,6 +5,11 @@ module.exports = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // src/lib manquait : les jetons de design y vivent, et Tailwind ne
+    // generait donc aucune des classes qu'ils declarent. Les surfaces du
+    // Control Plane tombaient sur le fond clair du body, ce qui donnait une
+    // barre laterale blanche sous un contenu sombre.
+    './src/lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {

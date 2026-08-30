@@ -14,6 +14,8 @@ import {
   Users,
 } from 'lucide-react';
 import { HUB_URL } from '@/lib/hub';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { BORDER, CAPTION, CARD, FIGURE, SURFACE_SUNKEN, TEXT_MUTED, TEXT_SECONDARY, TONE, type Tone } from '@/lib/ui';
 
 /**
  * Overview.
@@ -66,10 +68,12 @@ function relativeTime(epochSeconds: number | null): string {
  * sample cannot describe a trend, and inventing the rest is what made the
  * old cards untrustworthy.
  */
-function Sparkline({ points, live }: { points: number[]; live: boolean }) {
+function Sparkline({ points, live, tone = 'accent' }: { points: number[]; live: boolean; tone?: Tone }) {
+  const stroke = { accent: '#22d3ee', info: '#a78bfa', positive: '#34d399', warning: '#fbbf24', danger: '#fb7185', neutral: '#94a3b8' }[tone];
+  const gradId = `spark-${tone}`;
   if (points.length < 2) {
     return (
-      <div className="flex h-12 items-center text-[10px] font-mono text-zinc-600">
+      <div className="flex h-12 items-center text-[10px] font-mono text-slate-400">
         {live ? 'collecting…' : 'no data'}
       </div>
     );
@@ -89,16 +93,16 @@ function Sparkline({ points, live }: { points: number[]; live: boolean }) {
     <div className="space-y-1">
       <svg className="h-12 w-full" viewBox="0 0 200 40" preserveAspectRatio="none">
         <defs>
-          <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#00D4FF" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#00D4FF" stopOpacity="0" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <polygon points={area} fill="url(#sparkFill)" />
-        <polyline points={line} fill="none" stroke="#00D4FF" strokeWidth="1.75" vectorEffect="non-scaling-stroke" />
-        <circle cx={lastX} cy={lastY} r="2.5" fill="#00D4FF" />
+        <polygon points={area} fill={`url(#${gradId})`} />
+        <polyline points={line} fill="none" stroke={stroke} strokeWidth="1.75" vectorEffect="non-scaling-stroke" />
+        <circle cx={lastX} cy={lastY} r="2.5" fill={stroke} />
       </svg>
-      <div className="flex justify-between font-mono text-[9px] text-zinc-600">
+      <div className="flex justify-between font-mono text-[9px] text-slate-400">
         <span>{Math.round(min)}</span>
         <span>{(points.length * SAMPLE_MS) / 1000}s window</span>
         <span>{Math.round(max)}</span>
@@ -114,6 +118,7 @@ function Metric({
   icon: Icon,
   series,
   live,
+  tone = 'accent',
 }: {
   label: string;
   value: React.ReactNode;
@@ -121,19 +126,35 @@ function Metric({
   icon: React.ElementType;
   series: number[];
   live: boolean;
+  tone?: Tone;
 }) {
+  const t = TONE[tone];
   return (
-    <div className="rounded-xl border border-zinc-800/80 bg-[#121215] p-5">
-      <div className="flex items-center justify-between font-mono text-[11px] text-zinc-400">
-        <span className="font-semibold tracking-wider">{label}</span>
-        <Icon className="h-3.5 w-3.5 stroke-[1.5]" />
+    <div className={`${CARD} group relative overflow-hidden p-5 transition hover:border-white/[0.14]`}>
+      {/* A wash of the tone, strongest at the top edge. Enough to tell the
+          four cards apart at a glance without turning them into buttons. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
+      />
+      <div className="flex items-center justify-between">
+        <span className={CAPTION}>{label}</span>
+        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${t.soft} ${t.text}`}>
+          <Icon className="h-3.5 w-3.5 stroke-[1.6]" />
+        </span>
       </div>
-      <div className="mt-3 flex items-baseline gap-2">
-        <span className="font-mono text-3xl font-bold tracking-tight text-white">{value}</span>
+
+      <div className="mt-4 flex items-baseline gap-2.5">
+        <span className={FIGURE}>{value}</span>
+        <span className={`flex items-center gap-1.5 text-[11px] ${live ? t.text : 'text-slate-400'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${live ? t.dot : 'bg-slate-700'}`} />
+          {live ? 'live' : 'offline'}
+        </span>
       </div>
-      <div className="mt-1 text-[11px] text-zinc-500">{note}</div>
-      <div className="mt-3">
-        <Sparkline points={series} live={live} />
+
+      <div className={`mt-1 text-[11px] ${TEXT_MUTED}`}>{note}</div>
+      <div className="mt-4">
+        <Sparkline points={series} live={live} tone={tone} />
       </div>
     </div>
   );
@@ -167,6 +188,14 @@ export default function OverviewPage() {
   const pushLog = useCallback((level: LogEntry['level'], source: string, message: string) => {
     logIdRef.current += 1;
     setLogs((prev) => [{ id: logIdRef.current, time: new Date().toISOString(), level, source, message }, ...prev].slice(0, 60));
+  }, []);
+
+  // A session can reach this page without ever passing through the sign-in
+  // form — an OAuth redirect, or a confirmation link. This is the backstop
+  // that gives such an account its organization.
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    import('@/lib/supabase/account').then((m) => m.ensurePendingOrganization());
   }, []);
 
   /* ---------------- Telemetry ---------------- */
@@ -335,16 +364,25 @@ export default function OverviewPage() {
   return (
     <div className="space-y-8 font-sans text-slate-100 notranslate" translate="no">
       {/* HEADER */}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-800/80 pb-4">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.07] pb-4">
         <div className="space-y-1">
-          <h1 className="text-xl font-bold tracking-tight text-white">Overview</h1>
-          <p className="font-mono text-xs text-zinc-500">{HUB_URL}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-white">Overview</h1>
+          <p className="text-sm text-slate-400">
+            Live state reported by the hub this console is connected to.
+          </p>
         </div>
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <span className={`h-1.5 w-1.5 rounded-full ${hubConnected ? 'bg-emerald-400' : 'bg-red-500'}`} />
-          <span className={hubConnected ? 'text-emerald-400' : 'text-red-400'}>
-            {hubConnected ? 'connected' : 'disconnected'}
+        <div
+          className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${
+            hubConnected ? TONE.positive.soft : TONE.danger.soft
+          } ${hubConnected ? TONE.positive.text : TONE.danger.text}`}
+        >
+          <span className="relative flex h-1.5 w-1.5">
+            {hubConnected && (
+              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${TONE.positive.dot}`} />
+            )}
+            <span className={`relative h-1.5 w-1.5 rounded-full ${hubConnected ? TONE.positive.dot : TONE.danger.dot}`} />
           </span>
+          {hubConnected ? 'Hub connected' : 'Hub unreachable'}
         </div>
       </div>
 
@@ -363,6 +401,7 @@ export default function OverviewPage() {
           value={tasksSubmitted}
           note="since this view opened"
           icon={ListChecks}
+          tone="info"
           series={taskSeries}
           live={hubConnected}
         />
@@ -371,6 +410,7 @@ export default function OverviewPage() {
           value={tasksCompleted}
           note={tasksSubmitted ? `${Math.round((tasksCompleted / tasksSubmitted) * 100)}% of submitted` : 'since this view opened'}
           icon={ArrowUpRight}
+          tone="positive"
           series={doneSeries}
           live={hubConnected}
         />
@@ -379,6 +419,7 @@ export default function OverviewPage() {
           value={events}
           note="received on this connection"
           icon={Activity}
+          tone="neutral"
           series={eventSeries}
           live={hubConnected}
         />
@@ -386,36 +427,36 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* AGENTS */}
-        <div className="space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5 lg:col-span-7">
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+        <div className={`space-y-4 p-5 lg:col-span-7 ${CARD}`}>
+          <div className="flex items-center justify-between border-b border-white/[0.07] pb-3">
             <div className="flex items-center gap-3">
               <span className="font-mono text-xs font-bold uppercase tracking-wider text-white">Connected agents</span>
-              <span className="rounded bg-zinc-800 px-2 py-0.5 font-mono text-[10px] text-zinc-400">{agents.length}</span>
+              <span className="rounded-md bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-slate-300 ring-1 ring-white/10">{agents.length}</span>
             </div>
           </div>
 
           <div className="min-h-[300px] overflow-x-auto">
             {agents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-zinc-500">
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-slate-400">
                 <Users className="h-8 w-8 stroke-[1]" />
                 <p className="text-sm">
                   {hubConnected ? 'No agent is currently registered.' : 'Not connected to a hub.'}
                 </p>
-                <p className="mt-2 font-mono text-[11px] text-zinc-600">
+                <p className="mt-2 font-mono text-[11px] text-slate-400">
                   {hubConnected ? (
                     <>
-                      Try <code className="rounded bg-zinc-900 px-1 text-zinc-400">intermesh serve --name bot --exec ./my-agent</code>
+                      Try <code className="rounded bg-white/[0.05] px-1 text-slate-400">intermesh serve --name bot --exec ./my-agent</code>
                     </>
                   ) : (
                     <>
-                      Start one with <code className="rounded bg-zinc-900 px-1 text-zinc-400">intermesh hub</code>
+                      Start one with <code className="rounded bg-white/[0.05] px-1 text-slate-400">intermesh hub</code>
                     </>
                   )}
                 </p>
               </div>
             ) : (
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-zinc-800 text-[10px] font-semibold uppercase text-zinc-500">
+                <thead className="border-b border-white/[0.07] text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
                   <tr>
                     <th className="pb-3">Agent</th>
                     <th className="pb-3">Roles</th>
@@ -424,19 +465,19 @@ export default function OverviewPage() {
                     <th className="pb-3 text-right">Connected</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/40 text-zinc-300">
+                <tbody className="divide-y divide-white/[0.05] text-slate-300">
                   {agents.map((a) => (
-                    <tr key={a.id} className="transition hover:bg-zinc-800/30">
+                    <tr key={a.id} className="transition hover:bg-white/[0.03]">
                       <td className="py-3">
                         <div className="font-semibold text-white">{a.name}</div>
-                        <div className="font-mono text-[10px] text-zinc-600">{String(a.id).slice(0, 8)}</div>
+                        <div className="font-mono text-[10px] text-slate-400">{String(a.id).slice(0, 8)}</div>
                       </td>
-                      <td className="py-3 text-zinc-400">{a.roles.join(', ') || '—'}</td>
-                      <td className="py-3 text-zinc-400">
-                        {a.capabilities.length ? a.capabilities.join(', ') : <span className="text-zinc-600">none declared</span>}
+                      <td className="py-3 text-slate-400">{a.roles.join(', ') || '—'}</td>
+                      <td className="py-3 text-slate-400">
+                        {a.capabilities.length ? a.capabilities.join(', ') : <span className="text-slate-400">none declared</span>}
                       </td>
-                      <td className="py-3 text-right font-mono text-zinc-300">{a.messages}</td>
-                      <td className="py-3 text-right font-mono text-zinc-500">{relativeTime(a.connectedAt)}</td>
+                      <td className="py-3 text-right font-mono text-slate-300">{a.messages}</td>
+                      <td className="py-3 text-right font-mono text-slate-400">{relativeTime(a.connectedAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -446,8 +487,8 @@ export default function OverviewPage() {
         </div>
 
         {/* LOGS */}
-        <div className="flex h-[510px] flex-col space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5 lg:col-span-5">
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+        <div className={`flex h-[510px] flex-col space-y-4 p-5 lg:col-span-5 ${CARD}`}>
+          <div className="flex items-center justify-between border-b border-white/[0.07] pb-3">
             <div className="flex items-center gap-2 font-mono text-xs">
               <Terminal className="h-4 w-4 stroke-[1.5] text-white" />
               <span className="font-bold uppercase tracking-wider text-white">Event stream</span>
@@ -456,7 +497,7 @@ export default function OverviewPage() {
               <select
                 value={logFilter}
                 onChange={(e) => setLogFilter(e.target.value)}
-                className="rounded border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-[10px] text-zinc-300 outline-none"
+                className="rounded border border-white/[0.07] bg-white/[0.05] px-2 py-1 font-mono text-[10px] text-slate-300 outline-none"
               >
                 {['ALL', 'INFO', 'DEBUG', 'WARN', 'ERROR'].map((l) => (
                   <option key={l} value={l}>{l}</option>
@@ -465,7 +506,7 @@ export default function OverviewPage() {
               <button
                 onClick={() => setIsLive((v) => !v)}
                 title={isLive ? 'Pause the stream' : 'Resume the stream'}
-                className="rounded border border-zinc-800 p-1.5 text-zinc-400 transition hover:text-white"
+                className="rounded border border-white/[0.07] p-1.5 text-slate-400 transition hover:text-white"
               >
                 {isLive ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
               </button>
@@ -474,11 +515,11 @@ export default function OverviewPage() {
 
           <div className="flex-1 space-y-1.5 overflow-y-auto font-mono text-[11px]">
             {filteredLogs.length === 0 ? (
-              <div className="py-10 text-center text-zinc-600">No events yet.</div>
+              <div className="py-10 text-center text-slate-400">No events yet.</div>
             ) : (
               filteredLogs.map((log) => (
                 <div key={log.id} className="flex gap-2">
-                  <span className="shrink-0 text-zinc-600" suppressHydrationWarning>
+                  <span className="shrink-0 text-slate-400" suppressHydrationWarning>
                     {log.time.slice(11, 23)}
                   </span>
                   <span
@@ -488,14 +529,14 @@ export default function OverviewPage() {
                         : log.level === 'WARN'
                         ? 'text-amber-400'
                         : log.level === 'DEBUG'
-                        ? 'text-zinc-500'
+                        ? 'text-slate-400'
                         : 'text-cyan-400'
                     }`}
                   >
                     {log.level}
                   </span>
-                  <span className="shrink-0 font-semibold text-zinc-300">{log.source}</span>
-                  <span className="break-all text-zinc-400">{log.message}</span>
+                  <span className="shrink-0 font-semibold text-slate-300">{log.source}</span>
+                  <span className="break-all text-slate-400">{log.message}</span>
                 </div>
               ))
             )}
@@ -505,43 +546,43 @@ export default function OverviewPage() {
 
       {/* TOOLS */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div className="space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5">
+        <div className={`space-y-4 p-5 ${CARD}`}>
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4 stroke-[1.5] text-zinc-300" />
+                <KeyRound className="h-4 w-4 stroke-[1.5] text-slate-300" />
                 <h2 className="text-sm font-bold text-white">Self-hosted license token</h2>
               </div>
-              <p className="text-xs leading-relaxed text-zinc-400">
+              <p className="text-xs leading-relaxed text-slate-400">
                 Signs an Ed25519 token a hub can verify offline, without calling back to
                 this portal.
               </p>
             </div>
             <button
               onClick={handleGenerateLicense}
-              className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800"
+              className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/40 hover:bg-cyan-500/10 hover:text-white"
             >
-              <RefreshCw className="h-3.5 w-3.5 stroke-[1.5] text-zinc-400" />
+              <RefreshCw className="h-3.5 w-3.5 stroke-[1.5] text-slate-400" />
               <span>Generate</span>
             </button>
           </div>
 
           {generatedLicense && (
-            <div className="break-all rounded-lg border border-zinc-800 bg-[#08080A] p-3 font-mono text-xs">
-              <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">Ed25519 signed token</div>
-              <div className="select-all text-zinc-100">{generatedLicense}</div>
+            <div className="break-all rounded-lg border border-white/[0.07] bg-[#08080A] p-3 font-mono text-xs">
+              <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-400">Ed25519 signed token</div>
+              <div className="select-all text-slate-100">{generatedLicense}</div>
             </div>
           )}
         </div>
 
-        <div className="space-y-4 rounded-xl border border-zinc-800/80 bg-[#121215] p-5">
+        <div className={`space-y-4 p-5 ${CARD}`}>
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 stroke-[1.5] text-zinc-300" />
+                <ShieldAlert className="h-4 w-4 stroke-[1.5] text-slate-300" />
                 <h2 className="text-sm font-bold text-white">Quota enforcement check</h2>
               </div>
-              <p className="text-xs leading-relaxed text-zinc-400">
+              <p className="text-xs leading-relaxed text-slate-400">
                 Calls the slot endpoint with the free tier already full, to confirm an
                 eleventh registration is refused.
               </p>
@@ -549,22 +590,22 @@ export default function OverviewPage() {
             <button
               onClick={handleSimulateQuota}
               disabled={simulating}
-              className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-50"
+              className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-400/40 hover:bg-cyan-500/10 hover:text-white disabled:opacity-50"
             >
-              {simulating ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Users className="h-3.5 w-3.5 stroke-[1.5] text-zinc-400" />}
+              {simulating ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Users className="h-3.5 w-3.5 stroke-[1.5] text-slate-400" />}
               <span>Run check</span>
             </button>
           </div>
 
           {simResult && (
-            <div className={`space-y-1 rounded-lg border bg-[#08080A] p-3 font-mono text-xs ${simResult.status === 403 ? 'border-red-900/60' : 'border-zinc-800'}`}>
+            <div className={`space-y-1 rounded-lg border bg-[#08080A] p-3 font-mono text-xs ${simResult.status === 403 ? 'border-red-900/60' : 'border-white/[0.07]'}`}>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-zinc-300">HTTP response</span>
-                <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${simResult.status === 403 ? 'border border-red-500/20 bg-red-500/10 text-red-400' : 'bg-zinc-800 text-zinc-300'}`}>
+                <span className="font-semibold text-slate-300">HTTP response</span>
+                <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${simResult.status === 403 ? 'border border-red-500/20 bg-red-500/10 text-red-400' : 'bg-white/[0.06] text-slate-300'}`}>
                   {simResult.status}
                 </span>
               </div>
-              <pre className="overflow-x-auto rounded border border-zinc-900 bg-black/50 p-2.5 text-[11px] text-zinc-300">
+              <pre className="overflow-x-auto rounded border border-white/[0.07] bg-black/50 p-2.5 text-[11px] text-slate-300">
                 {JSON.stringify(simResult.data ?? simResult.error, null, 2)}
               </pre>
             </div>
