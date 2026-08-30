@@ -174,7 +174,21 @@ export default function SettingsPage() {
     }
 
     setInviteLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
+
+    // Best-effort: a failed send still adds the member locally, since this
+    // list is not backed by the memberships table yet either — see
+    // src/lib/resend.ts for what the email can and cannot promise.
+    let emailSent = true;
+    try {
+      const res = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role: inviteRole, orgName }),
+      });
+      if (!res.ok) emailSent = false;
+    } catch {
+      emailSent = false;
+    }
 
     const name = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     const nextMembers: Member[] = [
@@ -193,7 +207,10 @@ export default function SettingsPage() {
     setInviteOpen(false);
     setInviteEmail('');
     setInviteRole('Developer');
-    showToast('success', `Invitation sent to ${email}`);
+    showToast(
+      emailSent ? 'success' : 'info',
+      emailSent ? `Invitation sent to ${email}` : `${email} added — notification email could not be sent`,
+    );
   };
 
   const handleDeleteMember = async () => {
