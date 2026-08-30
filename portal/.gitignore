@@ -1,0 +1,12 @@
+# Généré par `vercel link`, puis complété.
+#
+# `.vercel` contient projectId/orgId et le VERCEL_OIDC_TOKEN : local à la
+# machine, jamais versionné. La racine ne le couvre pas, d'où ce fichier.
+.vercel
+
+# `.env*` seul — la règle telle que Vercel l'écrit — avale aussi les gabarits
+# .env.example, qui eux doivent être versionnés. Vérifié : sans l'exception
+# ci-dessous, un nouveau portal/.env.example serait ignoré en silence.
+.env*
+!.env.example
+!.env.*.example
