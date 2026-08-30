@@ -23,6 +23,9 @@ import {
   ScrollText,
   Fingerprint,
   Filter,
+  Unplug,
+  Workflow,
+  ChevronDown,
 } from 'lucide-react';
 import NetworkBackground from '@/components/NetworkBackground';
 import CodeShowcase from '@/components/CodeShowcase';
@@ -210,6 +213,63 @@ const LIMITS = [
   { title: 'Resumed tasks can run twice', body: 'A task interrupted by a restart is reassigned on reconnect. Your executors must be idempotent.' },
 ];
 
+/**
+ * The page used to go straight from the headline to Ed25519 and Merkle
+ * chains. That is proof for someone who already knows the field, and noise
+ * for everyone else. These three blocks are the on-ramp: the problem in plain
+ * words, the vocabulary the rest of the page relies on, and the questions a
+ * reader would otherwise leave with.
+ */
+const WITHOUT = [
+  'An agent can call tools, but it cannot find another agent. You hardcode an address, and it breaks the day something moves.',
+  'Two teams wire their agents together with their own glue. Six months later nobody can say who asked for what, or prove it.',
+  'Across two companies it stops entirely. Neither side hands over an API key that opens everything, so the work goes back to email.',
+];
+
+const WITH = [
+  'Agents announce what they can do. Others address them by capability, not by a machine that may have moved.',
+  'Registration, delegation and completion append to a chained log. Replay it and you have the whole history, or you find out it was edited.',
+  'Two companies peer their hubs. Each keeps its own signing key, so either side can authenticate the other and neither can sign in its name.',
+];
+
+const GLOSSARY = [
+  { term: 'Agent', body: 'Any program that does one job and can be asked to do it — a Python function, a Go binary, an HTTP endpoint. It does not have to involve a model.' },
+  { term: 'Hub', body: 'The router the agents of one organization connect to. It knows who is online and where to send a message. It cannot read the message.' },
+  { term: 'Capability', body: 'A label an agent declares about itself, such as pricing or translation. You address work to a capability; the hub picks who answers.' },
+  { term: 'Delegation', body: 'One agent handing a task to another and waiting for the result. The chain of who delegated to whom is recorded.' },
+  { term: 'Peering', body: 'A declared link between the hubs of two different organizations. Nothing crosses between two organizations that have not peered.' },
+  { term: 'Egress policy', body: 'Your rule for what may leave: drop a field, redact a pattern, or block the payload. It applies to outbound traffic only.' },
+  { term: 'Escrow', body: 'Payment held aside when a paid task starts, released to the provider only once the task completes.' },
+  { term: 'Mesh', body: 'The whole set — your agents, your hub, and the peered hubs you have chosen to reach.' },
+];
+
+const FAQ = [
+  {
+    q: 'Do I have to rewrite my agents?',
+    a: 'No. If your program reads JSON on stdin and writes JSON on stdout, one command puts it on the mesh. If it is already an HTTP service, point InterMesh at its URL and change nothing at all. The native Python and Node.js SDKs exist for agents you are writing from scratch, not as a requirement.',
+  },
+  {
+    q: 'Does this replace LangChain, CrewAI or MCP?',
+    a: 'No, and it is not trying to. Those help you build a single agent and connect it to tools and data. InterMesh starts after that: it connects agents that already work to each other, especially across a company boundary where neither side can be given the other’s credentials.',
+  },
+  {
+    q: 'Can the hub read what my agents send?',
+    a: 'Not the payload. It is encrypted on the sending agent with a single-use AES key sealed to the recipient’s public key, and the hub only routes ciphertext. The hub does see routing metadata — who talked to whom, when, and how large the message was — because it cannot deliver anything without it.',
+  },
+  {
+    q: 'What happens if the hub goes down?',
+    a: 'Agents reconnect on their own and state is restored from an encrypted snapshot, so work resumes. A task interrupted mid-flight is reassigned, which means your executors must be idempotent — running one twice must be safe. And a single hub is still a single point of failure today; that is on the roadmap, not in the box.',
+  },
+  {
+    q: 'Do the agents have to be AI?',
+    a: 'No. A shell script that echoes its input is a valid agent. The protocol cares about identity, routing and accountability, not about what runs behind the endpoint.',
+  },
+  {
+    q: 'Is it ready for production?',
+    a: 'The mechanisms described on this page exist and are covered by tests. The limitations further down are the ones that would bite you, and they are listed rather than hidden. Read them before deciding, and read RFC-001 before building on it.',
+  },
+];
+
 /* ------------------------------------------------------------------ */
 
 export default function LandingPage() {
@@ -321,6 +381,65 @@ export default function LandingPage() {
               <div className={`mt-1.5 text-sm ${BODY}`}>{s.label}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ================= THE PROBLEM ================= */}
+      <section className="relative py-24">
+        <div className="mx-auto max-w-[1180px] space-y-14 px-6">
+          <SectionHead
+            eyebrow="Why this exists"
+            title="Every agent is an island."
+            lead="Building one capable agent is close to a solved problem. Getting two of them to work together — especially when they belong to different teams, or different companies — is still done by hand, one integration at a time."
+          />
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Card>
+              <IconChip icon={Unplug} tone="violet" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>Without a protocol</h3>
+              <ul className="mt-4 space-y-4">
+                {WITHOUT.map((line) => (
+                  <li key={line} className={`flex gap-3 text-sm leading-relaxed ${BODY}`}>
+                    <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400 dark:bg-slate-600" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+
+            <Card>
+              <IconChip icon={Workflow} tone="cyan" />
+              <h3 className={`mt-5 text-base font-semibold ${HEADING}`}>With InterMesh</h3>
+              <ul className="mt-4 space-y-4">
+                {WITH.map((line) => (
+                  <li key={line} className={`flex gap-3 text-sm leading-relaxed ${BODY}`}>
+                    <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-r from-cyan-400 to-violet-400" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= GLOSSARY ================= */}
+      <section className={`relative border-t py-24 ${HAIRLINE} ${ALT_SURFACE}`}>
+        <div className="mx-auto max-w-[1180px] space-y-12 px-6">
+          <SectionHead
+            eyebrow="Vocabulary"
+            title="The words used on this page"
+            lead="Eight terms carry most of the meaning here. They are worth two minutes, because everything below assumes them."
+          />
+
+          <dl className="grid grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+            {GLOSSARY.map((g) => (
+              <div key={g.term} className="border-t pt-4 border-slate-200 dark:border-white/[0.07]">
+                <dt className={`text-sm font-semibold ${HEADING}`}>{g.term}</dt>
+                <dd className={`mt-1.5 text-sm leading-relaxed ${BODY}`}>{g.body}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
@@ -629,6 +748,40 @@ export default function LandingPage() {
             </Link>{' '}
             and tell us where it is wrong.
           </p>
+        </div>
+      </section>
+
+      {/* ================= FAQ ================= */}
+      <section className="relative py-24">
+        <div className="mx-auto max-w-[1180px] px-6">
+          <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,380px)_1fr]">
+            <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+              <Eyebrow>Questions</Eyebrow>
+              <h2 className={`text-[2rem] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[2.6rem] ${HEADING}`}>
+                The ones you would ask.
+              </h2>
+              <p className={`text-base leading-relaxed ${BODY}`}>
+                Answered straight, including where the answer is not flattering.
+              </p>
+            </div>
+
+            {/* Native <details>: collapsing keeps the page readable, and it stays
+                keyboard-operable and findable by in-page search without any JS. */}
+            <div className={`divide-y border-y divide-slate-200 dark:divide-white/[0.07] ${HAIRLINE}`}>
+              {FAQ.map((item) => (
+                <details key={item.q} className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-left [&::-webkit-details-marker]:hidden">
+                    <span className={`text-base font-semibold ${HEADING}`}>{item.q}</span>
+                    <ChevronDown
+                      aria-hidden
+                      className={`h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180 ${MUTED}`}
+                    />
+                  </summary>
+                  <p className={`max-w-2xl pb-6 pr-10 text-sm leading-relaxed ${BODY}`}>{item.a}</p>
+                </details>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
