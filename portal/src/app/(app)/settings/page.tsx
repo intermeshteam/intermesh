@@ -120,7 +120,7 @@ export default function SettingsPage() {
   const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!orgName.trim() || !orgSlug.trim()) {
-      showToast('error', 'Le nom et l’identifiant de l’organisation sont requis.');
+      showToast('error', 'Organization name and identifier are both required.');
       return;
     }
     setSaving(true);
@@ -128,26 +128,26 @@ export default function SettingsPage() {
     persist({ orgName: orgName.trim(), orgSlug: orgSlug.trim() });
     setSaving(false);
     setSaved(true);
-    showToast('success', 'Paramètres généraux enregistrés.');
+    showToast('success', 'General settings saved.');
     setTimeout(() => setSaved(false), 2000);
   };
 
   const handleSaveWebhooks = async () => {
     if (webhookEnabled && webhookUrl && !webhookUrl.startsWith('https://') && !webhookUrl.startsWith('http://')) {
-      showToast('error', 'L’URL du webhook doit commencer par http:// ou https://');
+      showToast('error', 'The webhook URL must start with http:// or https://');
       return;
     }
     setSaving(true);
     await new Promise((r) => setTimeout(r, 600));
     persist({ webhookUrl, webhookSecret, webhookEnabled, events });
     setSaving(false);
-    showToast('success', 'Configuration webhook enregistrée.');
+    showToast('success', 'Webhook configuration saved.');
   };
 
   const handleCopySecret = async () => {
     await navigator.clipboard.writeText(webhookSecret);
     setCopiedSecret(true);
-    showToast('info', 'Secret webhook copié.');
+    showToast('info', 'Webhook secret copied.');
     setTimeout(() => setCopiedSecret(false), 2000);
   };
 
@@ -158,18 +158,18 @@ export default function SettingsPage() {
     const next = `whsec_intermesh_${rand}`;
     setWebhookSecret(next);
     persist({ webhookSecret: next });
-    showToast('success', 'Nouveau secret webhook généré.');
+    showToast('success', 'New webhook secret generated.');
   };
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = inviteEmail.trim().toLowerCase();
     if (!email || !email.includes('@')) {
-      showToast('error', 'Email invalide.');
+      showToast('error', 'That email address is not valid.');
       return;
     }
     if (members.some((m) => m.email.toLowerCase() === email)) {
-      showToast('error', 'Ce membre existe déjà.');
+      showToast('error', 'That member is already in the workspace.');
       return;
     }
 
@@ -193,7 +193,7 @@ export default function SettingsPage() {
     setInviteOpen(false);
     setInviteEmail('');
     setInviteRole('Developer');
-    showToast('success', `Invitation envoyée à ${email}`);
+    showToast('success', `Invitation sent to ${email}`);
   };
 
   const handleDeleteMember = async () => {
@@ -202,19 +202,19 @@ export default function SettingsPage() {
     setMembers(nextMembers);
     persist({ members: nextMembers });
     setDeleteMember(null);
-    showToast('success', `${deleteMember.email} a été retiré de l’espace de travail.`);
+    showToast('success', `${deleteMember.email} was removed from the workspace.`);
   };
 
   const handleRoleChange = (id: string, role: Member['role']) => {
     const nextMembers = members.map((m) => (m.id === id && m.role !== 'Owner' ? { ...m, role } : m));
     setMembers(nextMembers);
     persist({ members: nextMembers });
-    showToast('success', 'Rôle mis à jour.');
+    showToast('success', 'Role updated.');
   };
 
   const handleResetCredentials = async () => {
     if (resetConfirm !== 'RESET') {
-      showToast('error', 'Tapez RESET pour confirmer.');
+      showToast('error', 'Type RESET to confirm.');
       return;
     }
     setResetLoading(true);
@@ -230,7 +230,7 @@ export default function SettingsPage() {
     setResetLoading(false);
     setResetOpen(false);
     setResetConfirm('');
-    showToast('success', 'Toutes les credentials ont été réinitialisées.');
+    showToast('success', 'All credentials have been reset.');
   };
 
   return (
@@ -251,9 +251,9 @@ export default function SettingsPage() {
       )}
 
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">Paramètres de l&apos;espace de travail</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-white">Workspace settings</h1>
         <p className="text-xs text-slate-400 mt-1">
-          Gérez les informations de votre organisation, les membres, les webhooks et la sécurité.
+          Manage your organization details, members, webhooks and security.
         </p>
       </div>
 
@@ -263,8 +263,8 @@ export default function SettingsPage() {
           <div className="flex items-center space-x-3">
             <Building2 className="w-5 h-5 text-slate-400" />
             <div>
-              <h2 className="text-base font-bold text-white">Informations générales</h2>
-              <p className="text-xs text-slate-400">Informations de base concernant le compte principal de votre organisation.</p>
+              <h2 className="text-base font-bold text-white">General information</h2>
+              <p className="text-xs text-slate-400">Basic details for your organization’s primary account.</p>
             </div>
           </div>
           <button
@@ -273,13 +273,13 @@ export default function SettingsPage() {
             className="py-2 px-4 bg-white hover:bg-slate-200 disabled:opacity-60 text-black text-xs font-semibold rounded-lg flex items-center space-x-2 transition"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Save className="w-3.5 h-3.5" />}
-            <span>{saving ? 'Enregistrement...' : saved ? 'Enregistré' : 'Enregistrer les modifications'}</span>
+            <span>{saving ? 'Saving…' : saved ? 'Saved' : 'Save changes'}</span>
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
           <div className="space-y-1.5">
-            <label className="block font-medium text-slate-300">Nom d&apos;affichage de l&apos;espace de travail</label>
+            <label className="block font-medium text-slate-300">Workspace display name</label>
             <input
               type="text"
               value={orgName}
@@ -289,7 +289,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block font-medium text-slate-300">Identifiant de l&apos;organisation</label>
+            <label className="block font-medium text-slate-300">Organization identifier</label>
             <input
               type="text"
               value={orgSlug}
@@ -307,8 +307,8 @@ export default function SettingsPage() {
           <div className="flex items-center space-x-3">
             <Users className="w-5 h-5 text-slate-400" />
             <div>
-              <h2 className="text-base font-bold text-white">Membres de l&apos;équipe et accès</h2>
-              <p className="text-xs text-slate-400">Personnes ayant accès à cet espace de travail du plan de contrôle.</p>
+              <h2 className="text-base font-bold text-white">Team members and access</h2>
+              <p className="text-xs text-slate-400">People with access to this Control Plane workspace.</p>
             </div>
           </div>
           <button
@@ -316,7 +316,7 @@ export default function SettingsPage() {
             className="py-2 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg flex items-center space-x-2 transition border border-white/10"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Inviter un membre</span>
+            <span>Invite a member</span>
           </button>
         </div>
 
@@ -324,9 +324,9 @@ export default function SettingsPage() {
           <table className="w-full text-left text-xs">
             <thead className="text-slate-500 border-b border-white/10 uppercase text-[10px] font-mono">
               <tr>
-                <th className="pb-3">Utilisateur</th>
-                <th className="pb-3">Rôle</th>
-                <th className="pb-3">Statut</th>
+                <th className="pb-3">User</th>
+                <th className="pb-3">Role</th>
+                <th className="pb-3">Status</th>
                 <th className="pb-3 text-right">Action</th>
               </tr>
             </thead>
@@ -346,23 +346,23 @@ export default function SettingsPage() {
                   </td>
                   <td className="py-3.5">
                     {m.role === 'Owner' ? (
-                      <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">Propriétaire</span>
+                      <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-slate-300">Owner</span>
                     ) : (
                       <select
                         value={m.role}
                         onChange={(e) => handleRoleChange(m.id, e.target.value as Member['role'])}
                         className="bg-[#08080A] border border-white/10 rounded px-2 py-1 text-slate-300 outline-none"
                       >
-                        <option value="Admin">Administrateur</option>
-                        <option value="Developer">Développeur</option>
-                        <option value="Viewer">Téléspectateur</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Developer">Developer</option>
+                        <option value="Viewer">Viewer</option>
                       </select>
                     )}
                   </td>
                   <td className="py-3.5">
                     <span className={`inline-flex items-center space-x-1.5 text-[11px] ${m.status === 'Active' ? 'text-emerald-400' : 'text-amber-400'}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${m.status === 'Active' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                      <span>{m.status === 'Active' ? 'Actif' : 'En attente'}</span>
+                      <span>{m.status === 'Active' ? 'Active' : 'Pending'}</span>
                     </span>
                   </td>
                   <td className="py-3.5 text-right">
@@ -370,7 +370,7 @@ export default function SettingsPage() {
                       <button
                         onClick={() => setDeleteMember(m)}
                         className="text-slate-500 hover:text-red-400 p-1 transition"
-                        title="Retirer le membre"
+                        title="Remove member"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -390,7 +390,7 @@ export default function SettingsPage() {
             <Webhook className="w-5 h-5 text-slate-400" />
             <div>
               <h2 className="text-base font-bold text-white">Event Webhooks</h2>
-              <p className="text-xs text-slate-400">Recevez des callbacks HTTP en temps réel pour les connexions d&apos;agents et alertes de quota.</p>
+              <p className="text-xs text-slate-400">Receive real-time HTTP callbacks for agent connections and quota alerts.</p>
             </div>
           </div>
           <button
@@ -418,10 +418,10 @@ export default function SettingsPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {(
               [
-                ['agent_connected', 'Agent connecté'],
-                ['quota_alert', 'Alerte quota'],
-                ['key_created', 'Clé créée'],
-                ['security_event', 'Événement sécurité'],
+                ['agent_connected', 'Agent connected'],
+                ['quota_alert', 'Quota alert'],
+                ['key_created', 'Key created'],
+                ['security_event', 'Security event'],
               ] as const
             ).map(([key, label]) => (
               <label key={key} className="flex items-center space-x-2 bg-[#08080A] border border-slate-800 rounded-lg px-3 py-2 cursor-pointer hover:border-slate-600 transition">
@@ -448,7 +448,7 @@ export default function SettingsPage() {
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs flex items-center space-x-1.5 transition font-sans"
               >
                 {copiedSecret ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedSecret ? 'Copié' : 'Copier'}</span>
+                <span>{copiedSecret ? 'Copied' : 'Copy'}</span>
               </button>
               <button
                 type="button"
@@ -456,7 +456,7 @@ export default function SettingsPage() {
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs flex items-center space-x-1.5 transition font-sans"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Régénérer</span>
+                <span>Regenerate</span>
               </button>
             </div>
           </div>
@@ -468,7 +468,7 @@ export default function SettingsPage() {
             className="py-2 px-4 bg-white hover:bg-slate-200 disabled:opacity-60 text-black text-xs font-semibold rounded-lg flex items-center space-x-2 transition"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            <span>Enregistrer les webhooks</span>
+            <span>Save webhooks</span>
           </button>
         </div>
       </div>
@@ -482,9 +482,9 @@ export default function SettingsPage() {
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs pt-2">
           <div>
-            <div className="font-bold text-white">Réinitialiser les credentials de l&apos;organisation</div>
+            <div className="font-bold text-white">Reset organization credentials</div>
             <div className="text-slate-400 mt-0.5">
-              Révoque le secret webhook et force la régénération des credentials sensibles locales.
+              Revokes the webhook secret and forces sensitive local credentials to be regenerated.
             </div>
           </div>
           <button
@@ -504,8 +504,8 @@ export default function SettingsPage() {
           <div className="relative w-full max-w-md bg-[#121214] border border-white/10 rounded-xl shadow-2xl p-6 space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-white">Inviter un membre</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Envoyez une invitation à rejoindre ce workspace.</p>
+                <h3 className="text-base font-bold text-white">Invite a member</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Send an invitation to join this workspace.</p>
               </div>
               <button type="button" onClick={() => setInviteOpen(false)} className="text-slate-500 hover:text-white">
                 <X className="w-4 h-4" />
@@ -529,15 +529,15 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400">Rôle</label>
+                <label className="text-xs text-slate-400">Role</label>
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as 'Admin' | 'Developer' | 'Viewer')}
                   className="w-full bg-[#08080A] border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-white/40"
                 >
-                  <option value="Admin">Administrateur</option>
-                  <option value="Developer">Développeur</option>
-                  <option value="Viewer">Téléspectateur</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Developer">Developer</option>
+                  <option value="Viewer">Viewer</option>
                 </select>
               </div>
 
@@ -547,7 +547,7 @@ export default function SettingsPage() {
                 className="w-full py-2.5 bg-white hover:bg-slate-200 disabled:opacity-60 text-black rounded-lg text-sm font-semibold flex items-center justify-center space-x-2"
               >
                 {inviteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                <span>{inviteLoading ? 'Envoi...' : 'Envoyer l’invitation'}</span>
+                <span>{inviteLoading ? 'Sending…' : 'Send invitation'}</span>
               </button>
             </form>
           </div>
@@ -564,9 +564,9 @@ export default function SettingsPage() {
                 <AlertTriangle className="w-5 h-5 text-red-400" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Retirer ce membre ?</h3>
+                <h3 className="text-base font-bold text-white">Remove this member?</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  <span className="text-white font-mono">{deleteMember.email}</span> perdra immédiatement l&apos;accès au Control Plane.
+                  <span className="text-white font-mono">{deleteMember.email}</span> will immediately lose access to the Control Plane.
                 </p>
               </div>
             </div>
@@ -602,8 +602,8 @@ export default function SettingsPage() {
               <div>
                 <h3 className="text-base font-bold text-white">Reset All Credentials</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Cette action régénère le secret webhook et invalide les credentials sensibles locales.
-                  Tapez <span className="text-red-300 font-mono">RESET</span> pour confirmer.
+                  This regenerates the webhook secret and invalidates sensitive local credentials.
+                  Type <span className="text-red-300 font-mono">RESET</span> to confirm.
                 </p>
               </div>
             </div>
@@ -634,7 +634,7 @@ export default function SettingsPage() {
                 className="px-4 py-2 bg-red-500 hover:bg-red-400 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition flex items-center space-x-2"
               >
                 {resetLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>{resetLoading ? 'Réinitialisation...' : 'Confirmer le reset'}</span>
+                <span>{resetLoading ? 'Resetting…' : 'Confirm reset'}</span>
               </button>
             </div>
           </div>

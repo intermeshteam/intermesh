@@ -37,7 +37,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'overview',
     label: 'Overview & Quotas',
-    description: 'Dashboard principal et limites d’agents',
+    description: 'Main dashboard and agent limits',
     href: '/dashboard',
     icon: LayoutDashboard,
     group: 'Navigation',
@@ -45,7 +45,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'agents',
     label: 'Agents Directory',
-    description: 'Liste des agents connectés',
+    description: 'List of connected agents',
     href: '/agents',
     icon: Users,
     group: 'Navigation',
@@ -53,7 +53,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'keys',
     label: 'API Keys & Licenses',
-    description: 'Gérer les clés et licences',
+    description: 'Manage keys and licenses',
     href: '/keys',
     icon: Key,
     group: 'Navigation',
@@ -61,7 +61,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'security',
     label: 'Audit Log & RBAC',
-    description: 'Journal d’audit et permissions',
+    description: 'Audit log and permissions',
     href: '/security',
     icon: ShieldCheck,
     group: 'Navigation',
@@ -69,7 +69,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'billing',
     label: 'Billing & Plans',
-    description: 'Abonnement et tarification',
+    description: 'Subscription and pricing',
     href: '/billing',
     icon: CreditCard,
     group: 'Navigation',
@@ -77,7 +77,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'settings',
     label: 'Workspace Settings',
-    description: 'Paramètres d’organisation, membres et webhooks',
+    description: 'Organization settings, members and webhooks',
     href: '/settings',
     icon: Settings,
     group: 'Navigation',
@@ -85,7 +85,7 @@ const SEARCH_ITEMS: SearchItem[] = [
   {
     id: 'docs',
     label: 'RFC-001 Documentation',
-    description: 'Spécification du protocole InterMesh',
+    description: 'InterMesh protocol specification',
     href: '/docs',
     icon: FileText,
     group: 'Resources',
@@ -376,7 +376,7 @@ export default function DashboardTopbar() {
 
             <div className="max-h-80 overflow-y-auto p-2">
               {filtered.length === 0 ? (
-                <div className="px-3 py-8 text-center text-xs text-slate-400">Aucun résultat pour “{query}”</div>
+                <div className="px-3 py-8 text-center text-xs text-slate-400">No results for “{query}”</div>
               ) : (
                 Object.entries(grouped).map(([group, items]) => (
                   <div key={group} className="mb-2">
