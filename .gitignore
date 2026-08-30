@@ -10,7 +10,14 @@ node_modules/
 *.egg-info/
 dist/
 build/
+# Secrets d'environnement.
+# `.env` seul ne suffisait pas : Next.js lit .env.local, .env.development.local
+# et .env.production.local, qui restaient donc suivis par git. Le fichier que
+# la documentation demande de creer etait le seul a ne pas etre protege.
 .env
+.env.*
+!.env.example
+!.env.*.example
 *.log
 .DS_Store
 *.node
