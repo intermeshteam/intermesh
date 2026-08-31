@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 import DashboardTopbar from '@/components/DashboardTopbar';
 import InterMeshLogo from '@/components/InterMeshLogo';
-import { HUB_URL } from '@/lib/hub';
-import { BORDER, CAPTION, SURFACE_BASE, SURFACE_CHROME, TEXT_MUTED } from '@/lib/ui';
+import HubConnection from '@/components/HubConnection';
+import { BORDER, CAPTION, SURFACE_BASE, SURFACE_CHROME } from '@/lib/ui';
 
 const NAV = [
   {
@@ -100,12 +100,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span>Docs — RFC-001</span>
           </Link>
 
-          <div className="space-y-1">
-            <div className={CAPTION}>Hub</div>
-            <div className={`truncate font-mono text-[11px] ${TEXT_MUTED}`} title={HUB_URL}>
-              {HUB_URL.replace(/^wss?:\/\//, '')}
-            </div>
-          </div>
+          <HubConnection />
         </div>
       </aside>
 

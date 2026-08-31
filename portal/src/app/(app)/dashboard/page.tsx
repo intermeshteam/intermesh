@@ -13,7 +13,7 @@ import {
   Terminal,
   Users,
 } from 'lucide-react';
-import { HUB_URL } from '@/lib/hub';
+import { getHubUrl } from '@/lib/hub';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { BORDER, CAPTION, CARD, FIGURE, SURFACE_SUNKEN, TEXT_MUTED, TEXT_SECONDARY, TONE, type Tone } from '@/lib/ui';
 
@@ -206,12 +206,13 @@ export default function OverviewPage() {
 
     const connect = () => {
       if (stopped) return;
-      const ws = new WebSocket(HUB_URL);
+      const hubUrl = getHubUrl();
+      const ws = new WebSocket(hubUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setHubConnected(true);
-        pushLog('INFO', 'System', `Connected to hub ${HUB_URL}`);
+        pushLog('INFO', 'System', `Connected to hub ${hubUrl}`);
         ws.send(
           JSON.stringify({
             id: crypto.randomUUID(),

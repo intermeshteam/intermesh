@@ -15,7 +15,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import { HUB_URL } from '@/lib/hub';
+import { getHubUrl } from '@/lib/hub';
 
 type NodeStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
@@ -47,7 +47,10 @@ const H = 720;
 // this system. They were nine invented boxes with invented latencies and
 // request rates, wired into a diagram that claimed to be live.
 const INFRA_NODES: TopoNode[] = [
-  { id: 'hub', label: 'InterMesh Hub', sub: HUB_URL, x: 550, y: 150, status: 'healthy', kind: 'hub', latency: 0, rps: 0 },
+  // `sub` reste vide ici : l'URL du hub dépend du navigateur (localStorage) et
+  // n'est donc pas connue au moment où ce module est évalué. Elle est renseignée
+  // à la connexion.
+  { id: 'hub', label: 'InterMesh Hub', sub: '', x: 550, y: 150, status: 'healthy', kind: 'hub', latency: 0, rps: 0 },
 ];
 
 const INFRA_EDGES: TopoEdge[] = [];
@@ -197,12 +200,13 @@ export default function TopologyPage() {
 
     const connect = () => {
       if (stopped) return;
-      const ws = new WebSocket(HUB_URL);
+      const hubUrl = getHubUrl();
+      const ws = new WebSocket(hubUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
         setHubConnected(true);
-        pushLog('INFO', `Hub connected (${HUB_URL})`);
+        pushLog('INFO', `Hub connected (${hubUrl})`);
         ws.send(
           JSON.stringify({
             id: crypto.randomUUID(),

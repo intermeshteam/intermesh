@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { HUB_URL } from '@/lib/hub';
 import { BORDER, SURFACE_CHROME_BLUR, SURFACE_RAISED, TONE } from '@/lib/ui';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import {
