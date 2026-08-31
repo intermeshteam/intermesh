@@ -17,6 +17,7 @@ import websockets
 from intermesh.admin import MUTATING, AdminContext, AdminError, authorize, caller_scope
 from intermesh.admin import execute as admin_execute
 from intermesh.apikeys import ApiKeyStore
+from intermesh.approval import ApprovalPolicy, requires_approval
 from intermesh.audit import ImmutableAuditLog
 from intermesh.egress import EgressBlocked, EgressPolicy, apply_egress
 from intermesh.escrow import EscrowError, EscrowManager
@@ -71,6 +72,21 @@ peer_public_keys: dict[str, str] = {}      # org distante -> clé publique PEM
 # Politique de sortie de cette organisation. Vide par défaut : rien n'est
 # filtré tant que rien n'est déclaré.
 egress_policy: EgressPolicy = EgressPolicy()
+
+# Validation humaine. Vide par défaut : aucune tâche n'est suspendue tant
+# qu'aucune règle n'est déclarée.
+approval_policy: ApprovalPolicy = ApprovalPolicy()
+
+# Tâches retenues en attente d'un arbitrage humain, par task_id.
+#
+# Le séquestre n'est volontairement pas encore constitué à ce stade : rien
+# ne doit être immobilisé tant qu'une personne n'a pas dit oui, et une
+# tâche refusée n'a donc aucun blocage à défaire. Le revers assumé est
+# qu'une approbation peut être suivie d'un échec de séquestre faute de
+# fonds — un échec visible, préférable à des fonds gelés en silence sur une
+# tâche que personne ne validera.
+pending_approvals: dict[str, dict] = {}
+
 SNAPSHOT_DIR: str | None = None   # None => ~/.intermesh/snapshots (ou $INTERMESH_HOME)
 
 
@@ -195,6 +211,55 @@ def remember_task(task: InterMeshTask) -> None:
     task_registry[task.task_id] = task
     if store is not None:
         store.save_task(task)
+
+
+async def finalize_task_submission(raw_task: dict, submitter: str, token: str | None,
+                                   reply_to: str | None = None) -> str | None:
+    """Constitue le séquestre puis livre la tâche à son exécutant.
+
+    Extrait du gestionnaire TASK_SUBMIT parce qu'une tâche soumise à
+    validation humaine emprunte le même chemin, mais plus tard — au moment
+    où quelqu'un l'approuve. Dupliquer cette séquence, c'est se garantir que
+    les deux divergeront.
+
+    Retourne un message d'erreur si le séquestre est refusé, sinon None.
+    """
+    escrow_req = raw_task.get("escrow")
+    if escrow_req:
+        try:
+            hold = escrow_manager.create_hold(
+                task_id=raw_task.get("task_id"),
+                payer_org=_agent_org(submitter),
+                payee_org=_agent_org(raw_task.get("assignee")),
+                amount=float(escrow_req.get("amount", 0) or 0),
+                currency=escrow_req.get("currency", "USD"),
+                auto_release=bool(escrow_req.get("auto_release", True)),
+            )
+        except EscrowError as ee:
+            audit_log.log("ESCROW_REJECTED", submitter, raw_task.get("assignee"), {
+                "reason": str(ee), "task_id": raw_task.get("task_id"),
+            })
+            return str(ee)
+        audit_log.log("ESCROW_HELD", submitter, raw_task.get("assignee"), {
+            "task_id": hold.task_id, "amount": hold.amount, "currency": hold.currency,
+        })
+
+    task = InterMeshTask.from_dict(raw_task)
+    remember_task(task)
+    entry = audit_log.log("TASK_SUBMITTED", submitter, task.assignee,
+                          {"task_id": task.task_id, "title": task.title})
+    await broadcast("task_submitted", {
+        "task_id": task.task_id, "title": task.title,
+        "orchestrator": submitter, "assignee": task.assignee,
+    })
+    await broadcast("audit_entry", {"entry": entry.to_dict()})
+    # Non livrée (exécutant hors ligne) : la tâche reste PENDING et sera
+    # réassignée à sa reconnexion.
+    await deliver_or_relay(InterMeshMessage(
+        type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee,
+        reply_to=reply_to, content=task.to_dict(), token=token,
+    ))
+    return None
 
 
 # ----------------------------------------------------------------------
@@ -528,6 +593,7 @@ async def _handle_admin_request(websocket, msg: InterMeshMessage) -> None:
             my_org=HUB_ORG, remember_task=remember_task, send_to_agent=send_task_to_agent,
             caller_org=caller_org, scoped=scoped, asimov_engine=asimov_engine, escrow_manager=escrow_manager,
             snapshot_dir=SNAPSHOT_DIR,
+            pending_approvals=pending_approvals, finalize_task=finalize_task_submission,
         )
         result = await admin_execute(command, params, ctx)
 
@@ -802,43 +868,65 @@ async def handle_agent(websocket, my_org: str):
                         ).to_json())
                         continue
 
-                    escrow_req = raw_task.get("escrow")
-                    if escrow_req:
-                        payee_org = _agent_org(raw_task.get("assignee"))
-                        try:
-                            hold = escrow_manager.create_hold(
-                                task_id=raw_task.get("task_id"), payer_org=task_org, payee_org=payee_org,
-                                amount=float(escrow_req.get("amount", 0) or 0),
-                                currency=escrow_req.get("currency", "USD"),
-                                auto_release=bool(escrow_req.get("auto_release", True)),
-                            )
-                        except EscrowError as ee:
-                            audit_log.log("ESCROW_REJECTED", msg.sender, raw_task.get("assignee"), {
-                                "reason": str(ee), "task_id": raw_task.get("task_id"),
-                            })
-                            await websocket.send(InterMeshMessage(
-                                type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id,
-                                content=str(ee), token=msg.token,
-                            ).to_json())
-                            continue
-                        audit_log.log("ESCROW_HELD", msg.sender, raw_task.get("assignee"), {
-                            "task_id": hold.task_id, "amount": hold.amount, "currency": hold.currency,
+                    # Validation humaine, avant toute constitution de séquestre :
+                    # rien ne doit être immobilisé tant qu'une personne n'a pas
+                    # tranché, et une tâche refusée n'a donc rien à défaire.
+                    assignee_name = raw_task.get("assignee") or ""
+                    assignee_identity = identity_registry.get(assignee_name)
+                    rule = requires_approval(
+                        raw_task,
+                        approval_policy,
+                        capabilities=(getattr(assignee_identity, "capabilities", None) or []),
+                        is_cross_org=(_agent_org(assignee_name) != task_org),
+                    )
+                    if rule is not None:
+                        pending_approvals[raw_task.get("task_id")] = {
+                            "task": raw_task,
+                            "submitter": msg.sender,
+                            "org_id": task_org,
+                            "rule": rule.name,
+                            "reason": rule.reason,
+                            "token": msg.token,
+                            "reply_to": msg.id,
+                            "submitted_at": time.time(),
+                        }
+                        entry = audit_log.log("APPROVAL_REQUIRED", msg.sender, assignee_name, {
+                            "task_id": raw_task.get("task_id"),
+                            "title": raw_task.get("title"),
+                            "rule": rule.name,
+                            "reason": rule.reason,
                         })
+                        await broadcast("approval_required", {
+                            "task_id": raw_task.get("task_id"),
+                            "title": raw_task.get("title"),
+                            "orchestrator": msg.sender,
+                            "assignee": assignee_name,
+                            "rule": rule.name,
+                            "reason": rule.reason,
+                        })
+                        await broadcast("audit_entry", {"entry": entry.to_dict()})
+                        # Aucun TASK_UPDATE n'est renvoyé à l'orchestrateur. Le
+                        # gestionnaire TASK_UPDATE du SDK parse le contenu comme
+                        # une tâche complète : un message partiel lève une
+                        # TaskValidationError dans sa boucle d'écoute et coupe sa
+                        # connexion. Un statut « awaiting_approval » exigerait
+                        # d'étendre TaskStatus, ce que les agents déjà publiés en
+                        # 0.3.0 ne sauraient pas lire.
+                        #
+                        # L'orchestrateur attend donc, comme devant un exécutant
+                        # lent — son propre timeout s'applique. La visibilité de
+                        # l'attente passe par approvals.list et l'événement de
+                        # télémétrie approval_required, qui est ce que regarde la
+                        # personne appelée à trancher.
+                        continue
 
-                    task = InterMeshTask.from_dict(msg.content)
-                    remember_task(task)
-                    entry = audit_log.log("TASK_SUBMITTED", msg.sender, task.assignee, {"task_id": task.task_id, "title": task.title})
-                    await broadcast("task_submitted", {
-                        "task_id": task.task_id, "title": task.title,
-                        "orchestrator": msg.sender, "assignee": task.assignee,
-                    })
-                    await broadcast("audit_entry", {"entry": entry.to_dict()})
-                    # Non livrée (exécutant hors ligne) : la tâche reste PENDING
-                    # et sera réassignée à sa reconnexion.
-                    await deliver_or_relay(InterMeshMessage(
-                        type=MessageType.TASK_ASSIGN, sender="hub", to=task.assignee,
-                        reply_to=msg.id, content=task.to_dict(), token=msg.token,
-                    ))
+                    err = await finalize_task_submission(raw_task, msg.sender, msg.token, reply_to=msg.id)
+                    if err:
+                        await websocket.send(InterMeshMessage(
+                            type=MessageType.ERROR, sender="hub", to=msg.sender, reply_to=msg.id,
+                            content=err, token=msg.token,
+                        ).to_json())
+                        continue
 
                 elif msg.type == MessageType.TASK_UPDATE:
                     td = msg.content or {}
@@ -908,7 +996,7 @@ async def main(argv: list[str] | None = None):
     """Démarre le Hub. `argv` permet de l'appeler depuis le CLI sans
     dépendre de sys.argv, qui porte déjà le nom de la sous-commande."""
     global store, api_keys, audit_log, HUB_SECRET, HUB_ORG, SNAPSHOT_DIR
-    global HUB_PRIVATE_KEY, HUB_PUBLIC_PEM, HUB_KEY_ID, egress_policy
+    global HUB_PRIVATE_KEY, HUB_PUBLIC_PEM, HUB_KEY_ID, egress_policy, approval_policy
 
     parser = argparse.ArgumentParser(description="InterMesh Hub")
     parser.add_argument("--port", type=int, default=8765, help="Port")
@@ -926,6 +1014,9 @@ async def main(argv: list[str] | None = None):
                         help="Autorité de certification des pairs (PKI privée)")
     parser.add_argument("--allow-insecure-peering", action="store_true",
                         help="Autorise un pairage en clair vers un hôte distant (déconseillé)")
+    parser.add_argument("--approval-policy", type=str, default=None,
+                        help="Politique de validation humaine (JSON) : quelles tâches "
+                             "sont retenues jusqu'à arbitrage")
     parser.add_argument("--egress-policy", type=str, default=None,
                         help="Politique de filtrage des contenus sortants (fichier JSON)")
 
@@ -964,6 +1055,10 @@ async def main(argv: list[str] | None = None):
     if args.egress_policy:
         egress_policy = EgressPolicy.load(args.egress_policy)
         print(f"  egress : {egress_policy.name} ({len(egress_policy.rules)} règle(s))")
+
+    if args.approval_policy:
+        approval_policy = ApprovalPolicy.load(args.approval_policy)
+        print(f"  appro. : {approval_policy.name} ({len(approval_policy.rules)} règle(s))")
     else:
         print("  egress : aucun filtre déclaré")
 

@@ -57,6 +57,8 @@ MUTATING = {
     "task.retry",
     "apikey.create",
     "apikey.revoke",
+    "approval.approve",
+    "approval.deny",
     "guardrails.set_policy",
     "escrow.grant",
     "escrow.release",
@@ -93,7 +95,14 @@ class AdminContext:
         asimov_engine: Any = None,
         escrow_manager: Any = None,
         snapshot_dir: Any = None,
+        pending_approvals: Any = None,
+        finalize_task: Callable | None = None,
     ):
+        # Tâches retenues en attente d'arbitrage humain, et le moyen de les
+        # relâcher. `finalize_task` est le même chemin que celui d'une
+        # soumission ordinaire : approuver ne doit pas livrer autrement.
+        self.pending_approvals = pending_approvals if pending_approvals is not None else {}
+        self.finalize_task = finalize_task
         self.snapshot_dir = snapshot_dir
         self.agents = agents
         self.identity_registry = identity_registry
@@ -694,6 +703,91 @@ def _snapshot_restore(ctx: AdminContext, params: dict) -> dict:
     }
 
 
+def _pending_in_scope(ctx: AdminContext, entry: dict) -> bool:
+    if not ctx.scoped:
+        return True
+    task = entry.get("task") or {}
+    return ctx.caller_org in (_org_of(entry.get("submitter")), _org_of(task.get("assignee")))
+
+
+def _approvals_list(ctx: AdminContext, params: dict) -> dict:
+    """Tâches en attente d'un arbitrage humain.
+
+    La charge utile de la tâche n'est pas renvoyée : elle peut contenir les
+    données mêmes que l'organisation ne veut pas voir circuler. Ce qui est
+    montré est ce qu'il faut pour décider — qui demande, pour qui, et la
+    raison écrite dans la règle.
+    """
+    out = []
+    for task_id, entry in ctx.pending_approvals.items():
+        if not _pending_in_scope(ctx, entry):
+            continue
+        task = entry.get("task") or {}
+        out.append({
+            "task_id": task_id,
+            "title": task.get("title"),
+            "submitter": entry.get("submitter"),
+            "assignee": task.get("assignee"),
+            "rule": entry.get("rule"),
+            "reason": entry.get("reason"),
+            "estimated_cost": task.get("estimated_cost"),
+            "submitted_at": entry.get("submitted_at"),
+        })
+    out.sort(key=lambda e: e.get("submitted_at") or 0)
+    return {"pending": out, "count": len(out)}
+
+
+def _pop_pending(ctx: AdminContext, params: dict) -> tuple[str, dict]:
+    task_id = params.get("task_id")
+    entry = ctx.pending_approvals.get(task_id)
+    if entry is None:
+        raise AdminError("Aucune tâche en attente d'approbation sous cet identifiant.")
+    if not _pending_in_scope(ctx, entry):
+        raise AdminError("Cette tâche est hors de votre organisation.")
+    return task_id, ctx.pending_approvals.pop(task_id)
+
+
+async def _approval_approve(ctx: AdminContext, params: dict) -> dict:
+    """Relâche une tâche retenue, par le même chemin qu'une soumission normale.
+
+    Le séquestre est constitué maintenant, pas au moment de la soumission :
+    rien n'aura été immobilisé pendant l'attente. Le revers est qu'il peut
+    échouer ici, faute de fonds — l'erreur est alors renvoyée à
+    l'approbateur plutôt que masquée.
+    """
+    task_id, entry = _pop_pending(ctx, params)
+    approver = params.get("_approver") or "admin"
+
+    if ctx.finalize_task is None:
+        raise AdminError("Ce Hub ne sait pas relâcher une tâche approuvée.")
+
+    err = await ctx.finalize_task(entry["task"], entry["submitter"], entry.get("token"))
+    if err:
+        # La tâche ressort de la file : elle n'a pas été livrée, et la
+        # remettre en attente laisse une chance de réapprouver une fois le
+        # solde reconstitué, au lieu de la perdre.
+        ctx.pending_approvals[task_id] = entry
+        raise AdminError(f"Approuvée, mais non livrée : {err}")
+
+    ctx.audit_log.log("APPROVAL_GRANTED", approver, entry["task"].get("assignee"), {
+        "task_id": task_id, "rule": entry.get("rule"), "submitter": entry.get("submitter"),
+    })
+    return {"task_id": task_id, "status": "approved"}
+
+
+def _approval_deny(ctx: AdminContext, params: dict) -> dict:
+    """Refuse une tâche retenue. Aucun séquestre n'existe, rien à défaire."""
+    task_id, entry = _pop_pending(ctx, params)
+    approver = params.get("_approver") or "admin"
+    note = params.get("note") or ""
+
+    ctx.audit_log.log("APPROVAL_DENIED", approver, entry["task"].get("assignee"), {
+        "task_id": task_id, "rule": entry.get("rule"),
+        "submitter": entry.get("submitter"), "note": note,
+    })
+    return {"task_id": task_id, "status": "denied", "note": note}
+
+
 HANDLERS: dict[str, Callable[..., Any]] = {
     "hub.info": _hub_info,
     "agents.list": _agents_list,
@@ -706,6 +800,9 @@ HANDLERS: dict[str, Callable[..., Any]] = {
     "apikeys.list": _apikeys_list,
     "apikey.create": _apikey_create,
     "apikey.revoke": _apikey_revoke,
+    "approvals.list": _approvals_list,
+    "approval.approve": _approval_approve,
+    "approval.deny": _approval_deny,
     "guardrails.policy": _guardrails_policy,
     "guardrails.set_policy": _guardrails_set_policy,
     "escrow.balance": _escrow_balance,
