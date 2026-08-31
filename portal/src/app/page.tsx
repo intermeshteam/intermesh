@@ -287,7 +287,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-white font-sans text-slate-900 selection:bg-cyan-500/25 dark:bg-[#08080A] dark:text-slate-50 notranslate" translate="no" suppressHydrationWarning>
+    <div className="relative min-h-screen bg-white font-sans text-slate-900 selection:bg-cyan-500/25 dark:bg-[#08080A] dark:text-slate-50 " suppressHydrationWarning>
       {/* ================= NAV ================= */}
       <header className={`sticky top-0 z-50 border-b bg-white/80 backdrop-blur-xl dark:bg-[#08080A]/80 ${HAIRLINE}`}>
         <div className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-4">

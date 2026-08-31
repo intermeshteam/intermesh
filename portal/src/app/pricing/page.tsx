@@ -2,66 +2,142 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Check, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Check, Github, Terminal } from 'lucide-react';
+import InterMeshLogo from '@/components/InterMeshLogo';
+import ThemeToggle from '@/components/ThemeToggle';
+
+/**
+ * This page used to advertise a $29/month "Pro Production" tier with an
+ * "Upgrade to Pro" button that linked to /dashboard, a "Contact Sales" button
+ * wired to nothing, and a "Managed Cloud Hub Option" that does not exist in any
+ * form. None of it could be bought: there is no payment integration, and the
+ * merchant account needed to add one is blocked for the time being.
+ *
+ * Everything the old table listed as paid — end-to-end encryption, federation,
+ * the Merkle audit log — is in fact free and open source today. So the honest
+ * page is also the stronger one, and it no longer needs a fake price to make
+ * the point.
+ */
+
+const HAIRLINE = 'border-slate-200 dark:border-white/[0.07]';
+const ALT_SURFACE = 'bg-slate-50 dark:bg-white/[0.015]';
+const HEADING = 'text-slate-900 dark:text-white';
+const BODY = 'text-slate-600 dark:text-slate-400';
+const MUTED = 'text-slate-500 dark:text-slate-500';
+
+const INCLUDED = [
+  'Unlimited agents — the limit is your own machine, not a plan',
+  'End-to-end encryption (RSA-2048-OAEP + AES-256-GCM)',
+  'Hub-to-hub federation between organizations, over TLS',
+  'Ed25519 federated identity',
+  'Merkle-chained audit log',
+  'Egress policies on what leaves your organization',
+  'Python and JavaScript SDKs, plus the universal bridge',
+  'The Control Plane you are looking at, pointed at your own hub',
+];
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-[#08080A] text-white p-8 max-w-[1200px] mx-auto font-sans space-y-12">
-      <Link href="/" className="inline-flex items-center space-x-2 text-xs text-slate-400 hover:text-white transition">
-        <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Back to Home</span>
-      </Link>
-
-      <div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-white">Simple, Predictable Pricing</h1>
-        <p className="text-sm text-slate-400 mt-2">Start free with self-hosted agents. Upgrade as your agent network grows.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-[#0D0E12] border border-slate-800 rounded-xl p-6 flex flex-col justify-between space-y-6">
-          <div>
-            <span className="text-xs font-mono uppercase text-slate-400">Developer</span>
-            <div className="text-4xl font-extrabold text-white mt-3">$0 <span className="text-xs font-normal text-slate-500">/ month</span></div>
-            <p className="text-xs text-slate-400 mt-2">Perfect for prototyping & personal AI agent projects.</p>
-            <ul className="space-y-3 text-xs text-slate-300 mt-6">
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-emerald-400" /><span>Up to 10 Active Agents</span></li>
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-emerald-400" /><span>E2E Encryption (RSA / AES)</span></li>
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-emerald-400" /><span>Self-Hosted Local Hub & CLI</span></li>
-            </ul>
-          </div>
-          <Link href="/dashboard" className="w-full py-2.5 bg-slate-800 text-slate-300 text-xs rounded-lg font-semibold text-center block">Current Plan</Link>
-        </div>
-
-        <div className="bg-[#0D0E12] border-2 border-white rounded-xl p-6 flex flex-col justify-between space-y-6 relative">
-          <div className="absolute top-3 right-3 bg-white text-black text-[10px] font-bold px-2 py-0.5 rounded uppercase">POPULAR</div>
-          <div>
-            <span className="text-xs font-mono uppercase text-white">Pro Production</span>
-            <div className="text-4xl font-extrabold text-white mt-3">$29 <span className="text-xs font-normal text-slate-500">/ month</span></div>
-            <p className="text-xs text-slate-400 mt-2">For growing teams deploying production agent clusters.</p>
-            <ul className="space-y-3 text-xs text-slate-200 mt-6">
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-white" /><span className="font-medium">Up to 50 Active Agents</span></li>
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-white" /><span>Managed Cloud Hub Option</span></li>
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-white" /><span>30-Day Telemetry Logs</span></li>
-            </ul>
-          </div>
-          <Link href="/dashboard" className="w-full py-2.5 bg-white text-black font-bold text-xs rounded-lg flex items-center justify-center space-x-2 hover:bg-slate-200 transition">
-            <span>Upgrade to Pro</span>
-            <ArrowRight className="w-4 h-4" />
+    <div
+      className="min-h-screen bg-white font-sans text-slate-900 dark:bg-[#08080A] dark:text-slate-50"
+      suppressHydrationWarning
+    >
+      <header className={`sticky top-0 z-50 border-b bg-white/80 backdrop-blur-xl dark:bg-[#08080A]/80 ${HAIRLINE}`}>
+        <div className="mx-auto flex max-w-[900px] items-center justify-between px-6 py-4">
+          <Link
+            href="/"
+            className={`flex items-center gap-2.5 text-base font-bold tracking-[0.18em] transition hover:opacity-80 notranslate ${HEADING}`}
+            translate="no"
+          >
+            <InterMeshLogo className="h-4 w-4 shrink-0" />
+            <span>INTERMESH</span>
           </Link>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[900px] space-y-12 px-6 py-12">
+        <Link
+          href="/"
+          className={`inline-flex items-center gap-2 text-xs transition hover:text-slate-900 dark:hover:text-white ${MUTED}`}
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Back to home</span>
+        </Link>
+
+        <div className="space-y-4">
+          <h1 className={`text-[2.4rem] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[3rem] ${HEADING}`}>
+            Free, and open source.
+          </h1>
+          <p className={`max-w-2xl text-lg leading-relaxed ${BODY}`}>
+            There is no paid plan yet — not a free tier with things held back, but genuinely everything,
+            under Apache&nbsp;2.0. You run the hub on your own infrastructure, so there is no per-agent
+            cost for us to pass on to you.
+          </p>
         </div>
 
-        <div className="bg-[#0D0E12] border border-slate-800 rounded-xl p-6 flex flex-col justify-between space-y-6">
-          <div>
-            <span className="text-xs font-mono uppercase text-slate-400">Enterprise</span>
-            <div className="text-4xl font-extrabold text-white mt-3">Custom</div>
-            <p className="text-xs text-slate-400 mt-2">For mission-critical infrastructure & compliance.</p>
-            <ul className="space-y-3 text-xs text-slate-300 mt-6">
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-emerald-400" /><span>Unlimited Active Agents</span></li>
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-emerald-400" /><span>Hub-to-Hub Federation Peering</span></li>
-              <li className="flex items-center space-x-2"><Check className="w-4 h-4 text-emerald-400" /><span>Merkle Audit Log Export</span></li>
-            </ul>
+        <div className={`rounded-2xl border p-8 ${HAIRLINE} ${ALT_SURFACE}`}>
+          <div className="flex flex-wrap items-baseline gap-3">
+            <span className={`text-4xl font-bold ${HEADING}`}>$0</span>
+            <span className={`text-sm ${MUTED}`}>self-hosted · Apache 2.0 · no account required</span>
           </div>
-          <button className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg font-semibold transition">Contact Sales</button>
+
+          <ul className="mt-8 grid grid-cols-1 gap-x-8 gap-y-3.5 sm:grid-cols-2">
+            {INCLUDED.map((item) => (
+              <li key={item} className={`flex items-start gap-2.5 text-sm leading-relaxed ${BODY}`}>
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-400" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className={`mt-8 flex flex-wrap items-center gap-3 border-t pt-6 ${HAIRLINE}`}>
+            <div
+              className={`flex items-center gap-2.5 rounded-lg border px-3.5 py-2 font-mono text-sm ${HAIRLINE} ${HEADING}`}
+            >
+              <Terminal className="h-3.5 w-3.5 shrink-0 text-cyan-600 dark:text-cyan-400" />
+              pip install intermesh
+            </div>
+            <a
+              href="https://github.com/intermeshteam/intermesh"
+              target="_blank"
+              rel="noreferrer"
+              className={`inline-flex items-center gap-2 text-sm font-medium transition hover:text-slate-900 dark:hover:text-white ${BODY}`}
+            >
+              <Github className="h-4 w-4" />
+              Read the source
+            </a>
+          </div>
+        </div>
+
+        <div className={`space-y-4 border-t pt-10 ${HAIRLINE}`}>
+          <h2 className={`text-xl font-semibold ${HEADING}`}>Is there a hosted version?</h2>
+          <p className={`max-w-2xl text-sm leading-relaxed ${BODY}`}>
+            Not today. The Control Plane is hosted, but it is a client for the hub you run yourself —
+            your browser connects to it directly, and no agent traffic passes through our servers.
+            That is what keeps this free, and it is also why your payloads stay on your own
+            infrastructure.
+          </p>
+          <p className={`max-w-2xl text-sm leading-relaxed ${BODY}`}>
+            A managed hub and team features are the obvious next step, and they will be paid. They do
+            not exist yet, so there is nothing to sell you and no waitlist to put you on. When that
+            changes it will be announced on the repository.
+          </p>
+        </div>
+
+        <div className={`border-t pt-10 ${HAIRLINE}`}>
+          <p className={`text-sm leading-relaxed ${MUTED}`}>
+            Questions, or a use case you want to discuss?{' '}
+            <a
+              href="https://github.com/intermeshteam/intermesh/issues"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-cyan-600 underline underline-offset-4 transition hover:text-cyan-500 dark:text-cyan-300 dark:hover:text-cyan-200"
+            >
+              Open an issue on GitHub
+            </a>
+            .
+          </p>
         </div>
       </div>
     </div>

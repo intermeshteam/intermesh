@@ -122,7 +122,7 @@ export default function KeysPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans text-slate-100 notranslate" translate="no">
+    <div className="space-y-8 font-sans text-slate-100">
       
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">

@@ -43,7 +43,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // `dark` is pinned here: these pages are written with dark colours in the
     // markup, so they would be unreadable under the light theme. Scoping the
     // class to this subtree keeps the public pages switchable.
-    <div className={`dark flex min-h-screen font-sans text-slate-100 notranslate ${SURFACE_BASE}`} translate="no">
+    <div className={`dark flex min-h-screen font-sans text-slate-100 ${SURFACE_BASE}`}>
       <aside className={`fixed bottom-0 left-0 top-0 z-30 flex w-[248px] shrink-0 flex-col justify-between border-r ${BORDER} ${SURFACE_CHROME}`}>
         <div>
           <div className={`flex h-14 items-center gap-2.5 border-b px-5 ${BORDER}`}>

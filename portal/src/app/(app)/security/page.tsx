@@ -109,7 +109,7 @@ export default function SecurityPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans text-slate-100 notranslate" translate="no">
+    <div className="space-y-8 font-sans text-slate-100">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
@@ -124,7 +124,8 @@ export default function SecurityPage() {
             </span>
           </div>
           <p className="text-xs text-zinc-400 mt-1 font-sans">
-            Cryptographically chained Merkle log for SOC2 & HIPAA compliance auditability.
+            Cryptographically chained Merkle log — each entry is verified against the previous
+            hash, so an edit made directly in the database breaks the chain and is detected.
           </p>
         </div>
 

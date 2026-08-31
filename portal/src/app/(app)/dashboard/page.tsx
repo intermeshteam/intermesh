@@ -363,7 +363,7 @@ export default function OverviewPage() {
   const orgs = useMemo(() => new Set(agents.map((a) => a.org)).size, [agents]);
 
   return (
-    <div className="space-y-8 font-sans text-slate-100 notranslate" translate="no">
+    <div className="space-y-8 font-sans text-slate-100">
       {/* HEADER */}
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.07] pb-4">
         <div className="space-y-1">

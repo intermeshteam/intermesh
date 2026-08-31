@@ -497,8 +497,7 @@ export default function TopologyPage() {
       ref={shellRef}
       className={`${
         fullscreen ? 'fixed inset-0 z-[200] bg-[#000000] p-6' : 'h-[calc(100vh-8rem)] min-h-[650px]'
-      } space-y-4 font-sans flex flex-col notranslate`}
-      translate="no"
+      } space-y-4 font-sans flex flex-col`}
     >
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 border-b border-zinc-800/80 pb-4">

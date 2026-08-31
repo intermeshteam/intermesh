@@ -36,14 +36,12 @@ const THEME_SCRIPT = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`notranslate ${inter.variable}`} translate="no" suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
-        <meta name="google" content="notranslate" />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body
-        className="min-h-screen bg-white font-sans text-slate-900 antialiased selection:bg-cyan-500/25 dark:bg-[#08080A] dark:text-slate-100 notranslate"
-        translate="no"
+        className="min-h-screen bg-white font-sans text-slate-900 antialiased selection:bg-cyan-500/25 dark:bg-[#08080A] dark:text-slate-100"
         suppressHydrationWarning
       >
         {children}
