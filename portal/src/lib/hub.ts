@@ -34,6 +34,41 @@ export function isValidHubUrl(value: string): boolean {
   }
 }
 
+/** Hosts the browser treats as trustworthy, where plain ws:// stays allowed from an https:// page. */
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
+    hostname === '::1'
+  );
+}
+
+/**
+ * True when the browser will refuse this URL outright rather than fail to reach it.
+ *
+ * A page served over HTTPS may not open a plain ws:// socket to anything other
+ * than a loopback host: `new WebSocket()` throws a SecurityError synchronously,
+ * before a single packet leaves the machine. Verified from the deployed site —
+ * ws:// to a remote host throws, wss:// to the same host does not.
+ *
+ * This distinction is the whole point of the function. Both cases otherwise
+ * surface as "not reachable", which sends someone off to inspect firewalls and
+ * server logs for a connection their own browser declined to attempt. A hub on
+ * a VPS, at Hostinger or anywhere else off the local machine, has to be wss://.
+ */
+export function isBlockedByMixedContent(value: string): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.location.protocol !== 'https:') return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'ws:' && !isLoopbackHost(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolves the hub URL for this browser. Safe to call during SSR, where there
  * is no localStorage — it falls back to the default.
@@ -73,6 +108,23 @@ export function resetHubUrl(): void {
 /** True when the given hub URL is reached over TLS. */
 export function isSecureHub(url: string): boolean {
   return url.startsWith('wss://');
+}
+
+/**
+ * Opens a socket to the hub, returning null instead of throwing.
+ *
+ * `new WebSocket()` throws synchronously on a blocked mixed-content URL. The
+ * pages call it inside an effect, where an uncaught throw takes the whole page
+ * down — so a hub address typed with the wrong scheme would blank the screen
+ * rather than show a disconnected state. Callers treat null as "no connection
+ * this attempt" and rely on their existing retry.
+ */
+export function openHubSocket(url: string = getHubUrl()): WebSocket | null {
+  try {
+    return new WebSocket(url);
+  } catch {
+    return null;
+  }
 }
 
 /**

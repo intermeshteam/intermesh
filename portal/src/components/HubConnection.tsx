@@ -2,7 +2,14 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Pencil, RotateCcw, X } from 'lucide-react';
-import { DEFAULT_HUB_URL, getHubUrl, isValidHubUrl, resetHubUrl, setHubUrl } from '@/lib/hub';
+import {
+  DEFAULT_HUB_URL,
+  getHubUrl,
+  isBlockedByMixedContent,
+  isValidHubUrl,
+  resetHubUrl,
+  setHubUrl,
+} from '@/lib/hub';
 
 /**
  * Hub address + live reachability, in the sidebar footer.
@@ -14,7 +21,13 @@ import { DEFAULT_HUB_URL, getHubUrl, isValidHubUrl, resetHubUrl, setHubUrl } fro
  * and nothing on screen distinguishes "no agents yet" from "not connected".
  */
 
-type Status = 'checking' | 'online' | 'offline';
+/**
+ * `blocked` is deliberately separate from `offline`. A remote ws:// hub is
+ * refused by the browser before any packet is sent, so reporting it as
+ * unreachable sends someone to inspect a firewall for a connection that was
+ * never attempted. The fix is on the hub (serve wss://), not on the network.
+ */
+type Status = 'checking' | 'online' | 'offline' | 'blocked';
 
 const PROBE_TIMEOUT_MS = 4000;
 
@@ -28,6 +41,14 @@ export default function HubConnection() {
 
   const probe = useCallback((target: string) => {
     probeRef.current?.close();
+
+    // Checked before opening anything: the constructor would throw a
+    // SecurityError, which is indistinguishable from a dead host once caught.
+    if (isBlockedByMixedContent(target)) {
+      setStatus('blocked');
+      return;
+    }
+
     setStatus('checking');
 
     let settled = false;
@@ -96,8 +117,21 @@ export default function HubConnection() {
   };
 
   const dot =
-    status === 'online' ? 'bg-emerald-400' : status === 'offline' ? 'bg-red-400' : 'bg-slate-500 animate-pulse';
-  const label = status === 'online' ? 'Connected' : status === 'offline' ? 'Not reachable' : 'Checking…';
+    status === 'online'
+      ? 'bg-emerald-400'
+      : status === 'offline'
+      ? 'bg-red-400'
+      : status === 'blocked'
+      ? 'bg-amber-400'
+      : 'bg-slate-500 animate-pulse';
+  const label =
+    status === 'online'
+      ? 'Connected'
+      : status === 'offline'
+      ? 'Not reachable'
+      : status === 'blocked'
+      ? 'Blocked by the browser'
+      : 'Checking…';
 
   if (editing) {
     return (
@@ -170,6 +204,17 @@ export default function HubConnection() {
           Start one with{' '}
           <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-slate-300">intermesh hub</code>, then
           refresh.
+        </p>
+      )}
+
+      {status === 'blocked' && (
+        <p className="text-[10px] leading-relaxed text-amber-400/80">
+          This page is served over HTTPS, so it cannot open a plain{' '}
+          <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono">ws://</code> socket to another machine — the
+          browser refuses before connecting. A remote hub has to serve{' '}
+          <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono">wss://</code> (
+          <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono">--tls-cert</code> /{' '}
+          <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono">--tls-key</code>). Only localhost is exempt.
         </p>
       )}
     </div>

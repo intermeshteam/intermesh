@@ -13,7 +13,7 @@ import {
   Terminal,
   Users,
 } from 'lucide-react';
-import { getHubUrl } from '@/lib/hub';
+import { getHubUrl, openHubSocket } from '@/lib/hub';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { BORDER, CAPTION, CARD, FIGURE, SURFACE_SUNKEN, TEXT_MUTED, TEXT_SECONDARY, TONE, type Tone } from '@/lib/ui';
 
@@ -207,7 +207,8 @@ export default function OverviewPage() {
     const connect = () => {
       if (stopped) return;
       const hubUrl = getHubUrl();
-      const ws = new WebSocket(hubUrl);
+      const ws = openHubSocket(hubUrl);
+      if (!ws) return; // adresse refusée par le navigateur : voir HubConnection
       wsRef.current = ws;
 
       ws.onopen = () => {

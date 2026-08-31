@@ -10,7 +10,7 @@ import {
   Lock, 
   AlertTriangle 
 } from 'lucide-react';
-import { getHubUrl } from '@/lib/hub';
+import { openHubSocket } from '@/lib/hub';
 
 interface AuditBlock {
   index: number;
@@ -36,7 +36,8 @@ export default function SecurityPage() {
 
     const connect = () => {
       if (stopped) return;
-      const ws = new WebSocket(getHubUrl());
+      const ws = openHubSocket();
+      if (!ws) return; // adresse refusée par le navigateur : voir HubConnection
       wsRef.current = ws;
 
       ws.onopen = () => {

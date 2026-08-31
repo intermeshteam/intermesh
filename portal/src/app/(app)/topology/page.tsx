@@ -15,7 +15,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-react';
-import { getHubUrl } from '@/lib/hub';
+import { getHubUrl, openHubSocket } from '@/lib/hub';
 
 type NodeStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
@@ -201,7 +201,8 @@ export default function TopologyPage() {
     const connect = () => {
       if (stopped) return;
       const hubUrl = getHubUrl();
-      const ws = new WebSocket(hubUrl);
+      const ws = openHubSocket(hubUrl);
+      if (!ws) return; // adresse refusée par le navigateur : voir HubConnection
       wsRef.current = ws;
 
       ws.onopen = () => {
