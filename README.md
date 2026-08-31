@@ -13,7 +13,7 @@
 **InterMesh is the neutral, open standard that lets AI agents — regardless of language,
 framework, or vendor — discover each other, communicate securely, and collaborate.**
 
-[Manifesto](docs/MANIFESTO.md) · [RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Agent integration](docs/AGENT-INTEGRATION.md) · [Contributing](CONTRIBUTING.md)
+[Manifesto](docs/MANIFESTO.md) · [RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Agent integration](docs/AGENT-INTEGRATION.md) · [Remote hub](docs/REMOTE-HUB.md) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -211,7 +211,7 @@ policy declared, nothing is touched.
 | `sdk-js/` | Official JavaScript/TypeScript SDK (`intermesh`) — adapters for LangChain.js and LlamaIndex.TS |
 | `server/` | The coordination hub |
 | `dashboard/` | Mission Control web UI |
-| `docs/` | RFC-001, security spec, API reference |
+| `docs/` | RFC-001, security spec, API reference, remote-hub guide |
 | `examples/` | Runnable agents (Python and Node.js); `examples/frameworks/` wraps real LangChain/LlamaIndex/CrewAI/AutoGen objects |
 | `tests/` | 137 unit + integration tests |
 | `docker/` | Container images for hub, agents, dashboard |
