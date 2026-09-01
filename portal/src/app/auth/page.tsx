@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Github, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import AuthShell from '@/components/AuthShell';
+import OAuthButtons from '@/components/OAuthButtons';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { signIn } from '@/lib/supabase/account';
 
@@ -41,18 +42,6 @@ export default function SignInPage() {
     router.push('/dashboard');
   };
 
-
-  // Real OAuth rather than a redirect that pretended to authenticate.
-  const handleGithub = async () => {
-    setError(null);
-    if (!configured) {
-      setError('Supabase is not configured on this deployment.');
-      return;
-    }
-    const { signInWithGithub } = await import('@/lib/supabase/account');
-    const result = await signInWithGithub();
-    if (!result.ok) setError(result.error ?? 'GitHub sign-in failed.');
-  };
 
   return (
     <AuthShell
@@ -94,16 +83,10 @@ export default function SignInPage() {
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={handleGithub}
-        disabled={!configured}
-        title={configured ? undefined : 'Supabase is not configured on this deployment'}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-white/[0.06]"
-      >
-        <Github className="h-4 w-4" />
-        <span>Continue with GitHub</span>
-      </button>
+      <OAuthButtons
+        configured={configured}
+        onError={(message) => setError(message)}
+      />
 
       <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-600">
         <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />

@@ -125,13 +125,92 @@ export async function ensureOrganization(name: string, slug: string): Promise<st
   return null;
 }
 
-/** OAuth via GitHub. Supabase handles the redirect dance. */
-export async function signInWithGithub(): Promise<AuthOutcome> {
+/**
+ * Identity providers this deployment offers.
+ *
+ * GitHub is for individual developers. Microsoft and Google are the
+ * enterprise path: a company that runs Entra ID or Google Workspace already
+ * has every employee in one directory, with joiners and leavers handled
+ * there. That is the requirement behind "we need SSO" — not a particular
+ * protocol, but not provisioning five thousand accounts by hand and having
+ * a departure revoke access on its own.
+ *
+ * True SAML 2.0 is a separate matter: Supabase offers it on Pro and above,
+ * configured through its CLI rather than the dashboard. The OAuth providers
+ * below cover the large majority of companies and cost nothing, so they come
+ * first. See docs/ENTERPRISE-SSO.md.
+ */
+export type OAuthProvider = 'github' | 'azure' | 'google';
+
+interface ProviderSpec {
+  id: OAuthProvider;
+  label: string;
+  /** Extra scopes the provider needs beyond Supabase's defaults. */
+  scopes?: string;
+}
+
+export const OAUTH_PROVIDERS: ProviderSpec[] = [
+  { id: 'github', label: 'GitHub' },
+  // `email` is not implied for Entra ID; without it the session carries no
+  // address and the organization lookup that follows sign-in has nothing to
+  // match on.
+  { id: 'azure', label: 'Microsoft', scopes: 'email' },
+  { id: 'google', label: 'Google' },
+];
+
+/**
+ * Which providers this Supabase project actually has enabled.
+ *
+ * Rendering a button for a disabled provider is worse than omitting it.
+ * `signInWithOAuth` does not fail in that case — it only builds a URL and
+ * navigates — so the browser leaves the site and lands on raw JSON from the
+ * Supabase domain: `{"code":400,...,"msg":"Unsupported provider: provider is
+ * not enabled"}`. There is no error for the caller to catch. Verified
+ * against a live project.
+ *
+ * The settings endpoint answers with the anon key, which the browser already
+ * holds, so asking is cheap and needs no privileged credential.
+ */
+export async function enabledProviders(): Promise<OAuthProvider[]> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return [];
+
+  try {
+    const res = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { external?: Record<string, boolean> };
+    const external = data.external ?? {};
+    return OAUTH_PROVIDERS.filter((p) => external[p.id]).map((p) => p.id);
+  } catch {
+    // Réseau indisponible : on ne devine pas. L'appelant retombe sur le
+    // formulaire e-mail plutôt que d'afficher des boutons incertains.
+    return [];
+  }
+}
+
+/**
+ * Starts an OAuth sign-in. Supabase handles the redirect dance.
+ *
+ * Only call this for a provider {@link enabledProviders} has confirmed —
+ * otherwise the visitor is sent to a JSON error page and never comes back.
+ */
+export async function signInWithProvider(provider: OAuthProvider): Promise<AuthOutcome> {
   const supabase = createClient();
+  const spec = OAUTH_PROVIDERS.find((p) => p.id === provider);
+
   const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'github',
-    options: { redirectTo: `${window.location.origin}/auth/callback` },
+    provider,
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+      ...(spec?.scopes ? { scopes: spec.scopes } : {}),
+    },
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/** @deprecated Use {@link signInWithProvider}. Kept so existing callers keep working. */
+export async function signInWithGithub(): Promise<AuthOutcome> {
+  return signInWithProvider('github');
 }
