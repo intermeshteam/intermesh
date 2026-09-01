@@ -27,6 +27,7 @@ class InterMeshTask:
         status: TaskStatus = TaskStatus.PENDING,
         output_data: Any = None,
         error_message: Optional[str] = None,
+        summary: Optional[str] = None,
         created_at: Optional[float] = None,
         updated_at: Optional[float] = None
     ):
@@ -38,13 +39,19 @@ class InterMeshTask:
         self.status = TaskStatus(status)
         self.output_data = output_data
         self.error_message = error_message
+        # Résumé en clair de ce que l'agent a fait : contrairement à
+        # input_data/output_data (chiffrés de bout en bout), ce champ est
+        # lisible par le Hub et la console, pour la page de résumés.
+        self.summary = summary
         self.created_at = created_at or time.time()
         self.updated_at = updated_at or time.time()
 
-    def update_status(self, status: TaskStatus, output_data: Any = None, error_message: Optional[str] = None):
+    def update_status(self, status: TaskStatus, output_data: Any = None, error_message: Optional[str] = None, summary: Optional[str] = None):
         self.status = TaskStatus(status)
         self.output_data = output_data
         self.error_message = error_message
+        if summary is not None:
+            self.summary = summary
         self.updated_at = time.time()
 
     def to_dict(self) -> dict:
@@ -57,6 +64,7 @@ class InterMeshTask:
             "status": self.status.value,
             "output_data": self.output_data,
             "error_message": self.error_message,
+            "summary": self.summary,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
@@ -108,6 +116,10 @@ class InterMeshTask:
         if updated_at is not None and not isinstance(updated_at, (int, float)):
             raise TaskValidationError("Le champ 'updated_at' doit etre un timestamp numerique.")
 
+        summary = data.get("summary")
+        if summary is not None and not isinstance(summary, str):
+            raise TaskValidationError("Le champ 'summary' doit etre une chaine de caracteres.")
+
         return cls(
             task_id=task_id,
             title=title,
@@ -117,6 +129,7 @@ class InterMeshTask:
             status=status,
             output_data=data.get("output_data"),
             error_message=data.get("error_message"),
+            summary=summary,
             created_at=created_at,
             updated_at=updated_at
         )

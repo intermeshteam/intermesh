@@ -440,9 +440,13 @@ class InterMeshAgent:
             if self.encrypt:
                 pk = await self._fetch_public_key(task.orchestrator)
                 if pk: encrypted_output = self._encrypt_content(pk, encrypted_output)
-            task.update_status(TaskStatus.COMPLETED, output_data=encrypted_output)
+            # task.summary peut avoir été renseigné par le handler (en clair,
+            # contrairement à output_data qui peut être chiffré) : sinon on
+            # retombe sur un résumé générique pour la page de résumés.
+            summary = task.summary or f"Tâche « {task.title} » terminée par {self.qualified_name}."
+            task.update_status(TaskStatus.COMPLETED, output_data=encrypted_output, summary=summary)
         except Exception as e:
-            task.update_status(TaskStatus.FAILED, error_message=str(e))
+            task.update_status(TaskStatus.FAILED, error_message=str(e), summary=task.summary or f"Échec de « {task.title} » : {e}")
 
         await self.ws.send(InterMeshMessage(type=MessageType.TASK_UPDATE, sender=self.qualified_name, content=task.to_dict(), token=self.token).to_json())
         print(f"✅ [{self.qualified_name}] Tâche terminée: {task.status.value.upper()}")

@@ -597,7 +597,7 @@ async def process_relayed(ws, msg: InterMeshMessage, origin_org: str) -> None:
             remember_task(InterMeshTask.from_dict(td))
         if td.get("status") == TaskStatus.COMPLETED.value:
             entry = audit_log.log("TASK_COMPLETED", msg.sender, td.get("orchestrator"), {
-                "task_id": tid, "federated": True,
+                "task_id": tid, "federated": True, "summary": td.get("summary"),
             })
             await broadcast("audit_entry", {"entry": entry.to_dict()})
         await deliver_or_relay(InterMeshMessage(
@@ -1159,8 +1159,8 @@ async def handle_agent(websocket, my_org: str):
                         task = InterMeshTask.from_dict(td)
                         remember_task(task)
                         if task.status == TaskStatus.COMPLETED:
-                            entry = audit_log.log("TASK_COMPLETED", msg.sender, orch, {"task_id": tid})
-                            await broadcast("task_completed", {"task_id": tid})
+                            entry = audit_log.log("TASK_COMPLETED", msg.sender, orch, {"task_id": tid, "summary": task.summary})
+                            await broadcast("task_completed", {"task_id": tid, "summary": task.summary})
                             await broadcast("audit_entry", {"entry": entry.to_dict()})
                             hold = escrow_manager.get(tid)
                             if hold and hold.status.value == "held" and hold.auto_release:
@@ -1170,6 +1170,9 @@ async def handle_agent(websocket, my_org: str):
                                 })
                         elif task.status == TaskStatus.FAILED:
                             audit_log.log("TASK_FAILED", msg.sender, orch, {"task_id": tid, "error": task.error_message})
+                            await broadcast("task_failed", {
+                                "task_id": tid, "summary": task.summary, "error_message": task.error_message,
+                            })
                             hold = escrow_manager.get(tid)
                             if hold and hold.status.value == "held":
                                 escrow_manager.refund(tid)

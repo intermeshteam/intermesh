@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BookOpen,
   CreditCard,
+  FileText,
   Key,
   LayoutDashboard,
   Network,
@@ -25,6 +26,7 @@ const NAV = [
       { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
       { name: 'Topology', href: '/topology', icon: Network },
       { name: 'Agents', href: '/agents', icon: Users },
+      { name: 'Summaries', href: '/resumes', icon: FileText },
       { name: 'API keys', href: '/keys', icon: Key },
       { name: 'Audit log', href: '/security', icon: ShieldCheck },
       { name: 'Billing', href: '/billing', icon: CreditCard },

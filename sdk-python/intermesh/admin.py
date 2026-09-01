@@ -283,6 +283,7 @@ def _tasks_list(ctx: AdminContext, params: dict) -> dict:
             {
                 "task_id": t.task_id,
                 "title": t.title,
+                "summary": t.summary,
                 "orchestrator": t.orchestrator,
                 "assignee": t.assignee,
                 "status": t.status.value,
