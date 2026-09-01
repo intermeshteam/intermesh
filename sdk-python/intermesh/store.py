@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -74,6 +75,22 @@ _STATEMENTS = (
     """CREATE TABLE IF NOT EXISTS audit_log (
            idx BIGINT PRIMARY KEY,
            payload TEXT NOT NULL
+       )""",
+    # Présence : quel Hub détient la connexion de quel agent.
+    #
+    # Une identité est persistée même hors ligne (table `identities`) ; la
+    # présence, elle, dit où joindre l'agent *maintenant*. Les deux ne se
+    # confondent pas : un agent connu mais déconnecté n'a pas de ligne ici.
+    #
+    # `last_seen` permet d'écarter les entrées d'un Hub disparu sans
+    # nettoyage : un processus tué n'a pas l'occasion de supprimer les
+    # siennes, et un routage vers un Hub mort échouerait en silence.
+    """CREATE TABLE IF NOT EXISTS presence (
+           agent_name TEXT PRIMARY KEY,
+           hub_id TEXT NOT NULL,
+           hub_url TEXT NOT NULL,
+           org_id TEXT NOT NULL,
+           last_seen DOUBLE PRECISION NOT NULL
        )""",
 )
 
@@ -277,6 +294,78 @@ class InterMeshStore:
             "INSERT INTO tasks (task_id, status, payload) VALUES (?, ?, ?)",
             [(t.task_id, t.status.value, json.dumps(t.to_dict())) for t in tasks.values()],
         )
+
+    # ------------------------------------------------------------------
+    # Présence (grappe de Hubs)
+    # ------------------------------------------------------------------
+
+    def record_presence(self, agent_name: str, hub_id: str, hub_url: str,
+                        org_id: str, seen_at: float) -> None:
+        """Déclare que `agent_name` est joignable via `hub_id`."""
+        self._conn.execute(
+            self._upsert("presence", "agent_name",
+                         ("agent_name", "hub_id", "hub_url", "org_id", "last_seen")),
+            (agent_name, hub_id, hub_url, org_id, seen_at),
+        )
+        self._conn.commit()
+
+    def clear_presence(self, agent_name: str, hub_id: str) -> None:
+        """Retire une présence, à condition qu'elle appartienne à ce Hub.
+
+        La condition sur `hub_id` évite une course : si l'agent s'est déjà
+        reconnecté ailleurs, sa nouvelle présence a écrasé l'ancienne et ce
+        Hub ne doit pas l'effacer en traitant sa propre déconnexion.
+        """
+        self._conn.execute(
+            self._sql("DELETE FROM presence WHERE agent_name = ? AND hub_id = ?"),
+            (agent_name, hub_id),
+        )
+        self._conn.commit()
+
+    def clear_hub_presence(self, hub_id: str) -> None:
+        """Retire toutes les présences d'un Hub, à son arrêt propre."""
+        self._conn.execute(self._sql("DELETE FROM presence WHERE hub_id = ?"), (hub_id,))
+        self._conn.commit()
+
+    def find_presence(self, agent_name: str, max_age: float = 0.0) -> dict | None:
+        """Où joindre `agent_name`, ou None.
+
+        `max_age` écarte les entrées trop anciennes pour être crues — celles
+        d'un Hub qui n'a pas eu l'occasion de faire le ménage.
+        """
+        rows = self._fetch(
+            "SELECT agent_name, hub_id, hub_url, org_id, last_seen "
+            "FROM presence WHERE agent_name = ?",
+            (agent_name,),
+        )
+        if not rows:
+            return None
+        name, hub_id, hub_url, org_id, last_seen = rows[0]
+        if max_age and (time.time() - float(last_seen)) > max_age:
+            return None
+        return {"agent_name": name, "hub_id": hub_id, "hub_url": hub_url,
+                "org_id": org_id, "last_seen": float(last_seen)}
+
+    def list_presence(self, max_age: float = 0.0) -> list[dict]:
+        """Toutes les présences fraîches, tous Hubs confondus."""
+        rows = self._fetch(
+            "SELECT agent_name, hub_id, hub_url, org_id, last_seen FROM presence")
+        now = time.time()
+        out = []
+        for name, hub_id, hub_url, org_id, last_seen in rows:
+            if max_age and (now - float(last_seen)) > max_age:
+                continue
+            out.append({"agent_name": name, "hub_id": hub_id, "hub_url": hub_url,
+                        "org_id": org_id, "last_seen": float(last_seen)})
+        return out
+
+    def touch_presence(self, hub_id: str, seen_at: float) -> None:
+        """Rafraîchit l'horodatage de toutes les présences de ce Hub."""
+        self._conn.execute(
+            self._sql("UPDATE presence SET last_seen = ? WHERE hub_id = ?"),
+            (seen_at, hub_id),
+        )
+        self._conn.commit()
 
     # ------------------------------------------------------------------
     # Journal d'audit

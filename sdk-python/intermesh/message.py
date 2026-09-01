@@ -31,6 +31,14 @@ class MessageType(str, Enum):
     PEER_CONNECTED = "peer_connected"      # Hub B -> Hub A
     FEDERATION_RELAY = "federation_relay"  # Hub A -> Hub B
 
+    # Grappe : plusieurs Hubs d'une *même* organisation, partageant état et
+    # clé de signature. À ne pas confondre avec FEDERATION_RELAY, qui
+    # franchit une frontière d'organisation et applique le filtrage de
+    # sortie. Ici rien ne sort : c'est le même tenant, réparti.
+    CLUSTER_JOIN = "cluster_join"          # Hub -> Hub frère
+    CLUSTER_JOINED = "cluster_joined"      # réponse
+    CLUSTER_RELAY = "cluster_relay"        # message transporté vers le frère
+
     # Console d'administration
     ADMIN_REQUEST = "admin_request"        # Console -> Hub
     ADMIN_RESULT = "admin_result"          # Hub -> Console

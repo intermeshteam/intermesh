@@ -174,12 +174,68 @@ elsewhere against the same database recovers its identities, its tasks and a
 verifiably intact audit chain. Backups become your usual PostgreSQL tooling
 rather than a file to copy.
 
-**What it does not give you:** two hubs serving traffic at once. Connected
-agents' sockets live in the memory of whichever process holds them, so two
-hubs sharing a database would not see each other's online agents, and a task
-routed by one would not reach an executor connected to the other. This lifts
-the storage constraint, not the routing one — it makes a standby possible, not
-active-active.
+**On its own it is not clustering.** Connected agents' sockets live in the
+memory of whichever process holds them, so state sharing alone does not let
+one hub reach an agent connected to another. That is what the next section
+adds.
+
+---
+
+## Running several hubs at once
+
+A single hub is a single process: one machine, one point of failure, and a
+throughput ceiling ([measured here](BENCHMARKS.md)). Several hubs of the same
+organization can serve one mesh together.
+
+Each hub needs three things in common with its siblings, and one of its own:
+
+```bash
+intermesh hub --port 8765 --org acme \
+  --state-dsn postgresql://user:pass@db:5432/intermesh \
+  --secret-file /etc/intermesh/hub_secret \
+  --cluster-url ws://hub-1.internal:8765
+```
+
+- **`--state-dsn`** — the same database. Without it there is no shared
+  presence table, so nothing routes; the hub warns at startup if you enable
+  clustering without it.
+- **`--secret-file`** — the same signing key. A token issued by one hub has
+  to be accepted by the others, and that key is also what authenticates
+  siblings to each other.
+- **`--cluster-url`** — how *this* hub is reachable by the others. Different
+  on every hub. Its presence is what enables clustering.
+- `--hub-id` is optional; one is generated if you leave it out.
+
+Put a load balancer in front and point agents at it. They connect wherever
+they land.
+
+### How a message finds its way
+
+Each hub records, in the shared `presence` table, which agents are connected
+to it. When a hub has to deliver to an agent it does not hold, it looks up the
+owner and forwards the message there over a direct link between the two hubs.
+
+The receiving hub delivers locally and **does not forward again**. One hop is
+what makes loops impossible without counting them — at the price of requiring
+the presence table to be right, which is exactly what the shared database
+provides.
+
+Presence entries carry a timestamp, refreshed every 15 seconds. An entry older
+than 45 seconds is ignored: a hub killed outright cannot clean up after
+itself, and without expiry its siblings would keep forwarding into the void.
+
+### What this is not
+
+**Not federation.** Federation crosses an organization boundary: it verifies
+an Ed25519 signature and applies the egress policy to what leaves. Clustering
+stays inside one tenant, so neither applies — a sibling presenting a token
+signed with a different key is refused, and a `CLUSTER_JOIN` from another
+organization is refused outright with a pointer to federation.
+
+**Not a guarantee against every race.** If an agent moves between hubs in the
+window between a presence lookup and the message arriving, the receiving hub
+records `CLUSTER_RELAY_UNDELIVERED` rather than guessing. Tasks are resumed on
+reconnection; a fire-and-forget message in that window is lost.
 
 ---
 

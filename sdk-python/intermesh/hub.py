@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import time
+import uuid
 
 import jwt
 import websockets
@@ -71,6 +72,19 @@ agents: dict[str, "websockets.ServerConnection"] = {}       # qualified_name -> 
 identity_registry: dict[str, AgentIdentity] = {}             # qualified_name -> AgentIdentity
 task_registry: dict[str, InterMeshTask] = {}                     # task_id -> InterMeshTask
 peered_hubs: dict[str, object] = {}                           # org distante -> websocket du Hub pair
+
+# Grappe : plusieurs Hubs d'une *même* organisation, partageant la base
+# d'état et la clé de signature. Distinct du pairage inter-organisations,
+# qui franchit une frontière et filtre ce qui sort ; ici rien ne sort.
+#
+# Chaque Hub a une identité propre et une adresse à laquelle ses frères le
+# joignent. La table `presence` du store dit qui détient quel agent ; ce
+# dictionnaire garde les liens ouverts vers les frères déjà contactés.
+HUB_ID: str = ""
+CLUSTER_URL: str = ""            # adresse annoncée aux frères, vide = hors grappe
+CLUSTER_LINKS: dict[str, object] = {}   # hub_id frère -> websocket
+PRESENCE_TTL = 45.0              # au-delà, une présence n'est plus crue
+PRESENCE_HEARTBEAT = 15.0        # période de rafraîchissement
 observers: set = set()                                        # websockets dashboard / topologie / sécurité
 agent_meta: dict[str, dict] = {}                              # qualified_name -> métriques de connexion
 
@@ -340,6 +354,64 @@ def is_peered(org: str) -> bool:
     return org in peered_hubs
 
 
+async def _cluster_link(hub_id: str, hub_url: str):
+    """Lien vers un Hub frère, ouvert à la demande et réutilisé.
+
+    L'authentification s'appuie sur la clé de signature du Hub, que les
+    frères partagent nécessairement — sans elle, un jeton émis par l'un ne
+    serait pas accepté par l'autre. Un tiers qui ne la détient pas ne peut
+    pas se faire passer pour un frère.
+    """
+    existing = CLUSTER_LINKS.get(hub_id)
+    if existing is not None:
+        return existing
+
+    try:
+        ws = await websockets.connect(hub_url, open_timeout=5)
+        await ws.send(InterMeshMessage(
+            type=MessageType.CLUSTER_JOIN, sender=HUB_ID,
+            content={"hub_id": HUB_ID, "org": HUB_ORG,
+                     "token": generate_token("hub", HUB_ID, ["hub"], HUB_ORG, "cluster")},
+        ).to_json())
+        reply = InterMeshMessage.from_json(await asyncio.wait_for(ws.recv(), timeout=5))
+        if reply.type != MessageType.CLUSTER_JOINED:
+            await ws.close()
+            print(f"[grappe] frère '{hub_id}' a refusé le lien : {reply.content}")
+            return None
+        CLUSTER_LINKS[hub_id] = ws
+        print(f"[grappe] lien établi vers le Hub frère '{hub_id}' ({hub_url})")
+        return ws
+    except Exception as exc:
+        print(f"[grappe] lien vers '{hub_id}' ({hub_url}) impossible : {exc}")
+        return None
+
+
+async def _forward_to_sibling(msg: InterMeshMessage, presence: dict) -> bool:
+    """Transporte `msg` vers le Hub frère qui détient l'agent visé.
+
+    Le message est encapsulé dans un CLUSTER_RELAY que le frère déballe
+    puis livre localement, **sans le retransmettre**. Un seul saut : cela
+    interdit les boucles sans avoir à compter les sauts, au prix d'exiger
+    que la présence soit juste — c'est précisément ce que la base partagée
+    garantit.
+    """
+    ws = await _cluster_link(presence["hub_id"], presence["hub_url"])
+    if ws is None:
+        return False
+    try:
+        await ws.send(InterMeshMessage(
+            type=MessageType.CLUSTER_RELAY, sender=HUB_ID,
+            to=presence["hub_id"], content=msg.to_dict(),
+        ).to_json())
+        return True
+    except Exception as exc:
+        # Le frère a disparu : on oublie le lien pour que la prochaine
+        # tentative le rétablisse au lieu de réutiliser une socket morte.
+        CLUSTER_LINKS.pop(presence["hub_id"], None)
+        print(f"[grappe] transfert vers '{presence['hub_id']}' échoué : {exc}")
+        return False
+
+
 async def deliver_or_relay(msg: InterMeshMessage) -> bool:
     """Livre `msg` à l'agent local visé, sinon le relaie au Hub pair de son org.
 
@@ -356,6 +428,19 @@ async def deliver_or_relay(msg: InterMeshMessage) -> bool:
         except Exception:
             return False
         return True
+
+    # Absent d'ici : peut-être connecté à un Hub frère de la même
+    # organisation. Vérifié avant le relais de fédération, qui lui franchit
+    # une frontière d'organisation et applique le filtrage de sortie —
+    # inapproprié pour du trafic qui reste dans le même tenant.
+    if CLUSTER_URL and store is not None:
+        try:
+            presence = store.find_presence(target, max_age=PRESENCE_TTL)
+        except Exception:
+            presence = None
+        if presence and presence["hub_id"] != HUB_ID and presence["org_id"] == HUB_ORG:
+            if await _forward_to_sibling(msg, presence):
+                return True
 
     target_org = _agent_org(target)
     peer_ws = peered_hubs.get(target_org)
@@ -707,6 +792,63 @@ async def handle_agent(websocket, my_org: str):
                         pass
                 continue
 
+            # -- Grappe : lien entrant d'un Hub frère ----------------------
+            if msg.type == MessageType.CLUSTER_JOIN:
+                content = msg.content or {}
+                sibling_id = content.get("hub_id") or msg.sender
+                refusal = None
+                if content.get("org") != my_org:
+                    # Un « frère » d'une autre organisation n'en est pas un.
+                    # Le trafic entre organisations passe par le pairage, qui
+                    # vérifie une signature et filtre ce qui sort.
+                    refusal = "organisation différente : utilisez le pairage fédéré."
+                else:
+                    # Le jeton est signé avec la clé du Hub, que les frères
+                    # partagent nécessairement — sans elle, un jeton émis par
+                    # l'un serait rejeté par l'autre. Qui ne la détient pas ne
+                    # peut pas se faire passer pour un frère.
+                    payload = decode_token(content.get("token") or "")
+                    if payload is None:
+                        refusal = "jeton absent ou signature invalide."
+                    elif payload.get("auth_method") != "cluster":
+                        refusal = "jeton non émis pour la grappe."
+                    elif payload.get("expires_at", 0) < time.time():
+                        refusal = "jeton expiré."
+
+                if refusal:
+                    await websocket.send(InterMeshMessage(
+                        type=MessageType.ERROR, sender=HUB_ID, to=sibling_id,
+                        content=f"CLUSTER_REJECTED: {refusal}",
+                    ).to_json())
+                    audit_log.log("CLUSTER_REJECTED", sibling_id, HUB_ID, {"reason": refusal})
+                    continue
+
+                await websocket.send(InterMeshMessage(
+                    type=MessageType.CLUSTER_JOINED, sender=HUB_ID, to=sibling_id,
+                    content={"hub_id": HUB_ID},
+                ).to_json())
+                print(f"[grappe] Hub frère '{sibling_id}' accepté")
+                audit_log.log("CLUSTER_JOINED", sibling_id, HUB_ID, {})
+                continue
+
+            # -- Grappe : message transporté par un frère ------------------
+            if msg.type == MessageType.CLUSTER_RELAY:
+                inner = InterMeshMessage.from_dict(msg.content or {})
+                local = _local_name(inner.to)
+                if local is None:
+                    # L'agent a quitté ce Hub entre l'écriture de la présence
+                    # et l'arrivée du message. Ne pas retransmettre : un seul
+                    # saut est ce qui interdit les boucles.
+                    audit_log.log("CLUSTER_RELAY_UNDELIVERED", msg.sender, inner.to, {
+                        "message_type": str(inner.type),
+                    })
+                    continue
+                try:
+                    await agents[local].send(inner.to_json())
+                except Exception as exc:
+                    print(f"[grappe] livraison locale de '{inner.to}' échouée : {exc}")
+                continue
+
             # -- Pairage Hub à Hub (connexion entrante) --------------------
             if msg.type == MessageType.PEER_CONNECT:
                 content = msg.content or {}
@@ -859,6 +1001,15 @@ async def handle_agent(websocket, my_org: str):
                 }
                 if store is not None:
                     store.save_identity(identity)
+                    if CLUSTER_URL:
+                        # Déclare où joindre cet agent. Un frère qui doit lui
+                        # transmettre un message lira cette ligne : sans elle,
+                        # il le tiendrait pour hors ligne.
+                        try:
+                            store.record_presence(agent_name, HUB_ID, CLUSTER_URL,
+                                                  identity.org_id, time.time())
+                        except Exception as exc:
+                            print(f"[grappe] présence de '{agent_name}' non enregistrée : {exc}")
                 token = generate_token(agent_name, identity.agent_id, identity.roles, identity.org_id, auth_method)
 
                 entry = audit_log.log("AGENT_REGISTERED", agent_name, "hub", {"roles": identity.roles, "org_id": identity.org_id})
@@ -1057,6 +1208,14 @@ async def handle_agent(websocket, my_org: str):
                 print(f"[peering] pair '{org}' déconnecté")
         if agent_name and agent_name in agents:
             del agents[agent_name]
+            if store is not None and CLUSTER_URL:
+                # Conditionné à HUB_ID côté store : si l'agent s'est déjà
+                # reconnecté ailleurs, sa nouvelle présence ne doit pas être
+                # effacée par le Hub qu'il vient de quitter.
+                try:
+                    store.clear_presence(agent_name, HUB_ID)
+                except Exception:
+                    pass
             if agent_name in agent_meta:
                 agent_meta[agent_name]["status"] = "unhealthy"
             entry = audit_log.log("AGENT_DISCONNECTED", agent_name, "hub", {"status": "unhealthy"})
@@ -1070,12 +1229,20 @@ async def main(argv: list[str] | None = None):
     global store, api_keys, audit_log, HUB_SECRET, HUB_ORG, SNAPSHOT_DIR
     global HUB_PRIVATE_KEY, HUB_PUBLIC_PEM, HUB_KEY_ID, egress_policy, approval_policy
     global MAX_AGENTS, ALLOW_SELF_DECLARED, REQUIRE_API_KEY
+    global HUB_ID, CLUSTER_URL
 
     parser = argparse.ArgumentParser(description="InterMesh Hub")
     parser.add_argument("--port", type=int, default=8765, help="Port")
     parser.add_argument("--org", type=str, default="default", help="Org")
     parser.add_argument("--ephemeral-state", action="store_true", help="État en mémoire, rien sur disque")
     parser.add_argument("--state-file", type=str, default=None, help="Chemin de la base d'état")
+    parser.add_argument("--cluster-url", type=str, default=None,
+                        help="Adresse à laquelle les Hubs frères joignent celui-ci "
+                             "(ex. ws://hub-2.internal:8765). Active la grappe : "
+                             "plusieurs Hubs d'une même organisation partageant "
+                             "--state-dsn et --secret-file. Aussi via $INTERMESH_CLUSTER_URL.")
+    parser.add_argument("--hub-id", type=str, default=None,
+                        help="Identifiant de ce Hub dans la grappe. Généré si absent.")
     parser.add_argument("--allow-self-declared", action="store_true",
                         help="Accepte des identités auto-déclarées depuis des connexions "
                              "distantes. Réseau privé ou test uniquement : sans clé d'API, "
@@ -1117,6 +1284,9 @@ async def main(argv: list[str] | None = None):
     # Le DSN peut venir de l'environnement : en conteneur, il arrive par une
     # variable d'environnement injectée, pas par la ligne de commande — et un
     # mot de passe passé en argument est visible dans la table des processus.
+    HUB_ID = args.hub_id or f"hub-{uuid.uuid4().hex[:12]}"
+    CLUSTER_URL = args.cluster_url or os.environ.get("INTERMESH_CLUSTER_URL") or ""
+
     ALLOW_SELF_DECLARED = args.allow_self_declared
     REQUIRE_API_KEY = args.require_api_key
 
@@ -1162,6 +1332,14 @@ async def main(argv: list[str] | None = None):
     else:
         identite = "auto-déclaration limitée à localhost"
     print(f"  identité : {identite}")
+    if CLUSTER_URL:
+        print(f"  grappe : {HUB_ID} joignable sur {CLUSTER_URL}")
+        if not (args.state_dsn or os.environ.get("INTERMESH_STATE_DSN")):
+            # Sans base partagée, la table de présence est locale : chaque
+            # Hub n'y verrait que ses propres agents, donc aucun transfert
+            # n'aurait lieu. La grappe serait inerte, silencieusement.
+            print("  ⚠️  grappe active sans --state-dsn : les Hubs frères ne "
+                  "partageront aucune présence et ne se routeront rien.")
     if not REQUIRE_API_KEY and api_keys.source.startswith("aucune"):
         # Un Hub derrière un reverse proxy voit toutes les connexions comme
         # locales : le contrôle d'origine ne le protège pas, et sans clé
@@ -1193,6 +1371,21 @@ async def main(argv: list[str] | None = None):
             continue
         asyncio.create_task(connect_peer(remote_org, url, args.peer_ca))
         print(f"  pair   : {remote_org} -> {url}")
+
+    if CLUSTER_URL and store is not None:
+        # Un Hub tué net n'efface pas ses présences. Sans rafraîchissement,
+        # rien ne distinguerait ses lignes de celles d'un Hub vivant, et les
+        # frères lui transmettraient des messages dans le vide. L'horodatage
+        # entretenu rend ces entrées périmables (PRESENCE_TTL).
+        async def _presence_heartbeat():
+            while True:
+                await asyncio.sleep(PRESENCE_HEARTBEAT)
+                try:
+                    store.touch_presence(HUB_ID, time.time())
+                except Exception as exc:
+                    print(f"[grappe] battement de présence échoué : {exc}")
+
+        asyncio.create_task(_presence_heartbeat())
 
     async with websockets.serve(
         lambda ws: handle_agent(ws, args.org),
