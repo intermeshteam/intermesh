@@ -1,0 +1,62 @@
+# Image du Hub pour un déploiement isolé (banque, centre de données fermé).
+#
+# Différences avec docker/Dockerfile.hub, qui reste le confort de
+# développement :
+#
+#   * Version de base épinglée par empreinte, pas par étiquette. `3.12-slim`
+#     désigne une image différente d'un mois à l'autre ; une empreinte
+#     désigne des octets. C'est ce qu'exige un contrôle des changements, et
+#     ce qui rend une reconstruction reproductible.
+#   * Construction en deux étapes : les outils de compilation servent à
+#     installer les dépendances puis disparaissent. Ce qui n'est pas dans
+#     l'image finale n'a pas de vulnérabilité à corriger.
+#   * Exécution sous un compte sans privilèges. L'image d'origine tourne en
+#     root ; une évasion de conteneur y trouve un uid 0.
+#   * `psycopg` inclus : l'état vit dans PostgreSQL, pas dans un fichier
+#     SQLite attaché au conteneur.
+#
+# Reconstruire après un changement d'empreinte est volontaire : cela force à
+# constater la mise à jour au lieu de la subir.
+
+# python:3.12-slim-bookworm
+FROM python@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254 AS build
+
+WORKDIR /build
+
+# Les dépendances sont installées dans un préfixe isolé, recopié tel quel
+# dans l'image finale — les en-têtes et compilateurs restent ici.
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+COPY sdk-python/ /build/sdk-python/
+RUN pip install --no-cache-dir --prefix=/install "/build/sdk-python[postgres]"
+
+
+FROM python@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254
+
+# Compte sans privilèges. Le uid est fixé plutôt que laissé au hasard : les
+# fichiers du volume lui appartiennent, et un uid qui change d'une
+# reconstruction à l'autre les rendrait illisibles.
+RUN groupadd --gid 10001 intermesh \
+ && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin intermesh
+
+COPY --from=build /install /usr/local
+COPY --chown=10001:10001 server/ /app/server/
+
+WORKDIR /app
+
+# INTERMESH_HOME reste utile même avec PostgreSQL : la clé de signature y est
+# écrite si elle n'est pas injectée par l'environnement.
+ENV INTERMESH_HOME=/data/intermesh \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN mkdir -p /data/intermesh && chown -R 10001:10001 /data
+
+USER 10001:10001
+
+EXPOSE 8765
+
+# Aucun CMD avec des options de sécurité en dur : elles sont dans le fichier
+# compose, où un exploitant les lit et les ajuste. Les enterrer ici les
+# rendrait invisibles.
+CMD ["python", "-u", "/app/server/hub.py"]

@@ -1,0 +1,167 @@
+# InterMesh en déploiement isolé — banque, centre de données fermé.
+#
+# `docker-compose.yml` reste la pile de développement : SQLite, ports ouverts,
+# agents de démonstration. Celle-ci part de l'hypothèse inverse — la machine
+# n'a pas Internet, l'exploitant doit rendre des comptes, et tout défaut est
+# refusé plutôt que supposé sûr.
+#
+#   cp docker/hardened.env.example docker/hardened.env   # puis le remplir
+#   chmod 600 docker/hardened.env
+#   docker compose --env-file docker/hardened.env \
+#                  -f docker-compose.hardened.yml up -d
+#
+# `--env-file` n'est pas décoratif. `env_file:` ci-dessous injecte les
+# variables *dans* les conteneurs, mais l'interpolation ${...} de ce fichier
+# est résolue par le CLI, qui lit son propre environnement — sans ce drapeau,
+# la pile s'arrête en réclamant les variables qu'elle a pourtant sous la main.
+#
+# La pile refuse de démarrer si un secret manque, plutôt que d'en inventer un
+# et de donner l'illusion d'un déploiement correct.
+#
+# Ce que cette pile fait, et que la pile de développement ne fait pas :
+#
+#   * L'état vit dans PostgreSQL, pas dans un fichier attaché au conteneur.
+#   * Aucune identité auto-déclarée : une clé d'API est exigée partout
+#     (--require-api-key), y compris depuis localhost — seul réglage qui
+#     tienne quand un proxy fait paraître toute connexion locale.
+#   * La base est sur un réseau `internal`, sans route vers l'extérieur.
+#     Elle ne peut joindre aucun hôte, même si on le lui demandait.
+#   * Systèmes de fichiers en lecture seule, capacités retirées, élévation de
+#     privilèges interdite, exécution sans root.
+#   * Images épinglées par empreinte : une reconstruction produit les mêmes
+#     octets, et une mise à jour se constate au lieu de se subir.
+#   * Le port du Hub n'est publié que sur la boucle locale. Exposer sur le
+#     réseau se fait par un proxy que l'exploitant maîtrise, pas par défaut.
+
+services:
+  # ------------------------------------------------------------------
+  # Base d'état
+  # ------------------------------------------------------------------
+  postgres:
+    # postgres:16-alpine
+    image: postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    container_name: intermesh-postgres
+    env_file: [docker/hardened.env]
+    environment:
+      POSTGRES_DB: intermesh
+      POSTGRES_USER: intermesh
+      # Pas de valeur par défaut : sans POSTGRES_PASSWORD dans hardened.env,
+      # le conteneur s'arrête au lieu de démarrer une base ouverte.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans docker/hardened.env}
+      # scram-sha-256 plutôt que md5, et exigé y compris pour les connexions
+      # locales au conteneur.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    volumes:
+      - intermesh-db:/var/lib/postgresql/data
+    networks: [backend]
+    # Aucun port publié : seul le Hub parle à la base, par le réseau interne.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intermesh -d intermesh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: "2.0", memory: 2G}
+
+  # ------------------------------------------------------------------
+  # Hub
+  # ------------------------------------------------------------------
+  hub:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.hub.hardened
+    image: intermesh/hub:hardened
+    container_name: intermesh-hub
+    env_file: [docker/hardened.env]
+    environment:
+      INTERMESH_STATE_DSN: postgresql://intermesh:${POSTGRES_PASSWORD}@postgres:5432/intermesh
+      # La clé de signature vient de l'environnement : rien n'est écrit sur
+      # disque, et deux Hubs de la même grappe partagent la même valeur.
+      INTERMESH_HUB_SECRET: ${INTERMESH_HUB_SECRET:?INTERMESH_HUB_SECRET manquant dans docker/hardened.env}
+      # Comptes de service. Sans cette variable, aucun agent ne peut
+      # s'enregistrer — c'est voulu : --require-api-key ci-dessous refuse
+      # l'auto-déclaration, y compris en local.
+      INTERMESH_API_KEYS: ${INTERMESH_API_KEYS:?INTERMESH_API_KEYS manquant dans docker/hardened.env}
+    command:
+      - python
+      - -u
+      - /app/server/hub.py
+      - --port=8765
+      - --org=${INTERMESH_ORG:-default}
+      - --require-api-key
+    ports:
+      # Boucle locale seulement. Pour ouvrir au réseau interne de la banque,
+      # placer un proxy terminant TLS devant — et conserver
+      # --require-api-key, puisque derrière un proxy toute connexion paraît
+      # locale et le contrôle d'origine du Hub ne protège plus rien.
+      - "127.0.0.1:8765:8765"
+    networks: [backend, frontend]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      # /healthz est servi par le Hub sur le même port que le WebSocket.
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    read_only: true
+    tmpfs:
+      # Le système de fichiers est en lecture seule ; Python a besoin d'un
+      # espace temporaire, et INTERMESH_HOME reçoit la clé si elle n'est pas
+      # injectée. Les deux sont en mémoire : rien ne survit au conteneur.
+      - /tmp:size=64m,mode=1777
+      - /data/intermesh:size=16m,mode=0700,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: "4.0", memory: 2G}
+
+  # ------------------------------------------------------------------
+  # Console d'exploitation
+  # ------------------------------------------------------------------
+  console:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    image: intermesh/console:hardened
+    container_name: intermesh-console
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [frontend]
+    depends_on:
+      hub: {condition: service_healthy}
+    # dashboard/ ne charge ni CDN, ni police distante, ni bibliothèque
+    # externe : les graphiques sont du SVG calculé sur place. C'est cette
+    # console qui convient à un réseau fermé, pas le Control Plane hébergé,
+    # qui dépend de Supabase.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+      - /var/cache/nginx:size=32m
+      - /var/run:size=8m
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETGID, SETUID]   # nginx abandonne ses privilèges au démarrage
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: "1.0", memory: 256M}
+
+volumes:
+  intermesh-db:
+
+networks:
+  # Sans route vers l'extérieur : les conteneurs qui n'y sont qu'attachés ne
+  # peuvent joindre aucun hôte. C'est ce qui rend l'isolement vérifiable
+  # plutôt que déclaratif.
+  backend:
+    internal: true
+  # Porte les ports publiés, eux-mêmes restreints à la boucle locale.
+  frontend:

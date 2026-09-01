@@ -27,3 +27,4 @@ build/
 # TypeScript build cache
 *.tsbuildinfo
 supabase/.temp/
+docker/*.env
