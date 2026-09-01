@@ -39,7 +39,17 @@ from intermesh.store import InterMeshStore
 from intermesh.task import InterMeshTask, TaskStatus
 
 TOKEN_EXPIRY_SECONDS = 3600
-MAX_FREE_AGENTS = 15
+
+# Plafond d'agents connectés simultanément. 0 = illimité, et c'est le
+# défaut : InterMesh est auto-hébergé, la seule limite qui a du sens est la
+# machine de celui qui l'exécute.
+#
+# Une valeur codée en dur ici était pire qu'inutile. Elle refusait le 16e
+# agent avant même de regarder la clé d'API — donc une clé entreprise n'y
+# changeait rien — et n'importe qui pouvait de toute façon éditer la
+# constante, puisque le dépôt est public. Elle ne protégeait aucun modèle
+# économique, elle empêchait seulement de s'en servir.
+MAX_AGENTS = 0
 
 # État partagé du Hub, peuplé par main() au démarrage.
 agents: dict[str, "websockets.ServerConnection"] = {}       # qualified_name -> websocket
@@ -740,8 +750,10 @@ async def handle_agent(websocket, my_org: str):
                     continue
 
                 current_active = len(agents)
-                if current_active >= MAX_FREE_AGENTS:
-                    err_msg = f"AGENT_QUOTA_EXCEEDED: Free tier limit reached ({current_active}/{MAX_FREE_AGENTS} agents)."
+                if MAX_AGENTS and current_active >= MAX_AGENTS:
+                    err_msg = (f"AGENT_LIMIT_REACHED: ce Hub est configuré pour "
+                               f"{MAX_AGENTS} agents simultanés ({current_active} connectés). "
+                               f"Relevez --max-agents.")
                     await websocket.send(InterMeshMessage(type=MessageType.ERROR, sender="hub", to=raw_name, content=err_msg).to_json())
                     continue
 
@@ -998,12 +1010,16 @@ async def main(argv: list[str] | None = None):
     dépendre de sys.argv, qui porte déjà le nom de la sous-commande."""
     global store, api_keys, audit_log, HUB_SECRET, HUB_ORG, SNAPSHOT_DIR
     global HUB_PRIVATE_KEY, HUB_PUBLIC_PEM, HUB_KEY_ID, egress_policy, approval_policy
+    global MAX_AGENTS
 
     parser = argparse.ArgumentParser(description="InterMesh Hub")
     parser.add_argument("--port", type=int, default=8765, help="Port")
     parser.add_argument("--org", type=str, default="default", help="Org")
     parser.add_argument("--ephemeral-state", action="store_true", help="État en mémoire, rien sur disque")
     parser.add_argument("--state-file", type=str, default=None, help="Chemin de la base d'état")
+    parser.add_argument("--max-agents", type=int, default=None,
+                        help="Plafond d'agents connectés simultanément (0 = illimité, "
+                             "défaut). Aussi lisible via $INTERMESH_MAX_AGENTS.")
     parser.add_argument("--state-dsn", type=str, default=None,
                         help="Base d'état PostgreSQL (postgresql://...). Découple l'état "
                              "de la machine : un Hub redémarré ailleurs le retrouve. "
@@ -1034,6 +1050,11 @@ async def main(argv: list[str] | None = None):
     # Le DSN peut venir de l'environnement : en conteneur, il arrive par une
     # variable d'environnement injectée, pas par la ligne de commande — et un
     # mot de passe passé en argument est visible dans la table des processus.
+    if args.max_agents is not None:
+        MAX_AGENTS = args.max_agents
+    elif os.environ.get("INTERMESH_MAX_AGENTS"):
+        MAX_AGENTS = int(os.environ["INTERMESH_MAX_AGENTS"])
+
     state_dsn = args.state_dsn or os.environ.get("INTERMESH_STATE_DSN")
 
     if args.ephemeral_state:
@@ -1063,6 +1084,7 @@ async def main(argv: list[str] | None = None):
     print(f"  clé    : Ed25519 kid={HUB_KEY_ID} (privée non exportée)")
     print(f"  état   : {store.description}")
     print(f"  clés   : {api_keys.source}")
+    print(f"  agents : {'illimités' if not MAX_AGENTS else f'{MAX_AGENTS} max'}")
 
     if args.egress_policy:
         egress_policy = EgressPolicy.load(args.egress_policy)

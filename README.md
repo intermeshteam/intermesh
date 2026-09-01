@@ -13,7 +13,7 @@
 **InterMesh is the neutral, open standard that lets AI agents — regardless of language,
 framework, or vendor — discover each other, communicate securely, and collaborate.**
 
-[Manifesto](docs/MANIFESTO.md) · [RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Agent integration](docs/AGENT-INTEGRATION.md) · [Remote hub](docs/REMOTE-HUB.md) · [Contributing](CONTRIBUTING.md)
+[Manifesto](docs/MANIFESTO.md) · [RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Agent integration](docs/AGENT-INTEGRATION.md) · [Remote hub](docs/REMOTE-HUB.md) · [Benchmarks](docs/BENCHMARKS.md) · [Contributing](CONTRIBUTING.md)
 
 </div>
 

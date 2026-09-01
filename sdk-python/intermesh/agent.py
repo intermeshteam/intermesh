@@ -311,6 +311,35 @@ class InterMeshAgent:
             try: return json.loads(encrypted_content)
             except json.JSONDecodeError: return encrypted_content
 
+    async def _respond_to_request(self, msg) -> None:
+        """Exécute le gestionnaire de requêtes et renvoie la réponse.
+
+        Séparée de la boucle d'écoute pour que celle-ci reste disponible :
+        le chiffrement de la réponse a besoin d'un aller-retour WHO_IS, que
+        la boucle doit pouvoir traiter pendant que cette tâche l'attend.
+        """
+        try:
+            handler = self._request_handler
+            reply = await handler(msg) if inspect.iscoroutinefunction(handler) else handler(msg)
+            reply = self._apply_egress(msg.sender, reply)
+            if self.encrypt:
+                pk = await self._fetch_public_key(msg.sender)
+                if pk:
+                    reply = self._encrypt_content(pk, reply)
+                else:
+                    # Sans clé, la réponse partirait en clair alors que
+                    # l'appelant a demandé le chiffrement. Le dire est le
+                    # minimum : une dégradation silencieuse vers le clair
+                    # est pire qu'une erreur.
+                    print(f"⚠️  [{self.qualified_name}] Clé publique de "
+                          f"{msg.sender} introuvable : réponse NON chiffrée.")
+            await self.ws.send(InterMeshMessage(
+                type=MessageType.RESPONSE, sender=self.qualified_name, to=msg.sender,
+                reply_to=msg.id, content=reply, token=self.token,
+            ).to_json())
+        except Exception as exc:
+            print(f"⚠️  [{self.qualified_name}] Réponse impossible : {exc}")
+
     async def _listen_loop(self):
         try:
             async for raw in self.ws:
@@ -348,12 +377,15 @@ class InterMeshAgent:
                         content = self._decrypt_content(content)
                     msg.content = content
                     if self._request_handler:
-                        reply = await self._request_handler(msg) if inspect.iscoroutinefunction(self._request_handler) else self._request_handler(msg)
-                        reply = self._apply_egress(msg.sender, reply)
-                        if self.encrypt:
-                            pk = await self._fetch_public_key(msg.sender)
-                            if pk: reply = self._encrypt_content(pk, reply)
-                        await self.ws.send(InterMeshMessage(type=MessageType.RESPONSE, sender=self.qualified_name, to=msg.sender, reply_to=msg.id, content=reply, token=self.token).to_json())
+                        # Hors de la boucle, comme TASK_ASSIGN. Répondre ici
+                        # même conduisait à un interblocage : chiffrer la
+                        # réponse exige la clé publique du demandeur, obtenue
+                        # par un WHO_IS dont la réponse ne peut être traitée
+                        # que par cette boucle — alors bloquée à l'attendre.
+                        # Le WHO_IS expirait donc systématiquement (3 s par
+                        # requête) et, faute de clé, la réponse repartait en
+                        # clair alors que le chiffrement était demandé.
+                        asyncio.create_task(self._respond_to_request(msg))
 
                 elif msg.type == MessageType.MESSAGE:
                     content = msg.content
