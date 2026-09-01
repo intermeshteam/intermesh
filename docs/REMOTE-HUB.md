@@ -85,43 +85,61 @@ the machine.
 
 ---
 
-## ⚠️ Before you expose a hub to the internet
+## Identity: who gets to declare their own roles
 
-**Read this part. It is not optional.**
+Without an API key, a registering agent **declares its own identity** — its
+`org_id`, its `roles`, its `permissions`. On `localhost` that is a development
+convenience. From a remote address it means anyone who finds the address can
+claim to be an admin of any organization.
 
-Without an API key, an agent that registers **declares its own identity**. It
-picks its own `org_id`, its own `roles`, and its own `permissions` — the hub
-takes them at face value:
+The hub always binds `0.0.0.0`, so "exposed" cannot be inferred from any
+setting. The decision is made **per connection**, by where it comes from:
 
-```python
-org_id = d.get("org_id", my_org)
-roles  = d.get("roles", ["standard"])
-perms  = d.get("permissions", [])
-auth_method = "self_declared"
-```
+| Connection | Without an API key | With a valid API key |
+|---|---|---|
+| From `localhost` | allowed | allowed |
+| From anywhere else | **refused** | allowed |
 
-On `localhost` that is a convenience. On a hub reachable from the internet, it
-means **anyone who finds the address can connect and claim to be an admin of
-any organization**.
+A refused registration gets `SELF_DECLARED_REFUSED` naming what to do. This is
+the default; nothing needs enabling.
 
-A hub exposed without configured API keys is an open hub. Configure them:
+### The two flags
 
 ```bash
-# Generate a key for an organization
+# Private network or testing: accept self-declared identities remotely.
+intermesh hub --allow-self-declared
+
+# Strictest: require an API key everywhere, including from localhost.
+intermesh hub --require-api-key
+```
+
+### ⚠️ Behind a reverse proxy, the origin check protects nothing
+
+If nginx or Caddy terminates TLS in front of the hub (Option B above), the
+proxy is the TCP peer — so **every connection looks local** and self-declared
+identities are accepted from the whole internet.
+
+`X-Forwarded-For` is deliberately not consulted: the client supplies that
+header unless a trusted proxy rewrites it, so trusting it would turn the check
+into a formality.
+
+**In that setup, `--require-api-key` is the only setting that holds.** The hub
+prints a warning at startup when no API key is configured, for this reason.
+
+### Issuing keys
+
+```bash
 intermesh apikey --org your-org
 ```
 
-Keys are read from `INTERMESH_API_KEYS` (JSON) or from
-`~/.intermesh/api_keys.json`. Without either, service accounts stay disabled and
-every registration falls back to self-declared.
+Keys are read from `INTERMESH_API_KEYS` (JSON) or `~/.intermesh/api_keys.json`.
 
 **Do not use `--dev-api-keys` on a public hub.** It enables demonstration keys
-whose values are in the source code of this repository.
+whose values are in this repository's source.
 
-Deciding *who* may register, beyond holding a key, is a policy the hub does not
-make for you. If the hub is reachable publicly, restrict it at the network
-level too — a firewall allowlist, a VPN, or a private network — rather than
-relying only on key possession.
+Holding a key is authentication, not authorization for everything. If the hub
+is publicly reachable, restrict it at the network level as well — a firewall
+allowlist, a VPN, or a private network.
 
 ---
 
@@ -172,14 +190,16 @@ accessible route for people who do not administer servers: those platforms give
 an HTTPS subdomain with a valid certificate automatically, so there is no
 certbot, no firewall, and no DNS to configure.
 
-Two things stand in the way today, and neither is a documentation problem:
+One thing still stands in the way, and it is not a documentation problem:
 
 1. **The hub does not read the `PORT` environment variable**, which those
    platforms assign dynamically. It only accepts `--port`.
-2. **The self-declared registration above.** A one-click deploy button that
-   hands someone an open hub would be worse than no button.
+2. ~~The self-declared registration.~~ **Fixed** — remote registrations now
+   require an API key by default, so a deployed hub is no longer open. What
+   remains is generating and delivering that first key to someone who does not
+   use a terminal.
 
-Both are tracked as work to do, not as steps you can follow.
+The first is tracked as work to do, not a step you can follow.
 
 **A managed hub** — where the hub is run for you and you never touch a
 server — does not exist. It is the intended answer for non-developers, and it

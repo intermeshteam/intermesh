@@ -51,6 +51,21 @@ TOKEN_EXPIRY_SECONDS = 3600
 # économique, elle empêchait seulement de s'en servir.
 MAX_AGENTS = 0
 
+# Auto-déclaration : à l'enregistrement, un agent sans clé d'API choisit
+# lui-même son organisation, ses rôles et ses permissions. Le Hub les
+# acceptait tels quels, quelle que soit la provenance de la connexion.
+#
+# Sur localhost c'est un confort de développement. Depuis une adresse
+# distante, cela signifie que quiconque connaît l'adresse se déclare admin
+# de n'importe quelle organisation. Le Hub écoutant toujours sur 0.0.0.0,
+# « exposé » ne se déduit pas d'un réglage : la décision se prend par
+# connexion, selon son origine.
+#
+#   ALLOW_SELF_DECLARED : autorise l'auto-déclaration même à distance.
+#   REQUIRE_API_KEY     : l'exige partout, y compris depuis localhost.
+ALLOW_SELF_DECLARED = False
+REQUIRE_API_KEY = False
+
 # État partagé du Hub, peuplé par main() au démarrage.
 agents: dict[str, "websockets.ServerConnection"] = {}       # qualified_name -> websocket
 identity_registry: dict[str, AgentIdentity] = {}             # qualified_name -> AgentIdentity
@@ -635,6 +650,29 @@ AUTHENTICATED_TYPES = (
 )
 
 
+def _is_local_connection(websocket) -> bool:
+    """Vrai si la connexion vient de la machine elle-même.
+
+    ⚠️ Derrière un reverse proxy (nginx, Caddy), *toutes* les connexions
+    paraissent locales — le proxy est le pair TCP. Le contrôle d'origine ne
+    protège donc rien dans cette configuration, et c'est pour cela que
+    `--require-api-key` existe : c'est le seul réglage qui tienne quand le
+    Hub est derrière un proxy.
+
+    L'en-tête X-Forwarded-For n'est délibérément pas consulté : il est
+    fourni par le client tant qu'aucun proxy de confiance ne le réécrit,
+    donc s'y fier transformerait ce contrôle en simple formalité.
+    """
+    try:
+        peer = websocket.remote_address
+    except Exception:
+        return False
+    if not peer:
+        return False
+    host = peer[0]
+    return host in ("127.0.0.1", "::1", "localhost") or host.startswith("127.")
+
+
 async def handle_agent(websocket, my_org: str):
     agent_name = None
     is_observer = False
@@ -768,6 +806,27 @@ async def handle_agent(websocket, my_org: str):
                     perms = info["permissions"]
                     auth_method = "api_key"
                 else:
+                    # Refus de l'auto-déclaration quand elle n'est pas sûre.
+                    # Le contrôle est ici, après la recherche de clé : un
+                    # agent qui en présente une valide n'est jamais concerné.
+                    local = _is_local_connection(websocket)
+                    if REQUIRE_API_KEY or (not local and not ALLOW_SELF_DECLARED):
+                        origin = "cette connexion" if local else "une connexion distante"
+                        await websocket.send(InterMeshMessage(
+                            type=MessageType.ERROR, sender="hub", to=raw_name,
+                            content=(
+                                f"SELF_DECLARED_REFUSED: ce Hub n'accepte pas d'identité "
+                                f"auto-déclarée depuis {origin}. Un agent doit présenter "
+                                f"une clé d'API (`intermesh apikey --org <org>`). "
+                                f"Pour un réseau privé, démarrez le Hub avec "
+                                f"--allow-self-declared."
+                            ),
+                        ).to_json())
+                        audit_log.log("SELF_DECLARED_REFUSED", raw_name, None, {
+                            "local": local, "require_api_key": REQUIRE_API_KEY,
+                        })
+                        continue
+
                     org_id = d.get("org_id", my_org)
                     roles = d.get("roles", ["standard"])
                     perms = d.get("permissions", [])
@@ -1010,13 +1069,21 @@ async def main(argv: list[str] | None = None):
     dépendre de sys.argv, qui porte déjà le nom de la sous-commande."""
     global store, api_keys, audit_log, HUB_SECRET, HUB_ORG, SNAPSHOT_DIR
     global HUB_PRIVATE_KEY, HUB_PUBLIC_PEM, HUB_KEY_ID, egress_policy, approval_policy
-    global MAX_AGENTS
+    global MAX_AGENTS, ALLOW_SELF_DECLARED, REQUIRE_API_KEY
 
     parser = argparse.ArgumentParser(description="InterMesh Hub")
     parser.add_argument("--port", type=int, default=8765, help="Port")
     parser.add_argument("--org", type=str, default="default", help="Org")
     parser.add_argument("--ephemeral-state", action="store_true", help="État en mémoire, rien sur disque")
     parser.add_argument("--state-file", type=str, default=None, help="Chemin de la base d'état")
+    parser.add_argument("--allow-self-declared", action="store_true",
+                        help="Accepte des identités auto-déclarées depuis des connexions "
+                             "distantes. Réseau privé ou test uniquement : sans clé d'API, "
+                             "un agent choisit lui-même son organisation et ses rôles.")
+    parser.add_argument("--require-api-key", action="store_true",
+                        help="Exige une clé d'API pour tout enregistrement, y compris "
+                             "depuis localhost. Le seul réglage qui tienne derrière un "
+                             "reverse proxy, où toute connexion paraît locale.")
     parser.add_argument("--max-agents", type=int, default=None,
                         help="Plafond d'agents connectés simultanément (0 = illimité, "
                              "défaut). Aussi lisible via $INTERMESH_MAX_AGENTS.")
@@ -1050,6 +1117,9 @@ async def main(argv: list[str] | None = None):
     # Le DSN peut venir de l'environnement : en conteneur, il arrive par une
     # variable d'environnement injectée, pas par la ligne de commande — et un
     # mot de passe passé en argument est visible dans la table des processus.
+    ALLOW_SELF_DECLARED = args.allow_self_declared
+    REQUIRE_API_KEY = args.require_api_key
+
     if args.max_agents is not None:
         MAX_AGENTS = args.max_agents
     elif os.environ.get("INTERMESH_MAX_AGENTS"):
@@ -1085,6 +1155,19 @@ async def main(argv: list[str] | None = None):
     print(f"  état   : {store.description}")
     print(f"  clés   : {api_keys.source}")
     print(f"  agents : {'illimités' if not MAX_AGENTS else f'{MAX_AGENTS} max'}")
+    if REQUIRE_API_KEY:
+        identite = "clé d'API exigée partout"
+    elif ALLOW_SELF_DECLARED:
+        identite = "AUTO-DÉCLARATION AUTORISÉE À DISTANCE (réseau privé uniquement)"
+    else:
+        identite = "auto-déclaration limitée à localhost"
+    print(f"  identité : {identite}")
+    if not REQUIRE_API_KEY and api_keys.source.startswith("aucune"):
+        # Un Hub derrière un reverse proxy voit toutes les connexions comme
+        # locales : le contrôle d'origine ne le protège pas, et sans clé
+        # configurée il n'a plus aucune barrière.
+        print("  ⚠️  aucune clé d'API configurée. Derrière un reverse proxy, "
+              "toute connexion paraît locale : utilisez --require-api-key.")
 
     if args.egress_policy:
         egress_policy = EgressPolicy.load(args.egress_policy)
