@@ -42,6 +42,11 @@ dependencies = [
     "cryptography>=42.0.0",
 ]
 
+# Optionnel : le Hub fonctionne en SQLite sans rien de plus. PostgreSQL
+# n'est nécessaire que pour découpler l'état de la machine.
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.1"]
+
 [project.urls]
 Homepage = "https://github.com/intermeshteam/intermesh"
 Repository = "https://github.com/intermeshteam/intermesh"

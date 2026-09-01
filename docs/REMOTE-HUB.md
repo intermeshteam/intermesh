@@ -125,6 +125,46 @@ relying only on key possession.
 
 ---
 
+## Where the state lives
+
+By default the hub keeps its state in a SQLite file, created `0600`. That is
+the right choice for a hub on one machine, and nothing below is needed to run
+one.
+
+A SQLite file is tied to its filesystem, though: no hub running elsewhere can
+read it, and losing the disk loses the identities, the tasks and the audit
+chain with it. For a deployment where that matters, point the hub at
+PostgreSQL instead:
+
+```bash
+pip install 'intermesh[postgres]'
+
+intermesh hub --org your-org \
+  --state-dsn postgresql://user:password@db.internal:5432/intermesh
+```
+
+The DSN can also come from `INTERMESH_STATE_DSN`. Prefer that in a container:
+a password passed as a command-line argument is visible in the process table
+to every user on the machine. The hub prints the DSN with its password
+replaced by `***`, so it does not end up in logs or in `hub.info`.
+
+Schema creation is automatic and idempotent — the hub issues
+`CREATE TABLE IF NOT EXISTS` at startup, so there is no migration step.
+
+**What this gives you:** state that outlives the machine. A hub restarted
+elsewhere against the same database recovers its identities, its tasks and a
+verifiably intact audit chain. Backups become your usual PostgreSQL tooling
+rather than a file to copy.
+
+**What it does not give you:** two hubs serving traffic at once. Connected
+agents' sockets live in the memory of whichever process holds them, so two
+hubs sharing a database would not see each other's online agents, and a task
+routed by one would not reach an executor connected to the other. This lifts
+the storage constraint, not the routing one — it makes a standby possible, not
+active-active.
+
+---
+
 ## Not covered here
 
 **Platform-as-a-service deployment** (Railway, Render, Fly.io) would be the

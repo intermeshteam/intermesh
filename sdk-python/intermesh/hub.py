@@ -9,6 +9,7 @@ implémentée que dans le second, que personne ne démarrait).
 import argparse
 import asyncio
 import json
+import os
 import time
 
 import jwt
@@ -1003,6 +1004,10 @@ async def main(argv: list[str] | None = None):
     parser.add_argument("--org", type=str, default="default", help="Org")
     parser.add_argument("--ephemeral-state", action="store_true", help="État en mémoire, rien sur disque")
     parser.add_argument("--state-file", type=str, default=None, help="Chemin de la base d'état")
+    parser.add_argument("--state-dsn", type=str, default=None,
+                        help="Base d'état PostgreSQL (postgresql://...). Découple l'état "
+                             "de la machine : un Hub redémarré ailleurs le retrouve. "
+                             "Défaut : $INTERMESH_STATE_DSN")
     parser.add_argument("--ephemeral-secret", action="store_true", help="Clé JWT jetable")
     parser.add_argument("--secret-file", type=str, default=None, help="Chemin du fichier de clé JWT")
     parser.add_argument("--snapshot-dir", type=str, default=None, help="Dossier des instantanés d'état")
@@ -1026,8 +1031,15 @@ async def main(argv: list[str] | None = None):
     HUB_ORG = args.org
     SNAPSHOT_DIR = args.snapshot_dir
 
+    # Le DSN peut venir de l'environnement : en conteneur, il arrive par une
+    # variable d'environnement injectée, pas par la ligne de commande — et un
+    # mot de passe passé en argument est visible dans la table des processus.
+    state_dsn = args.state_dsn or os.environ.get("INTERMESH_STATE_DSN")
+
     if args.ephemeral_state:
         store = InterMeshStore(ephemeral=True)
+    elif state_dsn:
+        store = InterMeshStore(dsn=state_dsn)
     elif args.state_file:
         store = InterMeshStore(path=args.state_file)
     else:
