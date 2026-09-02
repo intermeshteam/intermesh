@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] — 2026-09-02
+
+Everything in this release came from one question: what would stop a bank
+from running this? The answers were measured rather than guessed, and
+several of them were unflattering.
+
+**The hub is no longer a single machine.** State can live in PostgreSQL, so
+a hub restarted elsewhere finds its state again, and several hubs of one
+organisation form a cluster: an agent on one is reachable from another, and
+a task submitted on one completes on another. Measured on five hubs with a
+thousand agents — 1 503 cross-hub requests/s and 413 tasks/s, no errors.
+Killing a hub under load cost the survivors nothing measurable: 96 694
+requests after the kill, none failed.
+
+**Agents no longer die with their hub.** They used to. An agent knows only
+the address it was given, so its hub gone, the reconnect loop replayed that
+dead address forever while a sibling stood ready. Hubs now hand out their
+live siblings at registration; re-attachment takes about half a second, and
+the agent is reachable again afterwards — not merely connected.
+
+### Added
+
+- **PostgreSQL state backend** (`--state-dsn`), alongside SQLite and memory.
+- **Clustering** — `--hub-id` and `--cluster-url`. Sibling hubs share a
+  signing key and a database, and route between themselves.
+- **Mutual TLS** — `--tls-client-ca` makes the hub demand a client
+  certificate, refused during the TLS handshake rather than after.
+  `--mtls-cert` / `--mtls-key` are what this hub presents to peers and
+  siblings. The certificate's common name is written to the audit log.
+- **Human approval on dangerous tasks** — a policy suspends a task and waits
+  for a decision rather than refusing it outright.
+- **`--max-agents`** — a configurable ceiling, unlimited by default.
+- Load benchmarks: `scripts/benchmark.py` and `scripts/cluster_benchmark.py`.
+
+### Changed — breaking
+
+- **Self-declared identity is refused from remote connections.** Without an
+  API key, a registering agent chose its own organisation, roles and
+  permissions, and the hub accepted them whatever the origin — so anyone who
+  knew the address could declare themselves admin. Local connections are
+  unaffected; `--allow-self-declared` restores the old behaviour on a network
+  you control, and `--require-api-key` refuses it even from localhost, which
+  is the only setting that holds behind a reverse proxy.
+- **Observers must authenticate.** A client declaring `roles: ["observer"]`
+  received the agent inventory *and* the entire audit chain with no key at
+  all, while the same client declaring itself an agent was refused: the
+  identity check covered one door of two. Telemetry is now granted on the
+  roles a key carries, not the roles a client claims.
+- **Cluster links are encrypted.** Links between sibling hubs ran over no TLS
+  at all — authentication rested on the shared signing key, which holds, but
+  the traffic, tokens included, crossed in the clear.
+
+### Fixed
+
+- **A 15-agent cap, hardcoded and enforced before the API key was read** — so
+  an enterprise key made no difference. Found by writing the benchmark.
+- **A deadlock in the SDK, and silent plaintext with it.** Replying to a
+  request happened inside the agent's own listen loop; encrypting the reply
+  needed a key fetched through that same blocked loop. Every lookup timed out
+  after 3 s, and the reply then went out **unencrypted** while the banner
+  said encryption was on. Requests were encrypted; responses were not.
+  3.01 s → 0.007 s, and responses are now actually encrypted.
+- **The operations console could never sign in.** It declares
+  `roles: ["admin", "observer"]`; the observer branch caught it first and
+  issued the pseudo-token `"observer"`, which `authorize()` rejects — so its
+  `hub.info` probe failed and it refused to open, including in the hardened
+  stack shipped for closed networks.
+
+### Known limits
+
+Named because a security review will find them: no LDAP or Active Directory,
+no HSM, no SBOM or signed images, and console access uses a shared API key
+rather than per-person credentials. See `docs/AIR-GAPPED.md`.
+
+---
+
 ## [0.3.0] — 2026-08-29
 
 **Renamed: Nexus is now InterMesh.** The `nexus` name was unavailable across
