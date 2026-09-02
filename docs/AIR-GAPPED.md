@@ -121,7 +121,8 @@ that runs inside — that is the point of pinning rather than tagging.
 The Control Plane at intermesh.site **cannot be used here.** It requires
 Supabase, an external service, and pulls a font from Google at build time.
 
-The stack ships `dashboard/` instead — served by the `console` container. It
+The stack ships the packaged console instead (`sdk-python/intermesh/console/`),
+served by the `console` container. It
 loads no CDN, no remote font and no external library; its charts are SVG
 computed in place. That is the interface for a closed network.
 

@@ -307,17 +307,41 @@ async def run_snapshot(args):
 
 
 def run_dashboard(args):
+    """Sert la console d'exploitation, celle qui voyage avec le paquet.
+
+    Le chemin était codé en dur sur `~/nexus/dashboard`, l'arborescence du
+    développeur — et les fichiers n'étaient même pas dans le paquet. Chez
+    tout autre utilisateur la commande annonçait « actif » puis répondait
+    404 sur tout. Elle sert désormais le dossier livré avec `intermesh`,
+    situé par le module lui-même.
+    """
     port = args.port
-    dashboard_dir = os.path.expanduser("~/nexus/dashboard")
+    console_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "console")
+
+    if not os.path.isfile(os.path.join(console_dir, "index.html")):
+        print("\033[31m✗ Console introuvable dans le paquet installé "
+              f"({console_dir}).\033[0m")
+        print("  Réinstallez avec :  pip install --force-reinstall intermesh")
+        return 1
+
     class Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args_h, **kwargs_h):
-            super().__init__(*args_h, directory=dashboard_dir, **kwargs_h)
+            super().__init__(*args_h, directory=console_dir, **kwargs_h)
         def log_message(self, format, *log_args): pass
 
-    print(f"\033[32m✓ InterMesh Mission Control Dashboard actif sur http://localhost:{port}\033[0m")
+    print(f"\033[32m✓ Console d'exploitation sur http://localhost:{port}\033[0m")
+    # Dit ce que c'est, et ce que ce n'est pas : le premier utilisateur a
+    # cru voir « le mauvais dashboard » alors qu'il y en a deux, distincts
+    # et voulus.
+    print("  Interface locale, sans dépendance externe : elle se branche sur")
+    print("  le Hub que vous indiquez et n'a besoin d'aucun compte.")
+    print("  Le Control Plane hébergé (React, comptes et équipes) est un autre")
+    print("  produit, sur https://intermesh.site — il exige Supabase et ne")
+    print("  fonctionne pas hors ligne.\n")
     with socketserver.TCPServer(("", port), Handler) as httpd:
         try: httpd.serve_forever()
         except KeyboardInterrupt: pass
+    return 0
 
 
 def run_serve(args):

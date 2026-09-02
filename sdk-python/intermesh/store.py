@@ -140,7 +140,13 @@ class InterMeshStore:
                 os.close(fd)
             else:
                 os.chmod(self.path, 0o600)
-            self._conn = sqlite3.connect(str(self.path))
+            # `timeout` laisse SQLite attendre le verrou d'écriture au lieu
+            # d'échouer aussitôt sur « database is locked ». Deux Hubs qui
+            # partagent un fichier se croisent au démarrage ; sans cela, la
+            # création du schéma se réglait par des réessais côté Python,
+            # bien plus lents que l'attente native — assez pour qu'un Hub ne
+            # soit pas encore à l'écoute quand on l'attend.
+            self._conn = sqlite3.connect(str(self.path), timeout=15.0)
             self.description = f"sqlite:{self.path}"
 
         self._create_schema()

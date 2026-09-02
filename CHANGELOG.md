@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.3] — 2026-09-02
+
+### Fixed
+
+- **`intermesh dashboard` was broken for everyone who installed the
+  package.** It served a hardcoded `~/nexus/dashboard` — one developer's
+  own directory layout — and the console files were not in the wheel at
+  all. For any real user the command printed `✓ ... actif` and then
+  answered **404 on everything**, which is worse than failing: it claims to
+  have worked.
+
+  The console now lives inside the package (`intermesh/console/`) and is
+  located by the module itself, so it ships with `pip install intermesh`
+  and works wherever it is installed. If the files are somehow missing, the
+  command says so and stops instead of serving an empty directory.
+
+  Reported by a first user who saw "the Python dashboard instead of the
+  React one" — they were on the machine where that hardcoded path happened
+  to exist.
+
+### Changed
+
+- **The two interfaces are now named apart, in the CLI itself.** There are
+  deliberately two: the packaged console, local and dependency-free, which
+  connects to whichever hub you point it at and needs no account; and the
+  hosted Control Plane at intermesh.site, a React application that requires
+  Supabase and cannot run offline. `intermesh dashboard` now states which
+  one it is serving and where the other lives — the confusion above was
+  the predictable result of calling both "dashboard".
+
+---
+
 ## [0.4.2] — 2026-09-02
 
 ### Fixed

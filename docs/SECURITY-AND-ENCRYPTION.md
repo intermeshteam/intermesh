@@ -237,7 +237,8 @@ La valeur d'une clé créée n'est jamais écrite au journal.
 
 ### La console web
 
-`dashboard/` est une page statique sans aucune dépendance externe : elle
+La console (`sdk-python/intermesh/console/`) est une page statique sans aucune
+dépendance externe : elle
 fonctionne sur un réseau fermé, devant un Hub sans accès à Internet.
 
 La clé d'API saisie **n'est jamais écrite dans le navigateur** — ni

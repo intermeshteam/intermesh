@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-PORT = 8861
+PORT = 8930
 HUB_URL = f"ws://localhost:{PORT}"
 NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="Node.js absent de la machine")

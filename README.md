@@ -198,7 +198,7 @@ policy declared, nothing is touched.
 | 📜 **Immutable audit log** | Merkle-chained events; any retroactive edit breaks the chain. |
 | 🚦 **Rate limiting** | Token-bucket throttling per agent. |
 | 🛠️ **Developer CLI** | `intermesh hub`, `discover`, `ping`, `ask`, `task`, `keygen`, `dashboard`, `docs`. |
-| 📊 **Mission Control** | Real-time dark-mode web dashboard. |
+| 📊 **Mission Control** | `intermesh dashboard` — a local console with no external dependency. Distinct from the hosted Control Plane at intermesh.site, which is a React app needing accounts. |
 | 🐳 **Docker** | Full stack via `docker compose up -d`. |
 
 ---
@@ -210,7 +210,7 @@ policy declared, nothing is touched.
 | `sdk-python/` | Official Python SDK (`intermesh`) and the `intermesh` CLI — `from_callable`, `from_langchain`, `@intermesh_service` |
 | `sdk-js/` | Official JavaScript/TypeScript SDK (`intermesh`) — adapters for LangChain.js and LlamaIndex.TS |
 | `server/` | The coordination hub |
-| `dashboard/` | Mission Control web UI |
+| `sdk-python/intermesh/console/` | Mission Control — the console shipped in the package |
 | `docs/` | RFC-001, security spec, API reference, remote-hub guide |
 | `examples/` | Runnable agents (Python and Node.js); `examples/frameworks/` wraps real LangChain/LlamaIndex/CrewAI/AutoGen objects |
 | `tests/` | 137 unit + integration tests |

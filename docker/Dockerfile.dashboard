@@ -1,7 +1,7 @@
 FROM nginx:alpine
 
 # Copie des fichiers statiques du Dashboard
-COPY dashboard/ /usr/share/nginx/html/
+COPY sdk-python/intermesh/console/ /usr/share/nginx/html/
 
 # Copie de la configuration Nginx
 COPY docker/nginx-dashboard.conf /etc/nginx/conf.d/default.conf
