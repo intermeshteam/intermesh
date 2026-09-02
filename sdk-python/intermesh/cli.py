@@ -13,17 +13,23 @@ from intermesh.crypto import generate_keypair, get_public_key_pem
 from intermesh.identity import AgentIdentity
 
 
+# Le dessin vit dans une chaîne brute : ses antislashs sont des traits,
+# pas des séquences d'échappement. Les laisser dans une f-string produisait
+# un SyntaxWarning à chaque appel de la CLI — un avertissement affiché à
+# chaque commande coûte plus cher que le dessin ne rapporte.
+_LOGO = r"""    _____   __________________  __  ______________ __  __
+   /  _/ | / /_  __/ ____/ __ \/  |/  / ____/ ___// / / /
+   / //  |/ / / / / __/ / /_/ / /|_/ / __/  \__ \/ /_/ /
+ _/ // /|  / / / / /___/ _, _/ /  / / /___ ___/ / __  /
+/___/_/ |_/ /_/ /_____/_/ |_/_/  /_/_____//____/_/ /_/"""
+
+
 def print_banner():
     # La version vient du paquet : une chaîne en dur ici finit toujours
     # par mentir après quelques releases.
     from intermesh import __version__
-    print(f"""
-\033[36m    _   ___________  _______
-   / | / / ____/   |/  _/   |  INTERMESH PROTOCOL
-  /  |/ / __/ / /| |/ // /| |  Universal Agent Infrastructure
- / /|  / /___/ ___ / // ___ |  CLI Developer Tool v{__version__}
-/_/ |_/_____/_/  |_/___/_/  |_|\033[0m
-""")
+    print(f"\n\033[36m{_LOGO}\033[0m\n")
+    print(f"  Universal Agent Infrastructure · CLI v{__version__}\n")
 
 
 def run_security_check(args):
