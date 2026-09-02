@@ -143,9 +143,46 @@ class InterMeshStore:
             self._conn = sqlite3.connect(str(self.path))
             self.description = f"sqlite:{self.path}"
 
+        self._create_schema()
+
+    def _create_schema(self) -> None:
+        """Crée les tables, en tolérant qu'un autre processus le fasse aussi.
+
+        Deux Hubs qui démarrent ensemble sur la même base se gênent, et pas
+        de la même façon selon le moteur :
+
+          * PostgreSQL — `CREATE TABLE IF NOT EXISTS` n'est pas à l'abri
+            d'une course : les deux passent le test d'existence, et le
+            perdant échoue sur `duplicate key ... pg_type_typname_nsp_index`,
+            message qui ne dit pas qu'une table existe déjà.
+          * SQLite — le second attend le verrou d'écriture et peut renvoyer
+            « database is locked ».
+
+        Les deux se résolvent en réessayant : la table est alors créée par
+        l'autre, et `IF NOT EXISTS` passe sans rien faire. Le recul évite de
+        rejouer dans la milliseconde et de perdre le verrou à nouveau —
+        une réémission immédiate ralentissait le démarrage au point de
+        dépasser le délai d'attente des appelants.
+
+        Chaque instruction est validée séparément : sous PostgreSQL un échec
+        avorte la transaction entière, et différer la validation ferait
+        perdre les tables déjà créées au moment du rollback.
+        """
+        attempts = 5
         for statement in _STATEMENTS:
-            self._conn.execute(statement)
-        self._conn.commit()
+            for attempt in range(attempts):
+                try:
+                    self._conn.execute(statement)
+                    self._conn.commit()
+                    break
+                except Exception:
+                    try:
+                        self._conn.rollback()
+                    except Exception:
+                        pass
+                    if attempt == attempts - 1:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
 
     def _connect_postgres(self, dsn: str) -> None:
         try:

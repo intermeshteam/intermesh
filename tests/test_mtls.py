@@ -42,7 +42,7 @@ from cryptography.x509.oid import NameOID
 from intermesh import InterMeshAgent
 from intermesh.peering import build_peer_ssl_context, build_server_ssl_context
 
-PORT = 8890
+PORT = 8910
 API_KEY = "nx_live_mtls_test_key"
 
 

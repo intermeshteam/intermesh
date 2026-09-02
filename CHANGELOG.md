@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.1] — 2026-09-02
+
+### Added
+
+- **The JavaScript SDK reconnects.** It had no reconnection logic of any
+  kind: `hubUrl` was a single address, there was no `close()`, and an agent
+  whose hub died simply stopped. It now takes one address or several, learns
+  its hub's live siblings at registration, and fails over — measured at
+  **0.14 s** against a real five-hub cluster. Off by default
+  (`autoReconnect: true` to enable), so existing agents keep the behaviour
+  they were written against.
+- `onFailover(handler)`, `close()`, and in-flight calls that reject on
+  disconnect instead of hanging until their own timeout — an agent that
+  looks alive while disconnected is worse than one that fails.
+
+### Fixed
+
+- **A cluster could not cold-start.** Hubs starting together against an
+  empty PostgreSQL database raced on schema creation: `CREATE TABLE IF NOT
+  EXISTS` is not race-safe there, and the losers died on `duplicate key ...
+  pg_type_typname_nsp_index` — a message that does not mention tables at
+  all. Kubernetes and docker-compose start every hub at once, so this hit
+  the first deployment and only the first, when nobody expects it. Five
+  hubs now cold-start on an empty database with no casualties.
+- Two test files claimed the same TCP ports, so one failed only when the
+  whole suite ran. Found by not dismissing a test that passed in isolation.
+
+---
+
 ## [0.4.0] — 2026-09-02
 
 Everything in this release came from one question: what would stop a bank
@@ -78,12 +107,9 @@ the agent is reachable again afterwards — not merely connected.
 ### The JavaScript SDK
 
 Ships as `0.4.0` alongside Python, so one number says which hub an SDK is
-tested against. The number is the claim, not parity: the JavaScript SDK has
-**no reconnection logic at all**. Its `hubUrl` is a single address, and an
-agent whose hub dies stops there — the sibling failover added to the Python
-SDK does not exist here. Everything else works unchanged against a 0.4.0
-hub, provided the agent carries an API key, which the hub now requires from
-remote connections.
+tested against. At 0.4.0 the number was the claim, not parity: the
+JavaScript SDK had **no reconnection logic at all**, and an agent whose hub
+died stopped there. That gap is closed in 0.4.1.
 
 ### Known limits
 

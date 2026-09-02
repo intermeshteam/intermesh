@@ -86,7 +86,10 @@ export class InterMeshAgent {
     permissions = [],
     metadata = {},
     hubUrl = process.env.INTERMESH_HUB_URL || 'ws://localhost:8765',
-    encrypt = true
+    encrypt = true,
+    autoReconnect = false,
+    reconnectBackoff = 0.5,
+    reconnectMaxBackoff = 15
   }) {
     this.name = name;
     this.orgId = orgId;
@@ -95,8 +98,19 @@ export class InterMeshAgent {
     this.roles = roles.length ? roles : ['standard'];
     this.permissions = permissions;
     this.metadata = metadata;
-    this.hubUrl = hubUrl;
+    // Une adresse unique ou plusieurs. Le Hub complète cette liste avec
+    // ses frères de grappe à l'enregistrement : sans cela, un agent dont le
+    // Hub meurt rejoue indéfiniment la même adresse morte.
+    this._hubCandidates = Array.isArray(hubUrl) ? [...hubUrl] : [hubUrl];
+    this.hubUrl = this._hubCandidates[0];
     this.encrypt = encrypt;
+
+    this.autoReconnect = autoReconnect;
+    this._reconnectBackoff = reconnectBackoff;
+    this._reconnectMaxBackoff = reconnectMaxBackoff;
+    this._closing = false;
+    this._reconnecting = false;
+    this._failoverHandler = null;
 
     this.ws = null;
     this.token = null;
@@ -145,32 +159,145 @@ export class InterMeshAgent {
   onRequest(handler) { this.requestHandler = handler; }
   onTask(handler) { this.taskHandler = handler; }
 
-  async connect() {
-    return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.hubUrl);
+  /** Handler appelé quand l'agent se rattache à un Hub différent. */
+  onFailover(handler) { this._failoverHandler = handler; }
 
-      this.ws.on('open', () => {
+  /**
+   * Ajoute les Hubs frères annoncés par le Hub à la liste de repli.
+   *
+   * Un agent ne connaît que l'adresse qu'on lui a donnée. Si ce Hub meurt,
+   * la boucle de reconnexion rejouerait la même adresse morte alors qu'un
+   * frère de la même grappe l'accepterait. Les énumérer à la main dans
+   * chaque agent ne survit pas à l'ajout d'un Hub : la liste vieillit en
+   * silence, ce qui revient à ne pas l'avoir.
+   *
+   * Les adresses reçues sont ajoutées, jamais substituées : celle qu'a
+   * écrite l'exploitant reste la première essayée.
+   */
+  _learnSiblings(urls) {
+    if (!Array.isArray(urls)) return;
+    for (const candidate of urls) {
+      if (typeof candidate === 'string' && candidate && !this._hubCandidates.includes(candidate)) {
+        this._hubCandidates.push(candidate);
+      }
+    }
+  }
+
+  /**
+   * Abandonne les échanges en cours après une rupture de lien.
+   *
+   * Sans cela, un appelant reste suspendu jusqu'à son propre délai
+   * d'attente sur une socket qui ne répondra jamais — l'agent paraît
+   * fonctionner alors qu'il est déconnecté.
+   */
+  _failPending(error) {
+    for (const key of Object.keys(this.pendingRequests)) {
+      const { reject } = this.pendingRequests[key];
+      delete this.pendingRequests[key];
+      if (reject) reject(error);
+    }
+    for (const key of Object.keys(this.pendingTasks)) {
+      const { reject } = this.pendingTasks[key];
+      delete this.pendingTasks[key];
+      if (reject) reject(error);
+    }
+  }
+
+  /** Ferme volontairement : aucune reconnexion ne sera tentée. */
+  async close() {
+    this._closing = true;
+    if (this.ws) {
+      try { this.ws.close(); } catch { /* déjà fermée */ }
+    }
+  }
+
+  /**
+   * Rejoint un Hub, le même ou un autre candidat, avec un recul
+   * exponentiel jusqu'à réussite ou fermeture volontaire.
+   *
+   * Suppose que les candidats sont des Hubs opérationnels de la même
+   * organisation. Ce n'est pas une élection de chef ni une promotion
+   * automatique : c'est une reconnexion côté client.
+   */
+  async _reconnectLoop() {
+    const previous = this.hubUrl;
+    let attempt = 0;
+
+    while (!this._closing) {
+      for (const url of this._hubCandidates) {
+        try {
+          await this._registerOn(url);
+          if (this._failoverHandler && url !== previous) {
+            await this._failoverHandler(previous, url);
+          }
+          return;
+        } catch (err) {
+          // Un refus d'identité ne se corrige pas en réessayant ailleurs :
+          // la clé est mauvaise, ou le Hub exige ce que l'agent n'a pas.
+          if (err && err.code === 'INTERMESH_REFUSED') throw err;
+        }
+      }
+      attempt += 1;
+      const wait = Math.min(
+        this._reconnectMaxBackoff,
+        this._reconnectBackoff * Math.pow(2, Math.min(attempt, 5))
+      );
+      await new Promise((r) => setTimeout(r, wait * 1000));
+    }
+  }
+
+  async connect() {
+    let lastError = null;
+    for (const url of this._hubCandidates) {
+      try {
+        await this._registerOn(url);
+        return;
+      } catch (err) {
+        if (err && err.code === 'INTERMESH_REFUSED') throw err;
+        lastError = err;
+      }
+    }
+    throw new Error(
+      `Impossible de joindre un Hub parmi ${JSON.stringify(this._hubCandidates)} : ${lastError}`
+    );
+  }
+
+  _registerOn(url) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      // Vrai seulement une fois l'enregistrement obtenu. Une socket qui
+      // n'a jamais servi ne doit pas déclencher de reconnexion : sinon
+      // chaque tentative ratée en relance une, et les boucles se
+      // multiplient — la bascule était annoncée deux fois, puis quatre.
+      let established = false;
+      const ws = new WebSocket(url);
+      this.ws = ws;
+
+      ws.on('open', () => {
         const payload = { ...this.identity };
         if (this.apiKey) {
           payload.api_key = this.apiKey;
         }
 
-        const regMsg = {
+        ws.send(JSON.stringify({
           id: crypto.randomUUID(),
           version: 'intermesh/v1',
           type: 'register',
           sender: this.name,
           content: payload
-        };
-        this.ws.send(JSON.stringify(regMsg));
+        }));
       });
 
-      this.ws.on('message', (data) => {
+      // Gestionnaire de poignée de main : retiré dès l'enregistrement
+      // obtenu, sinon il resterait branché en plus du gestionnaire
+      // définitif et chaque message serait traité deux fois.
+      const handshake = (data) => {
         try {
           const msg = JSON.parse(data.toString());
 
           if (msg.type === 'registered') {
             this.token = msg.content.token;
+            this.hubUrl = url;
             if (msg.content.qualified_name) {
               this.qualifiedName = msg.content.qualified_name;
               this.identity.qualified_name = msg.content.qualified_name;
@@ -181,18 +308,48 @@ export class InterMeshAgent {
               this.identity.org_id = msg.content.org_id;
               this.orgId = msg.content.org_id;
             }
+            this._learnSiblings(msg.content.cluster_hubs);
 
+            ws.off('message', handshake);
             this._startListening();
+            settled = true;
+            established = true;
             resolve();
           } else if (msg.type === 'error' && !this.token) {
-            reject(new Error(msg.content));
+            // Un refus d'identité est définitif : réessayer sur un frère
+            // donnerait le même verdict, la clé étant la même.
+            const refusal = new Error(msg.content);
+            refusal.code = 'INTERMESH_REFUSED';
+            settled = true;
+            try { ws.close(); } catch { /* déjà fermée */ }
+            reject(refusal);
           }
         } catch (err) {
+          settled = true;
           reject(err);
         }
+      };
+      ws.on('message', handshake);
+
+      ws.on('error', (err) => {
+        if (!settled) { settled = true; reject(err); }
       });
 
-      this.ws.on('error', reject);
+      ws.on('close', () => {
+        if (!settled) { settled = true; reject(new Error(`Lien fermé par ${url}`)); return; }
+        if (!established) return;     // tentative ratée, pas une rupture
+        if (this.ws !== ws) return;   // socket remplacée par une plus récente
+
+        this.token = null;
+        this._failPending(new Error('Lien avec le Hub interrompu.'));
+
+        if (this.autoReconnect && !this._closing && !this._reconnecting) {
+          this._reconnecting = true;
+          this._reconnectLoop()
+            .catch(() => { /* refus définitif : la clé ne conviendra nulle part */ })
+            .finally(() => { this._reconnecting = false; });
+        }
+      });
     });
   }
 
