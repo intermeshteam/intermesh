@@ -40,6 +40,7 @@ Verified by reading the source, not by assertion:
 |---|---|
 | State | PostgreSQL, not a file attached to the container |
 | Registration | API key required everywhere, including from localhost |
+| Console | API key required to open it; refused without one |
 | Database network | `internal` — no route out, no published port |
 | Filesystems | read-only, with tmpfs for the few writable paths |
 | Privileges | non-root (uid 10001), all capabilities dropped, `no-new-privileges` |
@@ -75,6 +76,19 @@ $ nc -z 127.0.0.1 5432
 An agent registering without a key is refused with `SELF_DECLARED_REFUSED`;
 the same agent presenting a key from `hardened.env` connects and reports
 `state_ephemeral: false`.
+
+### Opening the console
+
+The console asks for a key before it shows anything, and needs one carrying
+`admin:*` — the same JSON in `INTERMESH_API_KEYS`. Give operators a key
+distinct from the agents', so revoking human access does not stop the mesh.
+
+Two things worth knowing. The key is held in memory only: it is never written
+to `localStorage` or `sessionStorage`, so closing the tab ends the session and
+a shared workstation keeps nothing. And the console appears in the mesh
+listing under its own name, with roles `admin, observer` — an operator
+watching is visible to everyone else watching, which is the intended
+behaviour rather than an oversight.
 
 ---
 
@@ -120,16 +134,18 @@ mean replacing Supabase authentication with something local.
 
 Named rather than glossed over, because a security review will find them:
 
-- **No LDAP or Active Directory.** Agents authenticate with API keys, which is
-  the right mechanism for programs. Human access to the console has no
-  authentication at all — put it behind whatever your organisation already
-  uses.
+- **No LDAP or Active Directory.** Both agents and the console authenticate
+  with API keys, which is the right mechanism for programs but a poor one for
+  people: a key is shared, not attributable, and revoking it locks out
+  everyone holding it. For per-person access tied to your directory, put the
+  console behind whatever your organisation already runs.
 - **No mTLS between agents and hub.** The hub can serve `wss://`
   (`--tls-cert` / `--tls-key`), but it does not verify client certificates.
 - **No HSM integration.** The signing key is a secret in the environment.
 - **No SBOM, no signed images, no reproducible build attestation.** Digest
   pinning is a floor, not a substitute.
-- **Console ships no authentication.** It talks to the hub as an observer.
-  Anyone who reaches port 8080 sees the mesh.
+- **The console key lives in the operator's head, not on the machine.** It is
+  asked for at each session and never written to `localStorage` — closing the
+  tab ends the session. That is deliberate, but it means no "stay signed in".
 
 Each is a real gap. None of them is hidden by the stack above.

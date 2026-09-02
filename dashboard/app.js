@@ -123,12 +123,29 @@ function connect(url, key) {
 }
 
 function handle(m) {
-  if (m.type === 'admin_result' && S.pending.has(m.reply_to)) {
-    const { resolve, reject } = S.pending.get(m.reply_to);
+  const waiting = m.reply_to ? S.pending.get(m.reply_to) : null;
+
+  // Le Hub répond avec la charge utile directement dans `content` — il n'y a
+  // pas d'enveloppe {ok, result}. En la cherchant, la console lisait
+  // `content.ok` (absent, donc faux) et rejetait avec `content.error`
+  // (absent aussi) : `new Error(undefined)` a un message vide, d'où un
+  // encadré d'erreur affiché sans rien dedans.
+  if (waiting && m.type === 'admin_result') {
     S.pending.delete(m.reply_to);
-    m.content.ok ? resolve(m.content.result) : reject(new Error(m.content.error));
+    waiting.resolve(m.content);
     return;
   }
+
+  // Un refus arrive en message `error` portant le même reply_to, et non en
+  // admin_result. Non traité, il laissait la promesse pendante jusqu'au
+  // délai de 12 s au lieu de dire tout de suite ce qui n'allait pas.
+  if (waiting && m.type === 'error') {
+    S.pending.delete(m.reply_to);
+    waiting.reject(new Error(
+      typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+    return;
+  }
+
   if (m.type === 'telemetry_event') onTelemetry(m.content);
 }
 

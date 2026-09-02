@@ -758,6 +758,31 @@ def _is_local_connection(websocket) -> bool:
     return host in ("127.0.0.1", "::1", "localhost") or host.startswith("127.")
 
 
+def _registration_refusal(websocket, api_key: str | None) -> str | None:
+    """Motif de refus d'un enregistrement sans clé d'API valide, ou None.
+
+    Appliqué aux agents comme aux observateurs. Un observateur reçoit la
+    chaîne d'audit complète — expéditeurs, cibles et métadonnées de chaque
+    opération — et le flux de télémétrie qui suit. Le laisser entrer sans
+    justification alors qu'un agent doit présenter une clé revenait à
+    protéger la porte et laisser la fenêtre ouverte : il suffisait de se
+    déclarer « observer » pour tout lire.
+    """
+    if api_key:
+        return None      # la validité de la clé est vérifiée par l'appelant
+    local = _is_local_connection(websocket)
+    if REQUIRE_API_KEY or (not local and not ALLOW_SELF_DECLARED):
+        origin = "cette connexion" if local else "une connexion distante"
+        return (
+            f"SELF_DECLARED_REFUSED: ce Hub n'accepte pas d'identité "
+            f"auto-déclarée depuis {origin}. Un agent doit présenter "
+            f"une clé d'API (`intermesh apikey --org <org>`). "
+            f"Pour un réseau privé, démarrez le Hub avec "
+            f"--allow-self-declared."
+        )
+    return None
+
+
 async def handle_agent(websocket, my_org: str):
     agent_name = None
     is_observer = False
@@ -910,7 +935,37 @@ async def handle_agent(websocket, my_org: str):
 
                 # -- Observateurs : télémétrie seule, hors quota ------------
                 roles_declared = d.get("roles", ["standard"])
-                if "observer" in roles_declared or str(raw_name).startswith(OBSERVER_PREFIXES):
+                wants_telemetry = ("observer" in roles_declared
+                                   or str(raw_name).startswith(OBSERVER_PREFIXES))
+
+                # Une console d'administration demande les deux : le flux de
+                # télémétrie *et* le droit d'exécuter des commandes. Traitée
+                # en simple observatrice, elle recevait le pseudo-jeton
+                # "observer" que authorize() rejette — sa sonde `hub.info`
+                # échouait donc et elle refusait de s'ouvrir. Porteuse d'une
+                # clé, elle emprunte désormais le chemin agent, qui délivre
+                # un vrai jeton signé, et rejoint les observateurs ensuite.
+                if wants_telemetry and not d.get("api_key"):
+                    observer_key = None
+                    if observer_key and api_keys.lookup(observer_key) is None:
+                        await websocket.send(InterMeshMessage(
+                            type=MessageType.ERROR, sender="hub", to=raw_name,
+                            content="API Key Entreprise invalide.",
+                        ).to_json())
+                        audit_log.log("OBSERVER_REJECTED", raw_name, None,
+                                      {"reason": "invalid_api_key"})
+                        continue
+
+                    refusal = _registration_refusal(websocket, observer_key)
+                    if refusal:
+                        await websocket.send(InterMeshMessage(
+                            type=MessageType.ERROR, sender="hub", to=raw_name,
+                            content=refusal,
+                        ).to_json())
+                        audit_log.log("OBSERVER_REJECTED", raw_name, None,
+                                      {"reason": "no_api_key"})
+                        continue
+
                     is_observer = True
                     observers.add(websocket)
                     await websocket.send(json.dumps({
@@ -930,7 +985,10 @@ async def handle_agent(websocket, my_org: str):
                     continue
 
                 current_active = len(agents)
-                if MAX_AGENTS and current_active >= MAX_AGENTS:
+                # Une console d'exploitation n'est pas une charge de travail :
+                # la compter dans le plafond ferme l'interface au moment
+                # précis où le maillage est saturé et où l'on en a besoin.
+                if MAX_AGENTS and not wants_telemetry and current_active >= MAX_AGENTS:
                     err_msg = (f"AGENT_LIMIT_REACHED: ce Hub est configuré pour "
                                f"{MAX_AGENTS} agents simultanés ({current_active} connectés). "
                                f"Relevez --max-agents.")
@@ -951,21 +1009,15 @@ async def handle_agent(websocket, my_org: str):
                     # Refus de l'auto-déclaration quand elle n'est pas sûre.
                     # Le contrôle est ici, après la recherche de clé : un
                     # agent qui en présente une valide n'est jamais concerné.
-                    local = _is_local_connection(websocket)
-                    if REQUIRE_API_KEY or (not local and not ALLOW_SELF_DECLARED):
-                        origin = "cette connexion" if local else "une connexion distante"
+                    refusal = _registration_refusal(websocket, None)
+                    if refusal:
                         await websocket.send(InterMeshMessage(
                             type=MessageType.ERROR, sender="hub", to=raw_name,
-                            content=(
-                                f"SELF_DECLARED_REFUSED: ce Hub n'accepte pas d'identité "
-                                f"auto-déclarée depuis {origin}. Un agent doit présenter "
-                                f"une clé d'API (`intermesh apikey --org <org>`). "
-                                f"Pour un réseau privé, démarrez le Hub avec "
-                                f"--allow-self-declared."
-                            ),
+                            content=refusal,
                         ).to_json())
                         audit_log.log("SELF_DECLARED_REFUSED", raw_name, None, {
-                            "local": local, "require_api_key": REQUIRE_API_KEY,
+                            "local": _is_local_connection(websocket),
+                            "require_api_key": REQUIRE_API_KEY,
                         })
                         continue
 
@@ -973,6 +1025,14 @@ async def handle_agent(websocket, my_org: str):
                     roles = d.get("roles", ["standard"])
                     perms = d.get("permissions", [])
                     auth_method = "self_declared"
+
+                # Le flux de télémétrie porte la chaîne d'audit complète. Il
+                # se décide donc sur les rôles *accordés* — ceux de la clé —
+                # et non sur ceux que le client a déclarés : sans quoi une
+                # clé d'exécutant lirait tout l'audit en se disant
+                # observatrice, alors que la moindre commande lui est refusée.
+                wants_telemetry = wants_telemetry and bool(
+                    {"admin", "observer"} & set(roles))
 
                 identity = AgentIdentity.from_dict({
                     "name": raw_name, "org_id": org_id, "agent_id": d.get("agent_id"),
@@ -1023,6 +1083,24 @@ async def handle_agent(websocket, my_org: str):
                     "roles": identity.roles, "permissions": identity.permissions, "org_id": identity.org_id,
                     "token": token, "online_agents": list(agents.keys()),
                 }).to_json())
+
+                if wants_telemetry:
+                    # Après REGISTERED, et non avant : un client installe son
+                    # gestionnaire définitif en recevant son jeton. L'instantané
+                    # envoyé plus tôt tombait dans le gestionnaire provisoire de
+                    # la poignée de main, qui l'ignore — la console restait sur
+                    # « Chargement… » jusqu'au premier événement suivant.
+                    is_observer = True
+                    observers.add(websocket)
+                    await websocket.send(json.dumps({
+                        "type": MessageType.TELEMETRY,
+                        "content": {
+                            "event": "snapshot",
+                            "agents": snapshot_agents(),
+                            "audit_chain": [e.to_dict() for e in audit_log.chain],
+                            "server_time": time.time(),
+                        },
+                    }))
 
                 # Reprise des tâches restées en attente pour cet exécutant.
                 pending = [t for t in task_registry.values()
