@@ -1,0 +1,41 @@
+{
+  "_comment": "Copiez-le sous le numéro de la facture, p. ex. data/2026-001.json.",
+
+  "invoice_number": "2026-001",
+  "issue_date": "2026-09-02",
+  "net_days": 30,
+
+  "currency": "USD",
+
+  "buyer_company": "Acme Bank AG",
+  "buyer_address": ["Bahnhofstrasse 1", "8001 Zürich", "Switzerland"],
+  "buyer_vat_id": "CHE-000.000.000",
+  "buyer_contact": "Ada Lovelace",
+  "buyer_email": "ada@acmebank.example",
+  "po_number": "PO-2026-4471",
+
+  "items": [
+    {
+      "title": "InterMesh — support et maintenance, 12 mois",
+      "description": [
+        "Contact nommé, réponse sous 4 h ouvrées pour un incident bloquant.",
+        "Mises à jour de sécurité et accompagnement des montées de version."
+      ],
+      "quantity": 1,
+      "unit_price": 0
+    },
+    {
+      "title": "Accompagnement au déploiement en réseau fermé",
+      "description": "Installation de la pile durcie, reprise après incident, transfert de compétences.",
+      "quantity": 5,
+      "unit_price": 0
+    }
+  ],
+
+  "_vat_comment": "Obligatoire, sans valeur par défaut. Mettez ce que votre comptable vous indique — 0 est une réponse valable et s'imprime en ligne explicite.",
+  "vat_rate": 0,
+  "vat_note": "À faire confirmer par votre comptable avant le premier envoi.",
+
+  "payment_terms": "Payable sous 30 jours à compter de la date d'émission, par virement bancaire, en USD.",
+  "notes": "Toute retenue à la source appliquée dans le pays du client doit être convenue par écrit avant signature."
+}

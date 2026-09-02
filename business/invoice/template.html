@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Invoice {{invoice_number}} — {{buyer_company}}</title>
+<style>
+  /* A4 with real print margins. The browser's own "Save as PDF" is the
+     renderer, so there is no toolchain to install and nothing to keep in
+     step with a template change. */
+  @page { size: A4; margin: 18mm 16mm; }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #14181f;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* On screen only: mimic the sheet so what you see is what prints. */
+  @media screen {
+    body { background: #f1f3f6; padding: 24px; }
+    .sheet {
+      background: #fff; max-width: 210mm; min-height: 297mm;
+      margin: 0 auto; padding: 18mm 16mm;
+      box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.08);
+    }
+  }
+  @media print {
+    body { background: none; padding: 0; }
+    .sheet { max-width: none; min-height: 0; padding: 0; box-shadow: none; }
+  }
+
+  header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+  .seller-name { font-size: 15pt; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .muted { color: #5a6473; }
+  .small { font-size: 9pt; }
+  .doc-title { font-size: 20pt; font-weight: 700; letter-spacing: -0.02em; margin: 0; text-align: right; }
+  .doc-meta { text-align: right; margin-top: 8px; }
+  .doc-meta div { white-space: nowrap; }
+
+  .parties { display: flex; gap: 32px; margin-top: 28px; }
+  .parties > div { flex: 1; }
+  .label { font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color: #7a8496; margin-bottom: 6px; }
+  .party-name { font-weight: 600; }
+
+  table.items { width: 100%; border-collapse: collapse; margin-top: 28px; }
+  table.items th {
+    text-align: left; font-size: 8pt; text-transform: uppercase; letter-spacing: .08em;
+    color: #7a8496; font-weight: 600; padding: 0 8px 8px 0; border-bottom: 1px solid #d7dce4;
+  }
+  table.items th.num, table.items td.num { text-align: right; padding-right: 0; }
+  table.items td { padding: 10px 8px 10px 0; border-bottom: 1px solid #eef1f5; vertical-align: top; }
+  table.items td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .item-desc { color: #5a6473; font-size: 9.5pt; margin-top: 3px; }
+
+  .totals { margin-top: 18px; margin-left: auto; width: 62%; }
+  .totals tr td { padding: 5px 0; }
+  .totals tr td:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .totals tr.grand td { border-top: 2px solid #14181f; padding-top: 10px; font-size: 12pt; font-weight: 700; }
+  .vat-note { font-size: 8.5pt; color: #5a6473; margin-top: 4px; }
+
+  .panel { margin-top: 28px; border: 1px solid #d7dce4; border-radius: 6px; padding: 14px 16px; }
+  .panel h3 { font-size: 9pt; text-transform: uppercase; letter-spacing: .08em; color: #7a8496; margin: 0 0 10px; font-weight: 600; }
+  dl.bank { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; font-size: 9.5pt; }
+  dl.bank dt { color: #5a6473; white-space: nowrap; }
+  dl.bank dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .terms { margin-top: 22px; font-size: 9pt; color: #5a6473; }
+  .terms strong { color: #14181f; }
+
+  footer { margin-top: 34px; padding-top: 12px; border-top: 1px solid #eef1f5; font-size: 8.5pt; color: #7a8496; }
+
+  /* Never split a row or the payment panel across two sheets. */
+  tr, .panel { break-inside: avoid; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header>
+    <div>
+      <p class="seller-name">{{seller_company}}</p>
+      <div class="small muted">{{seller_address_html}}</div>
+      <div class="small muted" style="margin-top:6px">{{seller_ids_html}}</div>
+    </div>
+    <div>
+      <p class="doc-title">{{doc_title}}</p>
+      <div class="doc-meta small">
+        <div><span class="muted">No.</span> <strong>{{invoice_number}}</strong></div>
+        <div><span class="muted">Issued</span> {{issue_date}}</div>
+        <div><span class="muted">Due</span> <strong>{{due_date}}</strong></div>
+        {{po_line}}
+      </div>
+    </div>
+  </header>
+
+  <section class="parties">
+    <div>
+      <div class="label">Billed to</div>
+      <div class="party-name">{{buyer_company}}</div>
+      <div class="small muted">{{buyer_address_html}}</div>
+      <div class="small muted" style="margin-top:6px">{{buyer_ids_html}}</div>
+    </div>
+    <div>
+      <div class="label">Contact</div>
+      <div class="party-name">{{buyer_contact}}</div>
+      <div class="small muted">{{buyer_email}}</div>
+    </div>
+  </section>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th style="width:56%">Description</th>
+        <th class="num" style="width:10%">Qty</th>
+        <th class="num" style="width:17%">Unit price</th>
+        <th class="num" style="width:17%">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{items_html}}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    <tr><td class="muted">Subtotal</td><td>{{subtotal}}</td></tr>
+    {{vat_row}}
+    <tr class="grand"><td>Total due</td><td>{{total}}</td></tr>
+  </table>
+  {{vat_note_html}}
+
+  <div class="panel">
+    <h3>Payment — bank transfer</h3>
+    <dl class="bank">
+      {{bank_html}}
+    </dl>
+    <p class="small muted" style="margin:12px 0 0">
+      Please quote invoice <strong>{{invoice_number}}</strong> as the payment reference.
+      Bank charges are borne by the payer (OUR), so that the amount received matches
+      the total above.
+    </p>
+  </div>
+
+  <div class="terms">
+    <p><strong>Terms.</strong> {{payment_terms}}</p>
+    {{notes_html}}
+  </div>
+
+  <footer>
+    {{footer_text}}
+  </footer>
+
+</div>
+</body>
+</html>

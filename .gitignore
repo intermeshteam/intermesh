@@ -28,3 +28,8 @@ build/
 *.tsbuildinfo
 supabase/.temp/
 docker/*.env
+
+# Factures remplies : noms de clients, montants, coordonnées bancaires.
+business/invoice/data/*.json
+!business/invoice/data/*.example.json
+business/invoice/out/

@@ -1,0 +1,30 @@
+{
+  "_comment": "Copiez ce fichier en data/seller.json et remplissez-le. seller.json est gitignoré : il porte votre compte bancaire.",
+
+  "company": "VOTRE SOCIÉTÉ SARL",
+  "address": [
+    "Adresse, numéro",
+    "Commune, Kinshasa",
+    "République Démocratique du Congo"
+  ],
+  "email": "facturation@votredomaine.com",
+  "phone": "+243 000 000 000",
+
+  "rccm": "CD/KIN/RCCM/00-X-00000",
+  "id_nat": "00-X0000-X00000X",
+  "nif": "A0000000X",
+
+  "bank": {
+    "_comment": "Demandez la liste complète à votre banque. Sans banque correspondante, un virement en USD vers Kinshasa est souvent renvoyé plusieurs semaines plus tard.",
+    "account_name": "VOTRE SOCIÉTÉ SARL",
+    "bank_name": "Nom de la banque",
+    "account_number": "00000000000",
+    "iban": "",
+    "swift": "XXXXCDKX",
+    "correspondent_bank": "Banque correspondante (souvent aux États-Unis pour l'USD)",
+    "correspondent_swift": "XXXXUS3X",
+    "bank_address": ["Adresse de la banque", "Kinshasa, RDC"]
+  },
+
+  "footer": "VOTRE SOCIÉTÉ SARL — RCCM CD/KIN/RCCM/00-X-00000 — Kinshasa, RDC"
+}
