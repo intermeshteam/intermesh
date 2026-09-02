@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.4] — 2026-09-02
+
+### Changed
+
+- **The local console is now the Control Plane itself, not a copy of it.**
+  There were two interfaces doing the same job: the hosted React
+  application, and a hand-written page served by `intermesh dashboard`.
+  Keeping both made them drift, and a first user reported seeing "the
+  wrong dashboard" — a fair complaint, because there were two.
+
+  `intermesh dashboard` now serves a static export of the same React
+  application, shipped in the package. Six of the eight pages already
+  spoke only to the hub, so the local build changes three things and
+  nothing else: no account (it connects straight to the hub you point it
+  at), the system font instead of a downloaded one, and no API routes —
+  quotes, invitations and licences belong to the hosted site.
+
+  The font change also means the console **builds with no network at
+  all**, verified by building it offline. That was a standing complaint
+  against the Control Plane in `docs/AIR-GAPPED.md`.
+
+  The export adds 2.9 MB to a wheel, which is about 9% on top of an
+  installation that already weighs 33 MB — most of it `cryptography`.
+
+  The console is generated, not committed. `./scripts/build_console.sh`
+  produces it before publishing, and the command says what to run if it is
+  missing, distinguishing an installed package from a checkout.
+
+### Fixed
+
+- A static export names its pages `agents.html` while client-side
+  navigation asks for `/agents`. Without a mapping the console opened and
+  then broke on the first click.
+- `package-data` declared only `*.html`, and a non-recursive pattern left
+  out the 33 files under `_next/` — the application itself.
+- The export contained the public marketing site, so opening
+  `localhost:8080` landed on the sales page rather than the dashboard.
+
+---
+
 ## [0.4.3] — 2026-09-02
 
 ### Fixed
