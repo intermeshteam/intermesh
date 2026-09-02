@@ -136,11 +136,33 @@ class InterMeshAgent:
             if "org_id" in res.content:
                 self.identity.org_id = res.content["org_id"]
                 self.org_id = res.content["org_id"]
+            self._learn_siblings(res.content.get("cluster_hubs"))
             print(f"✅ [{self.qualified_name}] Connecté sur {url} | E2E: {'🔒 ON' if self.encrypt else '🔓 OFF'}")
         elif res.type == MessageType.ERROR:
             print(f"❌ [{self.name}] Refusé : {res.content}")
             await ws.close()
             raise PermissionError(res.content)
+
+    def _learn_siblings(self, urls) -> None:
+        """Ajoute les Hubs frères annoncés par le Hub à la liste de repli.
+
+        Un agent ne connaît que l'adresse qu'on lui a donnée. Si ce Hub
+        meurt, la boucle de reconnexion rejoue indéfiniment la même adresse
+        morte, alors qu'un frère de la même grappe l'accepterait — c'est
+        mesurable, et c'était le comportement avant ceci.
+
+        Les énumérer à la main dans chaque agent serait possible, mais ne
+        survivrait pas à l'ajout d'un Hub : la liste vieillirait en silence,
+        ce qui revient à ne pas l'avoir. Le Hub, lui, sait qui est vivant.
+
+        Les adresses reçues sont *ajoutées*, jamais substituées : celle que
+        l'exploitant a écrite reste la première essayée.
+        """
+        if not isinstance(urls, list):
+            return
+        for candidate in urls:
+            if isinstance(candidate, str) and candidate and candidate not in self._hub_candidates:
+                self._hub_candidates.append(candidate)
 
     async def connect(self):
         """

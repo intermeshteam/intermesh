@@ -92,6 +92,18 @@ _STATEMENTS = (
            org_id TEXT NOT NULL,
            last_seen DOUBLE PRECISION NOT NULL
        )""",
+    # Les Hubs d'une même grappe, chacun s'y déclarant.
+    #
+    # La table `presence` ne recense que des agents : un Hub qui n'en porte
+    # aucun n'y apparaît pas — or c'est exactement le Hub de secours vers
+    # lequel on voudrait rediriger. D'où une table séparée, où un Hub existe
+    # parce qu'il tourne, pas parce qu'on s'est connecté à lui.
+    """CREATE TABLE IF NOT EXISTS hubs (
+           hub_id TEXT PRIMARY KEY,
+           hub_url TEXT NOT NULL,
+           org_id TEXT NOT NULL,
+           last_seen DOUBLE PRECISION NOT NULL
+       )""",
 )
 
 
@@ -357,6 +369,46 @@ class InterMeshStore:
                 continue
             out.append({"agent_name": name, "hub_id": hub_id, "hub_url": hub_url,
                         "org_id": org_id, "last_seen": float(last_seen)})
+        return out
+
+    # ------------------------------------------------------------------
+    # Grappe : quels Hubs sont vivants
+    # ------------------------------------------------------------------
+
+    def record_hub(self, hub_id: str, hub_url: str, org_id: str,
+                   seen_at: float | None = None) -> None:
+        """Déclare ce Hub vivant, ou rafraîchit son horodatage."""
+        self._conn.execute(
+            self._upsert("hubs", "hub_id",
+                         ("hub_id", "hub_url", "org_id", "last_seen")),
+            (hub_id, hub_url, org_id,
+             seen_at if seen_at is not None else time.time()),
+        )
+        self._conn.commit()
+
+    def clear_hub(self, hub_id: str) -> None:
+        """Retire ce Hub. Un arrêt propre le fait ; un arrêt brutal, non —
+        d'où `max_age` sur la lecture."""
+        self._conn.execute(self._sql("DELETE FROM hubs WHERE hub_id = ?"), (hub_id,))
+        self._conn.commit()
+
+    def list_hubs(self, org_id: str | None = None, max_age: float = 0.0) -> list[dict]:
+        """Hubs vivants, les périmés écartés.
+
+        `max_age` n'est pas facultatif en pratique : un Hub tué n'a pas
+        l'occasion de se retirer, et proposer son adresse à un agent en
+        train de basculer l'enverrait précisément là où il vient d'échouer.
+        """
+        rows = self._fetch("SELECT hub_id, hub_url, org_id, last_seen FROM hubs")
+        now = time.time()
+        out = []
+        for hub_id, hub_url, hub_org, last_seen in rows:
+            if org_id is not None and hub_org != org_id:
+                continue
+            if max_age and (now - float(last_seen)) > max_age:
+                continue
+            out.append({"hub_id": hub_id, "hub_url": hub_url, "org_id": hub_org,
+                        "last_seen": float(last_seen)})
         return out
 
     def touch_presence(self, hub_id: str, seen_at: float) -> None:

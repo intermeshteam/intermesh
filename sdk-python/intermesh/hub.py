@@ -329,6 +329,26 @@ async def broadcast(event: str, data: dict) -> None:
         observers.discard(ws)
 
 
+def sibling_hub_urls() -> list[str]:
+    """Adresses des autres Hubs vivants de cette organisation.
+
+    Écarte le Hub courant — un agent y est déjà — et les entrées périmées :
+    proposer l'adresse d'un Hub mort enverrait l'agent exactement là où il
+    vient d'échouer. Liste vide hors grappe, ce qui est le cas nominal d'un
+    déploiement à un seul Hub.
+    """
+    if store is None or not CLUSTER_URL:
+        return []
+    try:
+        found = store.list_hubs(org_id=HUB_ORG, max_age=PRESENCE_TTL)
+    except Exception:
+        # Une base indisponible ne doit pas faire échouer un enregistrement
+        # qui, sans grappe, se serait déroulé normalement.
+        return []
+    return [h["hub_url"] for h in found
+            if h["hub_id"] != HUB_ID and h["hub_url"]]
+
+
 def snapshot_agents() -> list[dict]:
     now = time.time()
     out = []
@@ -1107,6 +1127,12 @@ async def handle_agent(websocket, my_org: str):
                     "status": "ready", "agent_id": identity.agent_id, "qualified_name": agent_name,
                     "roles": identity.roles, "permissions": identity.permissions, "org_id": identity.org_id,
                     "token": token, "online_agents": list(agents.keys()),
+                    # Adresses des Hubs frères vivants. Le Hub les connaît ;
+                    # l'agent, non — et sans elles il rejoue indéfiniment le
+                    # Hub qui vient de mourir, alors qu'un frère l'attend.
+                    # Les énumérer à la main dans chaque agent ne survit pas
+                    # à l'ajout d'un Hub, ce qui revient à ne pas les avoir.
+                    "cluster_hubs": sibling_hub_urls(),
                 }).to_json())
 
                 if wants_telemetry:
@@ -1513,8 +1539,17 @@ async def main(argv: list[str] | None = None):
                 await asyncio.sleep(PRESENCE_HEARTBEAT)
                 try:
                     store.touch_presence(HUB_ID, time.time())
+                    store.record_hub(HUB_ID, CLUSTER_URL, HUB_ORG)
                 except Exception as exc:
                     print(f"[grappe] battement de présence échoué : {exc}")
+
+        # Se déclarer tout de suite, sans attendre le premier battement :
+        # un Hub qui vient de démarrer est justement celui vers lequel on
+        # voudrait rediriger, et il n'a encore aucun agent.
+        try:
+            store.record_hub(HUB_ID, CLUSTER_URL, HUB_ORG)
+        except Exception as exc:
+            print(f"[grappe] déclaration du Hub échouée : {exc}")
 
         asyncio.create_task(_presence_heartbeat())
 

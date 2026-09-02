@@ -73,11 +73,18 @@ remaining four hubs were measured for 90 seconds afterwards.
 10-second slice for the full 90 seconds — there is no degradation window to
 wait out. Throughput falls by about as much as the agents lost.
 
-**What this does not measure:** the 200 agents that went down with the hub.
-They are excluded from the traffic on purpose, so that what is measured is
-the health of the survivors. Whether a lost agent re-attaches to a sibling
-hub on its own is a separate question this benchmark does not answer — and
-it is the number a recovery plan needs.
+**The 200 agents that went down with the hub** are excluded from the traffic
+above on purpose, so that what is measured is the health of the survivors.
+Their own fate was measured separately, and it was bad: they stayed
+orphaned. An agent only knows the address it was given, so its hub dead, the
+reconnect loop replayed that same dead address forever while a sibling stood
+ready.
+
+Hubs now advertise their live siblings in the registration reply, and the
+agent adds them to its fallback list. Re-attachment takes **0.5 s** on this
+machine, and the agent is reachable again afterwards — `tests/
+test_orphan_failover.py` completes a task through the agent after the
+failover, because reconnected is not the same as reachable.
 
 ## Read these numbers honestly
 

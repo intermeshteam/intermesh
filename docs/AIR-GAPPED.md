@@ -162,6 +162,17 @@ The common name on the client certificate is written to the audit log as
 strangers without ever recording who it let through. The name is recorded,
 never the certificate — the audit log carries no cryptographic material.
 
+### Losing a hub
+
+Agents carried by a hub that dies re-attach to a sibling on their own. The
+hub hands out the addresses of its live siblings when an agent registers, so
+nothing has to be enumerated by hand in each agent — a list written once
+would not survive adding a hub, which amounts to not having it.
+
+A hub killed outright has no chance to withdraw itself, so the list is read
+with a freshness bound: handing out a dead hub's address would send the agent
+exactly where it just failed.
+
 ### Hub to hub
 
 `--mtls-cert` and `--mtls-key` are the certificate this hub *presents* when
