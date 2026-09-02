@@ -29,6 +29,7 @@ from intermesh.identity import AgentIdentity
 from intermesh.message import MessageType, InterMeshMessage
 from intermesh.peering import (
     assert_peer_link_is_secure, build_peer_ssl_context, build_server_ssl_context,
+    certificate_subject,
     parse_peer_spec,
 )
 from intermesh.ratelimit import RateLimiter
@@ -50,6 +51,13 @@ TOKEN_EXPIRY_SECONDS = 3600
 # changeait rien — et n'importe qui pouvait de toute façon éditer la
 # constante, puisque le dépôt est public. Elle ne protégeait aucun modèle
 # économique, elle empêchait seulement de s'en servir.
+# Certificat que ce Hub présente lorsqu'il se connecte à un pair ou à un
+# frère de grappe qui exige l'authentification mutuelle. Renseigné depuis la
+# ligne de commande au démarrage.
+MTLS_CERT: str | None = None
+MTLS_KEY: str | None = None
+MTLS_CA: str | None = None
+
 MAX_AGENTS = 0
 
 # Auto-déclaration : à l'enregistrement, un agent sans clé d'API choisit
@@ -367,7 +375,14 @@ async def _cluster_link(hub_id: str, hub_url: str):
         return existing
 
     try:
-        ws = await websockets.connect(hub_url, open_timeout=5)
+        # Le lien de grappe se contentait de la clé de signature partagée,
+        # sans TLS : le trafic entre Hubs frères passait en clair, jetons
+        # compris. En wss:// il est chiffré, et le certificat client est
+        # présenté si le frère exige l'authentification mutuelle.
+        ws = await websockets.connect(
+            hub_url, open_timeout=5,
+            ssl=build_peer_ssl_context(hub_url, MTLS_CA, MTLS_CERT, MTLS_KEY),
+        )
         await ws.send(InterMeshMessage(
             type=MessageType.CLUSTER_JOIN, sender=HUB_ID,
             content={"hub_id": HUB_ID, "org": HUB_ORG,
@@ -612,7 +627,7 @@ async def process_relayed(ws, msg: InterMeshMessage, origin_org: str) -> None:
 
 async def connect_peer(remote_org: str, url: str, ca_file: str | None = None) -> None:
     """Maintient une connexion sortante vers un Hub pair, avec reconnexion."""
-    ssl_context = build_peer_ssl_context(url, ca_file)
+    ssl_context = build_peer_ssl_context(url, ca_file, MTLS_CERT, MTLS_KEY)
     while True:
         try:
             async with websockets.connect(url, ssl=ssl_context) as ws:
@@ -1072,7 +1087,17 @@ async def handle_agent(websocket, my_org: str):
                             print(f"[grappe] présence de '{agent_name}' non enregistrée : {exc}")
                 token = generate_token(agent_name, identity.agent_id, identity.roles, identity.org_id, auth_method)
 
-                entry = audit_log.log("AGENT_REGISTERED", agent_name, "hub", {"roles": identity.roles, "org_id": identity.org_id})
+                # Le porteur du certificat client, sous mTLS. Sans cette
+                # trace, mTLS refuse bien les inconnus mais ne dit jamais
+                # *qui* a été accepté — ce qu'une revue de sécurité demande.
+                # Le nom du certificat, pas le certificat : le journal ne
+                # porte jamais de matière cryptographique.
+                cert_cn = certificate_subject(websocket)
+                details = {"roles": identity.roles, "org_id": identity.org_id,
+                           "auth_method": auth_method}
+                if cert_cn:
+                    details["client_cert_cn"] = cert_cn
+                entry = audit_log.log("AGENT_REGISTERED", agent_name, "hub", details)
                 await broadcast("agent_connected", {
                     "agent": {**identity.to_dict(), "status": "healthy", "online": True},
                 })
@@ -1310,6 +1335,7 @@ async def main(argv: list[str] | None = None):
     global store, api_keys, audit_log, HUB_SECRET, HUB_ORG, SNAPSHOT_DIR
     global HUB_PRIVATE_KEY, HUB_PUBLIC_PEM, HUB_KEY_ID, egress_policy, approval_policy
     global MAX_AGENTS, ALLOW_SELF_DECLARED, REQUIRE_API_KEY
+    global MTLS_CERT, MTLS_KEY, MTLS_CA
     global HUB_ID, CLUSTER_URL
 
     parser = argparse.ArgumentParser(description="InterMesh Hub")
@@ -1346,6 +1372,15 @@ async def main(argv: list[str] | None = None):
     parser.add_argument("--peer", action="append", default=[], help="Pair fédéré ORG=wss://host:port")
     parser.add_argument("--tls-cert", type=str, default=None, help="Certificat TLS (sert en wss://)")
     parser.add_argument("--tls-key", type=str, default=None, help="Clé privée du certificat TLS")
+    parser.add_argument("--tls-client-ca", type=str, default=None,
+                        help="Autorité qui signe les certificats clients. L'exiger active "
+                             "l'authentification mutuelle : une connexion sans certificat "
+                             "valide est refusée au niveau TLS, avant tout enregistrement. "
+                             "Se cumule aux clés d'API, ne les remplace pas.")
+    parser.add_argument("--mtls-cert", type=str, default=None,
+                        help="Certificat que ce Hub présente à ses pairs et à ses frères "
+                             "de grappe lorsqu'ils exigent l'authentification mutuelle.")
+    parser.add_argument("--mtls-key", type=str, default=None, help="Clé privée de --mtls-cert")
     parser.add_argument("--peer-ca", type=str, default=None,
                         help="Autorité de certification des pairs (PKI privée)")
     parser.add_argument("--allow-insecure-peering", action="store_true",
@@ -1440,8 +1475,23 @@ async def main(argv: list[str] | None = None):
 
     if bool(args.tls_cert) != bool(args.tls_key):
         parser.error("--tls-cert et --tls-key vont de pair")
-    server_ssl = build_server_ssl_context(args.tls_cert, args.tls_key) if args.tls_cert else None
+    if bool(args.mtls_cert) != bool(args.mtls_key):
+        parser.error("--mtls-cert et --mtls-key vont de pair")
+    if args.tls_client_ca and not args.tls_cert:
+        # Sans certificat serveur il n'y a pas de TLS du tout, donc aucune
+        # poignée de main où réclamer un certificat client. Accepter
+        # l'option laisserait croire que mTLS est actif alors qu'il est
+        # inerte.
+        parser.error("--tls-client-ca exige --tls-cert et --tls-key : "
+                     "sans TLS il n'y a pas de poignée de main où exiger un certificat client")
+
+    MTLS_CERT, MTLS_KEY, MTLS_CA = args.mtls_cert, args.mtls_key, args.peer_ca
+
+    server_ssl = (build_server_ssl_context(args.tls_cert, args.tls_key, args.tls_client_ca)
+                  if args.tls_cert else None)
     print(f"  écoute : {'wss:// (TLS)' if server_ssl else 'ws:// (en clair)'}")
+    if args.tls_client_ca:
+        print(f"  mTLS   : certificat client exigé (autorité {args.tls_client_ca})")
 
     for spec in args.peer:
         try:

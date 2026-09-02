@@ -41,6 +41,7 @@ Verified by reading the source, not by assertion:
 | State | PostgreSQL, not a file attached to the container |
 | Registration | API key required everywhere, including from localhost |
 | Console | API key required to open it; refused without one |
+| Mutual TLS | available (`--tls-client-ca`), off unless you supply a CA |
 | Database network | `internal` — no route out, no published port |
 | Filesystems | read-only, with tmpfs for the few writable paths |
 | Privileges | non-root (uid 10001), all capabilities dropped, `no-new-privileges` |
@@ -128,6 +129,60 @@ Being blunt about it: the console is plainer than the hosted Control Plane.
 Making the Control Plane run offline is a separate piece of work — it would
 mean replacing Supabase authentication with something local.
 
+
+---
+
+## Mutual TLS
+
+The hub could already serve `wss://`, so traffic was encrypted and the agent
+checked the hub's certificate. The reverse did not exist: anyone who reached
+the port could complete the TLS handshake and then try their luck at
+registration.
+
+```bash
+python3 server/hub.py \
+    --tls-cert hub.crt --tls-key hub.key \
+    --tls-client-ca corporate-ca.crt \
+    --require-api-key
+```
+
+With `--tls-client-ca`, a client without a certificate signed by that
+authority is refused **during the TLS handshake** — before the first byte of
+protocol, so before any registration, any API key, and any application log.
+
+**It does not replace API keys, and the hub does not let you drop them.** The
+certificate attests to the machine; the key says which agent it is and what
+roles it holds. A certificate holder with no API key still gets
+`SELF_DECLARED_REFUSED` under `--require-api-key`, and there is a test for
+exactly that — because "we have mTLS, so we can relax the keys" is the
+tempting misreading.
+
+The common name on the client certificate is written to the audit log as
+`client_cert_cn` on the registration entry. Otherwise mTLS would refuse
+strangers without ever recording who it let through. The name is recorded,
+never the certificate — the audit log carries no cryptographic material.
+
+### Hub to hub
+
+`--mtls-cert` and `--mtls-key` are the certificate this hub *presents* when
+it dials a peer or a cluster sibling that demands one. Setting them is what
+lets a hub join a mesh where mutual authentication is mandatory.
+
+Worth knowing: cluster links between sibling hubs previously ran without TLS
+at all. They relied on the shared signing key for authentication, which
+holds, but the traffic — tokens included — crossed in the clear. They now go
+through the same TLS path as peer links, so a `wss://` cluster URL is
+encrypted and presents a client certificate when one is configured.
+
+### Generating the certificates
+
+Use your own PKI. If you need to see the shape first, `tests/test_mtls.py`
+builds a throwaway CA, a server certificate and a client certificate with the
+extensions OpenSSL 3 actually requires — `SubjectKeyIdentifier`,
+`AuthorityKeyIdentifier`, `KeyUsage`, and a SAN on the server certificate.
+Leaving any of them out fails verification with a message that does not
+obviously point at the cause.
+
 ---
 
 ## What is still missing for a regulated deployment
@@ -139,8 +194,9 @@ Named rather than glossed over, because a security review will find them:
   people: a key is shared, not attributable, and revoking it locks out
   everyone holding it. For per-person access tied to your directory, put the
   console behind whatever your organisation already runs.
-- **No mTLS between agents and hub.** The hub can serve `wss://`
-  (`--tls-cert` / `--tls-key`), but it does not verify client certificates.
+- **mTLS is available but not switched on by the stack above.** It needs a
+  certificate authority you operate, so the compose file cannot supply one.
+  See "Mutual TLS" below.
 - **No HSM integration.** The signing key is a secret in the environment.
 - **No SBOM, no signed images, no reproducible build attestation.** Digest
   pinning is a floor, not a substitute.

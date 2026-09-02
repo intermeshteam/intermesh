@@ -77,15 +77,32 @@ def assert_peer_link_is_secure(org: str, url: str, allow_insecure: bool = False)
     )
 
 
-def build_server_ssl_context(certfile: str, keyfile: str) -> ssl.SSLContext:
-    """Contexte TLS du Hub pour servir en wss://."""
+def build_server_ssl_context(certfile: str, keyfile: str,
+                             client_ca: str | None = None) -> ssl.SSLContext:
+    """Contexte TLS du Hub pour servir en wss://.
+
+    `client_ca` active l'authentification mutuelle : le Hub exige alors un
+    certificat client signé par cette autorité, et refuse la connexion au
+    niveau TLS — avant le premier octet de protocole, donc avant tout
+    enregistrement, toute clé d'API et tout journal applicatif.
+
+    C'est un contrôle qui se cumule aux clés d'API, il ne les remplace pas.
+    La clé d'API dit *qui* est l'agent ; le certificat dit que la machine
+    au bout du câble fait partie du parc. Une banque exige généralement les
+    deux, et l'un ne compense pas l'absence de l'autre.
+    """
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+    if client_ca:
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.load_verify_locations(cafile=client_ca)
     return context
 
 
-def build_peer_ssl_context(url: str, ca_file: str | None = None) -> ssl.SSLContext | None:
+def build_peer_ssl_context(url: str, ca_file: str | None = None,
+                           certfile: str | None = None,
+                           keyfile: str | None = None) -> ssl.SSLContext | None:
     """Contexte TLS pour se connecter à un Hub pair, ou None en ws://.
 
     La vérification du certificat et du nom d'hôte est toujours active :
@@ -100,4 +117,31 @@ def build_peer_ssl_context(url: str, ca_file: str | None = None) -> ssl.SSLConte
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.check_hostname = True
     context.verify_mode = ssl.CERT_REQUIRED
+    if certfile:
+        # Certificat présenté par *ce* Hub quand le pair exige
+        # l'authentification mutuelle. Sans lui, la poignée de main échoue
+        # côté pair, pas ici : d'où un message d'erreur peu parlant si on
+        # l'oublie.
+        context.load_cert_chain(certfile=certfile, keyfile=keyfile)
     return context
+
+
+def certificate_subject(websocket) -> str | None:
+    """Nom du porteur du certificat client, ou None hors mTLS.
+
+    Sert à rendre une connexion attribuable dans le journal d'audit : sans
+    cela, mTLS refuse les inconnus mais ne laisse aucune trace de *qui* a
+    été accepté, ce qu'une revue de sécurité demandera.
+    """
+    try:
+        transport = getattr(websocket, "transport", None)
+        cert = transport.get_extra_info("peercert") if transport else None
+    except Exception:
+        return None
+    if not cert:
+        return None
+    for field in cert.get("subject", ()):
+        for key, value in field:
+            if key == "commonName":
+                return value
+    return None
