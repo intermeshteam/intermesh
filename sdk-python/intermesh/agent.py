@@ -10,8 +10,17 @@ import websockets
 from intermesh.message import MessageType, InterMeshMessage
 from intermesh.identity import AgentIdentity
 from intermesh.task import InterMeshTask, TaskStatus
-from intermesh.crypto import generate_keypair, get_public_key_pem, encrypt_for, decrypt_with
+from intermesh.crypto import (generate_keypair, get_public_key_pem, encrypt_for,
+                             decrypt_with, looks_encrypted)
 from intermesh.egress import EgressPolicy, apply_egress
+
+
+class EncryptionMismatch(ValueError):
+    """Les deux côtés ne s'accordent pas sur le chiffrement.
+
+    Levée plutôt que de rendre du texte chiffré à un gestionnaire, qui le
+    traiterait comme des données et rendrait un résultat faux.
+    """
 from intermesh.schema import SchemaRegistry, default_registry
 
 
@@ -329,9 +338,40 @@ class InterMeshAgent:
             decrypted = decrypt_with(self._private_key, encrypted_content)
             try: return json.loads(decrypted)
             except json.JSONDecodeError: return decrypted
-        except Exception:
+        except Exception as exc:
+            # Une charge reconnaissable comme chiffrée mais qu'on n'arrive pas
+            # à ouvrir n'est pas une chaîne ordinaire : la rendre telle quelle
+            # la ferait traiter comme des données.
+            if looks_encrypted(encrypted_content):
+                raise EncryptionMismatch(
+                    "Charge chiffrée illisible : elle a été chiffrée pour une autre "
+                    "clé publique que celle de cet agent. Un agent qui se reconnecte "
+                    "sous le même nom change de clé ; l'émetteur doit alors la "
+                    "redemander (WHO_IS) avant de chiffrer."
+                ) from exc
             try: return json.loads(encrypted_content)
             except json.JSONDecodeError: return encrypted_content
+
+    def _unwrap_incoming(self, value, what: str):
+        """Rend la charge exploitable, ou refuse franchement.
+
+        Le piège que ceci ferme : avec `encrypt=False`, aucun déchiffrement
+        n'était tenté et le texte chiffré arrivait tel quel au gestionnaire,
+        qui le traitait comme des données. La tâche « réussissait » et
+        rendait un résultat faux — le pire mode de défaillance pour un
+        produit dont l'argument est le chiffrement de bout en bout.
+        """
+        if self.encrypt:
+            return self._decrypt_content(value) if isinstance(value, str) else value
+
+        if looks_encrypted(value):
+            raise EncryptionMismatch(
+                f"{what} chiffré reçu alors que le chiffrement est désactivé sur cet "
+                f"agent (encrypt=False). Activez-le ici, ou désactivez-le chez "
+                f"l'émetteur : les deux côtés doivent s'accorder. Sans ce refus, le "
+                f"texte chiffré serait traité comme des données."
+            )
+        return value
 
     async def _respond_to_request(self, msg) -> None:
         """Exécute le gestionnaire de requêtes et renvoie la réponse.
@@ -410,8 +450,7 @@ class InterMeshAgent:
                         asyncio.create_task(self._respond_to_request(msg))
 
                 elif msg.type == MessageType.MESSAGE:
-                    content = msg.content
-                    if self.encrypt and isinstance(content, str): content = self._decrypt_content(content)
+                    content = self._unwrap_incoming(msg.content, "Message")
                     msg.content = content
                     if self._message_handler:
                         if inspect.iscoroutinefunction(self._message_handler): await self._message_handler(msg)
@@ -448,11 +487,10 @@ class InterMeshAgent:
         task.update_status(TaskStatus.RUNNING)
         await self.ws.send(InterMeshMessage(type=MessageType.TASK_UPDATE, sender=self.qualified_name, content=task.to_dict(), token=self.token).to_json())
 
-        decrypted_input = task.input_data
-        if self.encrypt and isinstance(decrypted_input, str):
-            decrypted_input = self._decrypt_content(decrypted_input)
-
         try:
+            # Dans le bloc : un refus de déchiffrement doit rapporter la tâche
+            # en échec avec sa raison, pas remonter jusqu'à la boucle d'écoute.
+            decrypted_input = self._unwrap_incoming(task.input_data, "Contenu de tâche")
             if self._task_handler:
                 output = await self._task_handler(decrypted_input, task) if inspect.iscoroutinefunction(self._task_handler) else self._task_handler(decrypted_input, task)
             else:

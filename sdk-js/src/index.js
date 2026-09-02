@@ -8,6 +8,16 @@ export { InterMeshPipeline, PipelineError, fanOut } from './pipeline.js';
 // MOTEUR CRYPTOGRAPHIQUE COMPATIBLE PYTHON (RSA-OAEP + AES-256-GCM)
 // ============================================================================
 
+/**
+ * Les deux côtés ne s'accordent pas sur le chiffrement.
+ *
+ * Levée plutôt que de remettre du texte chiffré à un gestionnaire, qui le
+ * traiterait comme des données et rendrait un résultat faux.
+ */
+export class EncryptionMismatch extends Error {
+  constructor(message) { super(message); this.name = 'EncryptionMismatch'; }
+}
+
 export class InterMeshCrypto {
   static generateKeyPair() {
     return crypto.generateKeyPairSync('rsa', {
@@ -45,6 +55,26 @@ export class InterMeshCrypto {
     };
 
     return Buffer.from(JSON.stringify(envelope)).toString('base64');
+  }
+
+  /**
+   * Reconnaît une charge produite par encryptFor, sans la déchiffrer.
+   *
+   * Distingue « du texte chiffré que cet agent ne sait pas ouvrir » d'une
+   * chaîne ordinaire. Sans cette distinction, un agent configuré sans
+   * chiffrement traitait le texte chiffré comme des données : la tâche
+   * paraissait réussir et rendait un résultat faux.
+   */
+  static looksEncrypted(value) {
+    if (typeof value !== 'string' || value.length < 32) return false;
+    try {
+      const envelope = JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+      if (typeof envelope !== 'object' || envelope === null) return false;
+      const keys = Object.keys(envelope).sort();
+      return keys.length === 3 && keys[0] === 'ct' && keys[1] === 'ek' && keys[2] === 'n';
+    } catch {
+      return false;
+    }
   }
 
   static decryptWith(privateKeyPem, encryptedB64) {
@@ -456,6 +486,46 @@ export class InterMeshAgent {
     });
   }
 
+  /**
+   * Rend la charge exploitable, ou refuse franchement.
+   *
+   * Le piège que ceci ferme : avec `encrypt: false`, aucun déchiffrement
+   * n'était tenté et le texte chiffré arrivait tel quel au gestionnaire.
+   * La tâche « réussissait » et rendait un résultat faux — le pire mode de
+   * défaillance pour un produit dont l'argument est le chiffrement.
+   */
+  _unwrapIncoming(value, what) {
+    if (this.encrypt) {
+      if (typeof value !== 'string') return value;
+      try {
+        return JSON.parse(InterMeshCrypto.decryptWith(this.privateKeyPem, value));
+      } catch {
+        try {
+          return InterMeshCrypto.decryptWith(this.privateKeyPem, value);
+        } catch (err) {
+          if (InterMeshCrypto.looksEncrypted(value)) {
+            throw new EncryptionMismatch(
+              'Charge chiffrée illisible : elle a été chiffrée pour une autre clé ' +
+              "publique que celle de cet agent. Un agent qui se reconnecte sous le " +
+              "même nom change de clé ; l'émetteur doit la redemander avant de chiffrer."
+            );
+          }
+          return value;
+        }
+      }
+    }
+
+    if (InterMeshCrypto.looksEncrypted(value)) {
+      throw new EncryptionMismatch(
+        `${what} chiffré reçu alors que le chiffrement est désactivé sur cet agent ` +
+        "(encrypt: false). Activez-le ici, ou désactivez-le chez l'émetteur : les " +
+        'deux côtés doivent s\'accorder. Sans ce refus, le texte chiffré serait ' +
+        'traité comme des données.'
+      );
+    }
+    return value;
+  }
+
   async _executeTask(task) {
     task.status = 'running';
     this.ws.send(JSON.stringify({
@@ -467,16 +537,11 @@ export class InterMeshAgent {
       token: this.token
     }));
 
-    let input = task.input_data;
-    if (this.encrypt && typeof input === 'string') {
-      try {
-        input = JSON.parse(InterMeshCrypto.decryptWith(this.privateKeyPem, input));
-      } catch {
-        input = InterMeshCrypto.decryptWith(this.privateKeyPem, input);
-      }
-    }
-
     try {
+      // À l'intérieur du bloc : un refus de déchiffrement doit rapporter la
+      // tâche en échec avec sa raison, pas faire tomber l'agent. Sans cela
+      // l'orchestrateur attendait son délai complet sans rien apprendre.
+      const input = this._unwrapIncoming(task.input_data, 'Contenu de tâche');
       if (!this.taskHandler) throw new Error('Aucun handler de tâche configuré.');
       const output = await this.taskHandler(input, task);
       let encOutput = output;

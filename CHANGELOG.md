@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.2] — 2026-09-02
+
+### Fixed
+
+- **An encryption mismatch produced wrong answers instead of an error.** An
+  agent configured without encryption, given work by an orchestrator that
+  encrypts, received the ciphertext **as if it were the data**. The handler
+  processed it, the task completed successfully, and the answer was wrong —
+  `"bonjour undefined"` instead of `"bonjour Adrien"`. Nothing failed
+  anywhere.
+
+  For a protocol whose argument is end-to-end encryption, that is the worst
+  possible failure: silent, and it produces bad data rather than an error.
+  Both SDKs now recognise a payload they cannot open and refuse it with a
+  message carrying the remedy. The task is reported failed, so the
+  orchestrator learns the reason instead of waiting out its timeout, and the
+  agent stays in service rather than crashing.
+
+  The same refusal covers the neighbouring case: encryption is on, but the
+  payload was encrypted for a different public key — which happens when an
+  agent reconnects under the same name and the sender caches a stale key.
+
+  Detection is structural (base64 of the three-field envelope) and needs no
+  key, so the wire format is unchanged and 0.4.x agents keep interoperating.
+  Ordinary strings, including valid base64, are not mistaken for ciphertext —
+  a false positive would refuse perfectly good data, which is worse than the
+  bug being fixed.
+
+- **The CLI banner still drew the old name.** `intermesh hub` and
+  `intermesh --help` rendered "NEXA" in ASCII art next to the words
+  "INTERMESH PROTOCOL". First thing a user sees, and on every screenshot.
+
+- **The README's first code block did not compile.** `await agent.connect()`
+  at module level is a `SyntaxError` in Python, and it fails before anything
+  runs — so nothing hints at the cause. The same shape was in the SDK README
+  and the integration guide. JavaScript blocks were left alone: top-level
+  `await` is valid in an ES module.
+
+---
+
 ## [0.4.1] — 2026-09-02
 
 ### Added

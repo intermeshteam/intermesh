@@ -60,6 +60,31 @@ def encrypt_for(recipient_public_key_pem: str, plaintext: str) -> str:
     return base64.b64encode(json.dumps(envelope).encode()).decode()
 
 
+ENVELOPE_KEYS = {"ek", "n", "ct"}
+
+
+def looks_encrypted(value) -> bool:
+    """Reconnaît une charge produite par `encrypt_for`, sans la déchiffrer.
+
+    Sert à distinguer « cet agent reçoit du texte chiffré qu'il ne sait pas
+    ouvrir » de « cet agent reçoit une chaîne ordinaire ». Sans cette
+    distinction, un agent configuré sans chiffrement traitait le texte
+    chiffré comme des données : la tâche paraissait réussir et rendait un
+    résultat faux, ce qui est pire qu'un échec.
+
+    Le test est structurel — base64 d'un objet JSON portant exactement les
+    trois champs de l'enveloppe — et n'exige aucune clé. Une chaîne
+    ordinaire, même en base64, ne produit pas cette forme.
+    """
+    if not isinstance(value, str) or len(value) < 32:
+        return False
+    try:
+        envelope = json.loads(base64.b64decode(value, validate=True))
+    except Exception:
+        return False
+    return isinstance(envelope, dict) and set(envelope) == ENVELOPE_KEYS
+
+
 def decrypt_with(private_key, encrypted_b64: str) -> str:
     """Déchiffrement hybride RSA-OAEP + AES-256-GCM."""
     envelope = json.loads(base64.b64decode(encrypted_b64))
