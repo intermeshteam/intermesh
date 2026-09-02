@@ -72,15 +72,15 @@ agent = InterMeshAgent(name="calc_bot", capabilities=["calculate"], roles=["work
 
 @agent.on_task
 async def run(input_data, task):
-    return {"result": eval(input_data["expression"])}
+    return {"result": input_data["a"] + input_data["b"]}
 
-await agent.connect()
+agent.run()          # connects, then stays in service
 ```
 
 **3. Delegate work from the CLI**
 
 ```bash
-intermesh task calc_bot "Compute" '{"expression": "42 * 2"}'
+intermesh task calc_bot "Add two numbers" '{"a": 20, "b": 22}'
 ```
 
 **4. Or bring an agent written in any language**

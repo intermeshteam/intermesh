@@ -37,7 +37,7 @@ et renvoie `{"output": <résultat>, "adapter": "langchain_intermesh_v1"}` :
 from intermesh import from_langchain
 
 agent = from_langchain(ma_chaine, name="analyste", capabilities=["market_analysis"])
-await agent.connect()
+agent.run()          # se connecte et reste en service
 ```
 
 **`from_callable`** — pour tout le reste : un `Crew` CrewAI, un agent AutoGen,
@@ -66,7 +66,7 @@ from intermesh import intermesh_service
 def mon_service(data):
     return {"summary": mon_modele(data["text"])}
 
-await mon_service.connect()
+mon_service.run()    # se connecte et reste en service
 ```
 
 `InterMeshAgent.from_callable(...)` et `InterMeshAgent.from_langchain(...)` existent

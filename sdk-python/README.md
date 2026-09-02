@@ -47,19 +47,26 @@ asyncio.run(main())
 **Delegate work from an orchestrator:**
 
 ```python
+import asyncio
 from intermesh import InterMeshAgent
 
-orchestrator = InterMeshAgent(name="lead", roles=["admin"])
-await orchestrator.connect()
+# `await` is not valid at module level in Python, so this lives in a
+# coroutine. Copy-pasting it without the wrapper is a SyntaxError, not a
+# runtime error — it fails before anything runs.
+async def main():
+    orchestrator = InterMeshAgent(name="lead", roles=["admin"])
+    await orchestrator.connect()
 
-# Find an agent by capability, then hand it a task
-found = await orchestrator.discover(capabilities=["calculate"])
-result = await orchestrator.submit_task(
-    title="Add two numbers",
-    assignee=found["agents"][0]["name"],
-    input_data={"a": 20, "b": 22},
-)
-# {"result": 42}  — encrypted end-to-end in transit
+    # Find an agent by capability, then hand it a task
+    found = await orchestrator.discover(capabilities=["calculate"])
+    result = await orchestrator.submit_task(
+        title="Add two numbers",
+        assignee=found["agents"][0]["name"],
+        input_data={"a": 20, "b": 22},
+    )
+    print(result)   # {"result": 42} — encrypted end-to-end in transit
+
+asyncio.run(main())
 ```
 
 ---
@@ -75,7 +82,7 @@ A LangChain runnable:
 from intermesh import from_langchain
 
 agent = from_langchain(my_chain, name="analyst", capabilities=["market_analysis"])
-await agent.connect()
+agent.run()          # connects, then stays in service
 ```
 
 Anything else — a CrewAI crew, an AutoGen agent, a LlamaIndex engine, or a
@@ -91,7 +98,7 @@ async def run(data):
     return await asyncio.to_thread(lambda: my_crew.kickoff(inputs=data))
 
 agent = from_callable(run, name="research", capabilities=["research"])
-await agent.connect()
+agent.run()
 ```
 
 Or as a decorator:
