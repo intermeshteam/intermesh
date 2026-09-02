@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Check, Github, Terminal } from 'lucide-react';
 import InterMeshLogo from '@/components/InterMeshLogo';
 import ThemeToggle from '@/components/ThemeToggle';
+import QuoteRequestForm from '@/components/QuoteRequestForm';
 
 /**
  * This page used to advertise a $29/month "Pro Production" tier with an
@@ -123,6 +124,47 @@ export default function PricingPage() {
             not exist yet, so there is nothing to sell you and no waitlist to put you on. When that
             changes it will be announced on the repository.
           </p>
+        </div>
+
+        <div id="enterprise" className={`space-y-6 border-t pt-10 ${HAIRLINE}`}>
+          <div className="space-y-4">
+            <h2 className={`text-xl font-semibold ${HEADING}`}>Buying this for a company</h2>
+            <p className={`max-w-2xl text-sm leading-relaxed ${BODY}`}>
+              The software above stays free and Apache&nbsp;2.0 — running it yourself costs nothing and
+              needs no contract. What a company usually wants alongside it is different: a named
+              contact, an agreed response time, help with a closed-network deployment, and someone
+              answerable when something breaks at three in the morning. That is what a quote covers.
+            </p>
+            <ul className={`max-w-2xl space-y-2.5 text-sm leading-relaxed ${BODY}`}>
+              <li className="flex items-start gap-2.5">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-400" />
+                <span>
+                  <strong className={HEADING}>Invoice and bank transfer.</strong> There is no card
+                  checkout, by choice as much as by circumstance — procurement raises a purchase
+                  order and settles an invoice, which is how this is bought anyway.
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-400" />
+                <span>
+                  <strong className={HEADING}>Quoted before anything is signed.</strong> You get a
+                  written quote with the scope and the terms on it. Nothing recurring starts by
+                  itself.
+                </span>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-400" />
+                <span>
+                  <strong className={HEADING}>What is not there yet.</strong> No SOC&nbsp;2, no
+                  ISO&nbsp;27001, no independent penetration test. If your security review requires
+                  one of those, say so in the form and we will tell you honestly where it stands
+                  rather than waste a procurement cycle.
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <QuoteRequestForm />
         </div>
 
         <div className={`border-t pt-10 ${HAIRLINE}`}>
