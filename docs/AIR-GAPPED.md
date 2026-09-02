@@ -116,20 +116,45 @@ that runs inside — that is the point of pinning rather than tagging.
 
 ---
 
-## The Control Plane is not the console
+## The console is the Control Plane
 
-The Control Plane at intermesh.site **cannot be used here.** It requires
-Supabase, an external service, and pulls a font from Google at build time.
+They used to be two different interfaces. The hosted Control Plane is a
+React application; the packaged console was a hand-written page that did
+roughly the same job, less well. Maintaining both made them drift, and a
+first user reported seeing "the wrong dashboard" — a complaint that made
+sense, because there were two.
 
-The stack ships the packaged console instead (`sdk-python/intermesh/console/`),
-served by the `console` container. It
-loads no CDN, no remote font and no external library; its charts are SVG
-computed in place. That is the interface for a closed network.
+`intermesh dashboard` now serves a static export of the same React
+application, shipped inside the package:
 
-Being blunt about it: the console is plainer than the hosted Control Plane.
-Making the Control Plane run offline is a separate piece of work — it would
-mean replacing Supabase authentication with something local.
+```bash
+intermesh dashboard          # http://localhost:8080
+```
 
+What the local build changes, and nothing else:
+
+- **No account.** The hosted version signs you in through Supabase. The
+  local one connects straight to the hub you point it at, so the account
+  pages are not part of this export.
+- **System font.** The hosted build downloads Inter from Google at build
+  time and self-hosts it afterwards. That still needs a network *while
+  building*, which a closed site does not have. The console build uses the
+  system stack, so it compiles with no network at all — verified by
+  building it offline.
+- **No API routes.** Quotes, invitations and licences belong to the hosted
+  site.
+
+Rebuild it after changing the portal:
+
+```bash
+./scripts/build_console.sh
+```
+
+The export is 2.9 MB and ships in the wheel. That is about **9% on top of
+an installation that already weighs 33 MB**, most of it `cryptography` —
+which is why it is not a separate optional package. The first estimate for
+this decision compared the *archive* size, not the installed size, and was
+misleading by roughly twenty-fold.
 
 ---
 

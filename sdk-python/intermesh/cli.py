@@ -319,14 +319,31 @@ def run_dashboard(args):
     console_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "console")
 
     if not os.path.isfile(os.path.join(console_dir, "index.html")):
-        print("\033[31m✗ Console introuvable dans le paquet installé "
-              f"({console_dir}).\033[0m")
-        print("  Réinstallez avec :  pip install --force-reinstall intermesh")
+        print(f"\033[31m✗ Console introuvable ({console_dir}).\033[0m")
+        print("  Depuis un paquet installé :  pip install --force-reinstall intermesh")
+        print("  Depuis une copie du dépôt  :  ./scripts/build_console.sh")
+        print("  La console est un export généré : elle n'est pas versionnée.")
         return 1
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args_h, **kwargs_h):
             super().__init__(*args_h, directory=console_dir, **kwargs_h)
+
+        def translate_path(self, path):
+            """Fait correspondre /agents au fichier agents.html.
+
+            Un export statique nomme ses pages `agents.html`, alors que la
+            navigation côté client demande `/agents`. Sans cette
+            correspondance, tout lien interne rend 404 — la console
+            s'ouvrirait puis casserait au premier clic.
+            """
+            local = super().translate_path(path)
+            if not os.path.exists(local) and not local.endswith(".html"):
+                candidate = local.rstrip("/") + ".html"
+                if os.path.isfile(candidate):
+                    return candidate
+            return local
+
         def log_message(self, format, *log_args): pass
 
     print(f"\033[32m✓ Console d'exploitation sur http://localhost:{port}\033[0m")

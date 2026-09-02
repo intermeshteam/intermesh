@@ -65,4 +65,7 @@ include = ["intermesh*"]
 # développeur : la commande annonçait « actif » puis répondait 404 chez
 # tout le monde sauf lui.
 [tool.setuptools.package-data]
-"intermesh.console" = ["*.html", "*.js", "*.css"]
+# Récursif, et non `*.html` : l'essentiel de la console vit dans `_next/`,
+# et un motif non récursif laissait les 32 fichiers JavaScript dehors —
+# la page se serait chargée sans son application.
+"intermesh.console" = ["**/*"]

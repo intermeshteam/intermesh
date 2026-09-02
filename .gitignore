@@ -33,3 +33,10 @@ docker/*.env
 business/invoice/data/*.json
 !business/invoice/data/*.example.json
 business/invoice/out/
+
+# Console React générée par scripts/build_console.sh : sortie de build,
+# pas source. Elle est produite avant publication et voyage dans la roue.
+sdk-python/intermesh/console/*
+!sdk-python/intermesh/console/__init__.py
+portal/.next-console/
+portal/next.config.js
