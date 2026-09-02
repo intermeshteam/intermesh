@@ -75,11 +75,22 @@ the agent is reachable again afterwards — not merely connected.
   `hub.info` probe failed and it refused to open, including in the hardened
   stack shipped for closed networks.
 
+### The JavaScript SDK
+
+Ships as `0.4.0` alongside Python, so one number says which hub an SDK is
+tested against. The number is the claim, not parity: the JavaScript SDK has
+**no reconnection logic at all**. Its `hubUrl` is a single address, and an
+agent whose hub dies stops there — the sibling failover added to the Python
+SDK does not exist here. Everything else works unchanged against a 0.4.0
+hub, provided the agent carries an API key, which the hub now requires from
+remote connections.
+
 ### Known limits
 
 Named because a security review will find them: no LDAP or Active Directory,
-no HSM, no SBOM or signed images, and console access uses a shared API key
-rather than per-person credentials. See `docs/AIR-GAPPED.md`.
+no HSM, no SBOM or signed images, console access uses a shared API key
+rather than per-person credentials, and the JavaScript SDK does not
+re-attach after a hub is lost. See `docs/AIR-GAPPED.md`.
 
 ---
 
