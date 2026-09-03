@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Formation InterMesh</title>
+<style>
+
+/* ==================================================================
+   MISE EN PAGE D'IMPRESSION
+   ================================================================== */
+
+@page {
+  size: A4;
+  margin: 2.2cm 2cm 2.2cm 2cm;
+  @bottom-center {
+    content: counter(page);
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 9pt;
+    color: #8a8f98;
+  }
+}
+
+@page :first {
+  margin: 0;
+  @bottom-center { content: none; }
+}
+
+@page couverture {
+  margin: 0;
+  @bottom-center { content: none; }
+}
+
+@page sommaire {
+  @bottom-center { content: none; }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+  font-size: 10.3pt;
+  line-height: 1.55;
+  color: #1c1f26;
+}
+
+/* ------------------------------------------------------------ Couverture */
+
+.couverture {
+  page: couverture;
+  height: 297mm;
+  width: 100%;
+  background: linear-gradient(160deg, #0b0d14 0%, #121729 55%, #0a1a24 100%);
+  color: #f4f6fb;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 26mm 22mm;
+  page-break-after: always;
+}
+.couverture .marque {
+  font-size: 13pt;
+  letter-spacing: 0.32em;
+  font-weight: 700;
+  color: #6fe3ff;
+}
+.couverture .bloc-titre { margin-top: 62mm; }
+.couverture h1 {
+  font-size: 34pt;
+  line-height: 1.15;
+  margin: 0 0 6mm 0;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.couverture .sous-titre {
+  font-size: 14pt;
+  color: #b9c2d4;
+  font-weight: 400;
+  max-width: 130mm;
+}
+.couverture .parcours {
+  margin-top: 14mm;
+  display: flex;
+  gap: 8mm;
+}
+.couverture .etape {
+  flex: 1;
+  border-top: 2px solid #2e3650;
+  padding-top: 4mm;
+}
+.couverture .etape .n { font-size: 9pt; letter-spacing: 0.18em; color: #6fe3ff; font-weight: 700; }
+.couverture .etape .t { font-size: 10.5pt; color: #dbe1ee; margin-top: 1.5mm; }
+.couverture .pied {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 9pt;
+  color: #7d8699;
+  border-top: 1px solid #262c42;
+  padding-top: 5mm;
+}
+.couverture .pied .droite { text-align: right; }
+
+/* ------------------------------------------------------------ Sommaire */
+
+.sommaire {
+  page: sommaire;
+  page-break-after: always;
+}
+.sommaire h2 {
+  font-size: 20pt;
+  color: #0b0d14;
+  border-bottom: 3px solid #0b0d14;
+  padding-bottom: 3mm;
+  margin-bottom: 8mm;
+}
+.sommaire .partie-titre {
+  font-size: 10.5pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0d6e8f;
+  margin-top: 7mm;
+  margin-bottom: 2mm;
+}
+.sommaire .partie-titre.expert { color: #9a3b12; }
+.sommaire .partie-titre.inter { color: #5b3d9e; }
+.sommaire ol.toc {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sommaire ol.toc li {
+  display: flex;
+  justify-content: space-between;
+  padding: 1.6mm 0;
+  border-bottom: 1px dotted #d8dce3;
+  font-size: 10pt;
+}
+.sommaire ol.toc li .num { color: #8a8f98; width: 8mm; flex-shrink: 0; }
+
+/* ------------------------------------------------------------ Parties */
+
+.page-partie {
+  page-break-before: always;
+  page-break-after: always;
+  height: 253mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #f4f6fb;
+  padding: 0 20mm;
+}
+.page-partie.debutant { background: linear-gradient(160deg, #0f2a3a 0%, #0a1622 100%); }
+.page-partie.intermediaire { background: linear-gradient(160deg, #221a3a 0%, #140f24 100%); }
+.page-partie.expert { background: linear-gradient(160deg, #3a1c10 0%, #200f0a 100%); }
+.page-partie .num-partie {
+  font-size: 12pt;
+  letter-spacing: 0.3em;
+  color: #8fb8cc;
+  font-weight: 700;
+}
+.page-partie.intermediaire .num-partie { color: #b7a3e8; }
+.page-partie.expert .num-partie { color: #e8b39a; }
+.page-partie h1 {
+  font-size: 30pt;
+  margin: 6mm 0 4mm 0;
+}
+.page-partie p.chapo {
+  font-size: 12pt;
+  color: #d3d9e6;
+  max-width: 120mm;
+  line-height: 1.6;
+}
+.page-partie .liste-chapitres {
+  margin-top: 10mm;
+  font-size: 10.5pt;
+  color: #aeb6c8;
+}
+.page-partie .liste-chapitres div { padding: 1.2mm 0; }
+
+/* ------------------------------------------------------------ Chapitres */
+
+.chapitre { page-break-before: always; }
+
+h2.titre-chapitre {
+  font-size: 19pt;
+  color: #0b0d14;
+  margin: 0 0 1mm 0;
+  padding-bottom: 3mm;
+  border-bottom: 3px solid #0b0d14;
+}
+.repere-chapitre {
+  font-size: 9pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 2mm;
+}
+.repere-chapitre.debutant { color: #0d6e8f; }
+.repere-chapitre.intermediaire { color: #5b3d9e; }
+.repere-chapitre.expert { color: #9a3b12; }
+
+h3 {
+  font-size: 13pt;
+  color: #12151c;
+  margin: 7mm 0 3mm 0;
+}
+h4 {
+  font-size: 11pt;
+  color: #12151c;
+  margin: 5mm 0 2mm 0;
+}
+
+p { margin: 0 0 3mm 0; text-align: left; }
+ul, ol { margin: 0 0 3.5mm 0; padding-left: 5.5mm; }
+li { margin-bottom: 1.3mm; }
+strong { color: #0b0d14; }
+code {
+  font-family: "DejaVu Sans Mono", monospace;
+  background: #eef0f4;
+  padding: 0.3mm 1.2mm;
+  border-radius: 2px;
+  font-size: 9pt;
+  color: #a3123a;
+}
+
+pre {
+  background: #14161d;
+  color: #e4e7ee;
+  padding: 4mm 5mm;
+  border-radius: 3px;
+  font-family: "DejaVu Sans Mono", monospace;
+  font-size: 8.6pt;
+  line-height: 1.5;
+  margin: 3mm 0 4mm 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  page-break-inside: avoid;
+  border-left: 3px solid #2fb7c9;
+}
+pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+pre .c1 { color: #7e8494; } /* commentaires */
+
+.etiquette-code {
+  font-size: 8pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  font-weight: 700;
+  margin: 3mm 0 -1mm 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 3mm 0 4.5mm 0;
+  font-size: 9pt;
+  page-break-inside: avoid;
+}
+th {
+  background: #14161d;
+  color: #f4f6fb;
+  text-align: left;
+  padding: 2mm 2.5mm;
+  font-weight: 700;
+  font-size: 8.7pt;
+}
+td {
+  padding: 1.8mm 2.5mm;
+  border-bottom: 1px solid #e4e7ee;
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: #f7f8fa; }
+
+.encart {
+  border-radius: 3px;
+  padding: 3.5mm 4.5mm;
+  margin: 3.5mm 0;
+  font-size: 9.3pt;
+  page-break-inside: avoid;
+}
+.encart .titre-encart {
+  font-weight: 700;
+  font-size: 8.6pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 1.2mm;
+  display: block;
+}
+.encart.astuce { background: #e9f6fb; border-left: 3px solid #0d6e8f; }
+.encart.astuce .titre-encart { color: #0d6e8f; }
+.encart.attention { background: #fdf3e2; border-left: 3px solid #b3760c; }
+.encart.attention .titre-encart { color: #8a5a06; }
+.encart.danger { background: #fbebe9; border-left: 3px solid #a3123a; }
+.encart.danger .titre-encart { color: #a3123a; }
+.encart.mesure { background: #eef4ea; border-left: 3px solid #3f7d20; }
+.encart.mesure .titre-encart { color: #3f7d20; }
+
+.exercice {
+  background: #f4f1fb;
+  border: 1px dashed #8a6fd6;
+  border-radius: 3px;
+  padding: 3.5mm 4.5mm;
+  margin: 4mm 0;
+  page-break-inside: avoid;
+}
+.exercice .titre-encart {
+  font-weight: 700;
+  font-size: 8.6pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5b3d9e;
+  display: block;
+  margin-bottom: 1.2mm;
+}
+
+.grille-2 { display: flex; gap: 4mm; margin: 3mm 0; }
+.grille-2 > div { flex: 1; }
+
+.resume-chapitre {
+  background: #f2f3f6;
+  border-radius: 3px;
+  padding: 4mm 5mm;
+  margin-top: 6mm;
+  font-size: 9.3pt;
+}
+.resume-chapitre .titre-encart {
+  font-weight: 700;
+  font-size: 8.6pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0b0d14;
+  display: block;
+  margin-bottom: 1.5mm;
+}
+.resume-chapitre ul { margin-bottom: 0; }
+
+.glossaire dt { font-weight: 700; color: #0b0d14; margin-top: 3mm; }
+.glossaire dd { margin: 0.8mm 0 0 0; }
+
+.annexe-cli h4 {
+  font-family: "DejaVu Sans Mono", monospace;
+  background: #14161d;
+  color: #6fe3ff;
+  padding: 1.5mm 3mm;
+  border-radius: 2px;
+  font-size: 9.5pt;
+  margin-top: 5mm;
+}
+
+</style>
+</head>
+<body>
+
+<!-- =========================================================== COUVERTURE -->
+<div class="couverture">
+  <div class="marque">INTERMESH</div>
+  <div class="bloc-titre">
+    <h1>Formation complète<br>InterMesh Protocol</h1>
+    <div class="sous-titre">Le protocole ouvert de coordination pour agents IA — de l'installation à la production, du niveau junior au niveau expert.</div>
+  </div>
+  <div class="parcours">
+    <div class="etape"><div class="n">PARTIE I</div><div class="t">Débutant — premiers pas</div></div>
+    <div class="etape"><div class="n">PARTIE II</div><div class="t">Intermédiaire — construire</div></div>
+    <div class="etape"><div class="n">PARTIE III</div><div class="t">Expert — déployer et sécuriser</div></div>
+  </div>
+  <div class="pied">
+    <div>Version du protocole documentée : <strong>0.4.5</strong><br>Licence Apache 2.0 — logiciel libre</div>
+    <div class="droite">Document de formation<br>Rédigé en français</div>
+  </div>
+</div>
+
+<!-- =========================================================== SOMMAIRE -->
+<div class="sommaire">
+  <h2>Sommaire</h2>
+
+  <div class="partie-titre">Partie I — Débutant</div>
+  <ol class="toc">
+    <li><span class="num">1.</span><span>Qu'est-ce qu'InterMesh ?</span></li>
+    <li><span class="num">2.</span><span>Les quatre concepts qu'il faut connaître</span></li>
+    <li><span class="num">3.</span><span>Installation et premier Hub</span></li>
+    <li><span class="num">4.</span><span>Écrire son premier agent</span></li>
+    <li><span class="num">5.</span><span>Déléguer une tâche depuis la ligne de commande</span></li>
+    <li><span class="num">6.</span><span>La CLI InterMesh en détail</span></li>
+    <li><span class="num">7.</span><span>La console d'administration (tableau de bord)</span></li>
+  </ol>
+
+  <div class="partie-titre inter">Partie II — Intermédiaire</div>
+  <ol class="toc">
+    <li><span class="num">8.</span><span>Le SDK Python en profondeur</span></li>
+    <li><span class="num">9.</span><span>Le SDK JavaScript / TypeScript</span></li>
+    <li><span class="num">10.</span><span>Un agent dans n'importe quel langage</span></li>
+    <li><span class="num">11.</span><span>Brancher un agent déjà écrit (LangChain, CrewAI, AutoGen, LlamaIndex)</span></li>
+    <li><span class="num">12.</span><span>Orchestrer plusieurs agents : Pipeline et fan-out</span></li>
+    <li><span class="num">13.</span><span>Comprendre le chiffrement de bout en bout</span></li>
+    <li><span class="num">14.</span><span>Identité vérifiable et authentification</span></li>
+  </ol>
+
+  <div class="partie-titre expert">Partie III — Expert</div>
+  <ol class="toc">
+    <li><span class="num">15.</span><span>Exposer un Hub à distance (TLS, wss://)</span></li>
+    <li><span class="num">16.</span><span>Identité auto-déclarée : le modèle de confiance</span></li>
+    <li><span class="num">17.</span><span>Fédération inter-organisations</span></li>
+    <li><span class="num">18.</span><span>Grappe : plusieurs Hubs, un seul maillage</span></li>
+    <li><span class="num">19.</span><span>Capacité et contre-pression</span></li>
+    <li><span class="num">20.</span><span>Authentification mutuelle TLS (mTLS)</span></li>
+    <li><span class="num">21.</span><span>Déploiement en réseau fermé et Docker durci</span></li>
+    <li><span class="num">22.</span><span>Bonnes pratiques et pièges connus</span></li>
+    <li><span class="num">23.</span><span>Annexe A — Référence complète de la CLI</span></li>
+    <li><span class="num">24.</span><span>Annexe B — Glossaire</span></li>
+  </ol>
+</div>
+
+<!-- =========================================================== PARTIE I -->
+<div class="page-partie debutant">
+  <div class="num-partie">PARTIE I</div>
+  <h1>Débutant</h1>
+  <p class="chapo">Ce que sont un Hub et un agent, comment les installer, écrire son premier agent et lui déléguer une tâche — sans prérequis autre qu'un terminal.</p>
+  <div class="liste-chapitres">
+    <div>1 — Qu'est-ce qu'InterMesh ?</div>
+    <div>2 — Les quatre concepts clés</div>
+    <div>3 — Installation et premier Hub</div>
+    <div>4 — Écrire son premier agent</div>
+    <div>5 — Déléguer une tâche depuis la CLI</div>
+    <div>6 — La CLI en détail</div>
+    <div>7 — La console d'administration</div>
+  </div>
+</div>
+
+<!-- =============================================== CHAPITRE 1 -->
+<div class="chapitre">
+<div class="repere-chapitre debutant">Partie I — Débutant</div>
+<h2 class="titre-chapitre">1. Qu'est-ce qu'InterMesh ?</h2>
+
+<p><strong>InterMesh</strong> est un protocole ouvert qui permet à des agents d'intelligence
+artificielle — quel que soit le langage, le framework ou l'éditeur qui les a
+produits — de se trouver les uns les autres, de communiquer de façon
+chiffrée, et de se déléguer du travail.</p>
+
+<p>Le mot important est <strong>protocole</strong>, pas produit. InterMesh ne vous impose ni
+framework d'agent, ni fournisseur de modèle de langage. Un agent écrit avec
+LangChain, un script Python de trois lignes, un exécutable compilé en Go ou
+un service HTTP déjà en production peuvent tous rejoindre le même maillage,
+du moment qu'ils parlent le même protocole — ou qu'un pont le parle pour
+eux.</p>
+
+<h3>Le problème que ça résout</h3>
+
+<p>Deux agents IA écrits par deux équipes différentes, dans deux langages
+différents, ne savent naturellement pas se parler. Chacun a sa propre
+convention d'appel, son propre format d'entrée et de sortie, sa propre
+notion de « qui a le droit de me demander quoi ». Sans standard commun, faire
+collaborer des agents hétérogènes demande d'écrire une intégration sur
+mesure à chaque nouvelle paire — un travail qui ne se réutilise jamais et qui
+recommence à zéro à chaque projet.</p>
+
+<p>InterMesh remplace ces intégrations sur mesure par un seul protocole :
+<code>intermesh/v1</code>. Un agent qui le parle peut être découvert par capacité
+(« qui sait faire de la traduction ? »), recevoir des tâches, y répondre, et
+tout cela avec un chiffrement de bout en bout que le serveur central —
+appelé le <strong>Hub</strong> — ne peut pas lire.</p>
+
+<h3>Ce que vous obtenez concrètement</h3>
+
+<table>
+<tr><th>Capacité</th><th>Ce que ça signifie en pratique</th></tr>
+<tr><td>Chiffrement de bout en bout</td><td>RSA-2048-OAEP + AES-256-GCM. Le Hub route du texte chiffré qu'il ne peut pas lire.</td></tr>
+<tr><td>Identité vérifiable</td><td>Empreinte SHA-256 sur les rôles et permissions d'un agent — toute altération est rejetée à l'enregistrement.</td></tr>
+<tr><td>Authentification JWT</td><td>Chaque message après l'enregistrement porte un jeton signé par la clé du Hub.</td></tr>
+<tr><td>Découverte</td><td>Trouver des agents par capacité, rôle, métadonnée ou nom.</td></tr>
+<tr><td>Tâches distribuées</td><td>Cycle de vie asynchrone : <code>pending → running → completed/failed</code>.</td></tr>
+<tr><td>N'importe quel langage</td><td><code>intermesh serve --exec</code> transforme n'importe quel exécutable en agent — JSON sur l'entrée standard, JSON sur la sortie.</td></tr>
+<tr><td>Fédération</td><td>Deux Hubs de deux organisations différentes peuvent se relier, sans jamais partager de secret.</td></tr>
+<tr><td>Journal d'audit infalsifiable</td><td>Chaînage de Merkle : toute modification rétroactive brise la chaîne, et le Hub le détecte.</td></tr>
+</table>
+
+<div class="encart astuce">
+<span class="titre-encart">À retenir</span>
+InterMesh n'est pas un remplaçant de LangChain, CrewAI ou AutoGen. C'est la
+couche qui permet à des agents construits avec ces frameworks — ou sans
+aucun framework — de se découvrir et de collaborer entre eux, y compris
+au-delà des frontières d'une seule organisation.
+</div>
+
+<h3>Le logiciel est libre</h3>
+
+<p>InterMesh est publié sous licence <strong>Apache 2.0</strong>. Le code source est
+public, le protocole est documenté (RFC-001), et rien n'empêche de faire
+tourner un Hub entièrement hors ligne, sans aucun compte ni service externe
+— une exigence complète pour un déploiement en réseau fermé (voir le
+chapitre 21).</p>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>InterMesh est un <strong>protocole</strong>, pas un framework d'agent : il fait parler entre eux des agents hétérogènes.</li>
+<li>Le <strong>Hub</strong> route les messages chiffrés sans pouvoir les lire.</li>
+<li>N'importe quel langage peut rejoindre le maillage, avec ou sans SDK dédié.</li>
+<li>Le logiciel est libre et peut fonctionner entièrement hors ligne.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 2 -->
+<div class="chapitre">
+<div class="repere-chapitre debutant">Partie I — Débutant</div>
+<h2 class="titre-chapitre">2. Les quatre concepts qu'il faut connaître</h2>
+
+<p>Avant d'écrire une seule ligne de code, quatre notions suffisent à
+comprendre tout le reste de cette formation.</p>
+
+<h3>2.1 Le Hub</h3>
+
+<p>Le <strong>Hub</strong> est le point de rencontre. C'est un serveur qui écoute sur un
+port WebSocket (8765 par défaut), tient le registre des agents connectés,
+route les messages entre eux, et applique les règles de sécurité —
+authentification, limites de débit, journal d'audit.</p>
+
+<p>Le Hub <strong>ne peut pas lire le contenu chiffré</strong> qui transite par lui : il
+voit une enveloppe (qui parle à qui, quel type de message) mais pas ce
+qu'elle contient quand le chiffrement de bout en bout est actif. C'est une
+propriété centrale du protocole, détaillée au chapitre 13.</p>
+
+<h3>2.2 L'agent</h3>
+
+<p>Un <strong>agent</strong> est n'importe quel programme qui se connecte au Hub, s'enregistre
+avec un nom et des <strong>capacités</strong>, et peut alors envoyer et recevoir des
+messages, répondre à des requêtes, ou exécuter des tâches qu'on lui délègue.</p>
+
+<p>Un agent peut être :</p>
+<ul>
+<li>un script Python utilisant le SDK officiel ;</li>
+<li>un script JavaScript/TypeScript utilisant le SDK officiel ;</li>
+<li>n'importe quel exécutable, dans n'importe quel langage, exposé via <code>intermesh serve</code> (chapitre 10) ;</li>
+<li>un agent déjà écrit avec LangChain, CrewAI, AutoGen ou LlamaIndex, branché sans en changer une ligne (chapitre 11).</li>
+</ul>
+
+<h3>2.3 La capacité</h3>
+
+<p>Une <strong>capacité</strong> est une étiquette libre qui décrit ce qu'un agent sait
+faire : <code>"translate"</code>, <code>"calculate"</code>, <code>"market_analysis"</code>… Un
+agent en déclare une ou plusieurs à l'enregistrement. Un autre agent, ou un
+orchestrateur, peut alors chercher « qui sait faire X ? » avec
+<code>discover(capabilities=["X"])</code>, sans avoir besoin de connaître le nom
+exact de l'agent à l'avance.</p>
+
+<h3>2.4 La tâche</h3>
+
+<p>Une <strong>tâche</strong> est une unité de travail déléguée d'un agent à un autre :
+un titre, des données d'entrée, et un cycle de vie.</p>
+
+<div class="etiquette-code">Cycle de vie d'une tâche</div>
+<pre>pending → running → completed
+                   → failed</pre>
+
+<p>L'orchestrateur soumet la tâche (<code>submit_task</code>), le Hub la remet à
+l'exécutant désigné, l'exécutant la traite et renvoie un résultat ou une
+erreur. Si le Hub redémarre ou si l'exécutant se déconnecte pendant qu'une
+tâche est en cours, elle est <strong>réassignée automatiquement</strong> à la
+reconnexion — l'orchestrateur n'a rien à resoumettre (voir chapitre 3 du
+modèle de sécurité).</p>
+
+<div class="encart attention">
+<span class="titre-encart">Point important</span>
+Une tâche interrompue en plein traitement <strong>repasse à l'état <code>pending</code></strong>
+avant d'être réémise : le travail engagé est perdu, pas repris là où il
+s'était arrêté. Les exécutants doivent donc être <strong>idempotents</strong> — capables
+de tourner deux fois sans effet de bord dangereux.
+</div>
+
+<h3>Comment ces quatre notions s'articulent</h3>
+
+<pre>┌─────────────────────┐                      ┌─────────────────────┐
+│   Agent Python       │  🔒 chiffré E2E      │   Agent JavaScript   │
+│   capacités: [calc]  │◄────────────────────►│   capacités: [trad]  │
+└──────────┬───────────┘                      └───────────┬──────────┘
+           │                                              │
+           └──────────────────┐        ┌──────────────────┘
+                               ▼        ▼
+                    ═══════════════════════════
+                         LE HUB InterMesh
+                    [ découverte ][ authentif. ]
+                    [ routage ][ journal d'audit ]
+                    ═══════════════════════════</pre>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><strong>Hub</strong> = le routeur central, aveugle au contenu chiffré.</li>
+<li><strong>Agent</strong> = tout programme connecté, quel que soit son langage.</li>
+<li><strong>Capacité</strong> = une étiquette qui permet à un agent d'être trouvé sans connaître son nom.</li>
+<li><strong>Tâche</strong> = du travail délégué, avec un cycle de vie explicite et une reprise automatique.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 3 -->
+<div class="chapitre">
+<div class="repere-chapitre debutant">Partie I — Débutant</div>
+<h2 class="titre-chapitre">3. Installation et premier Hub</h2>
+
+<h3>3.1 Installer le SDK</h3>
+
+<p>Deux distributions officielles, une par langage. Les deux s'appellent
+<code>intermesh</code> sur leur registre respectif.</p>
+
+<div class="grille-2">
+<div>
+<div class="etiquette-code">Python</div>
+<pre>pip install intermesh</pre>
+<p style="font-size:9pt;color:#5a6070;">Installe le SDK <strong>et</strong> la commande <code>intermesh</code>.</p>
+</div>
+<div>
+<div class="etiquette-code">JavaScript / TypeScript</div>
+<pre>npm install intermesh</pre>
+<p style="font-size:9pt;color:#5a6070;">Installe le SDK seul (pas de CLI côté JS).</p>
+</div>
+</div>
+
+<div class="encart astuce">
+<span class="titre-encart">Astuce</span>
+Le nom du paquet Python publié est <code>intermesh</code> et le module à
+importer s'appelle aussi <code>intermesh</code> — pas de piège de nommage entre
+les deux, contrairement à d'autres écosystèmes.
+</div>
+
+<h3>3.2 Installer depuis le code source (optionnel)</h3>
+
+<pre>git clone https://github.com/intermeshteam/intermesh.git
+cd intermesh
+python3 -m venv venv && source venv/bin/activate
+pip install -e ./sdk-python</pre>
+
+<p>Cette voie est utile pour contribuer au projet ou pour examiner le code
+avant de lui faire confiance en production — ce que la licence Apache 2.0
+autorise et encourage.</p>
+
+<h3>3.3 Démarrer un Hub</h3>
+
+<p>Une seule commande suffit :</p>
+
+<pre>intermesh hub</pre>
+
+<p>Sans aucun paramètre, le Hub :</p>
+<ul>
+<li>écoute sur <code>ws://localhost:8765</code> ;</li>
+<li>appartient à l'organisation <code>default</code> ;</li>
+<li>persiste son état dans <code>~/.intermesh/hub_state.db</code> (SQLite) ;</li>
+<li>génère et conserve sa clé de signature dans <code>~/.intermesh/hub_secret</code> ;</li>
+<li>accepte l'identité auto-déclarée <strong>uniquement depuis <code>localhost</code></strong> — voir le chapitre 16 pour ce que cela signifie exactement.</li>
+</ul>
+
+<p>Le Hub affiche au démarrage sa configuration effective : organisation,
+port, source de la clé de signature (persistante ou éphémère), et le mode
+d'identité retenu. C'est la première chose à lire si quelque chose ne se
+comporte pas comme prévu.</p>
+
+<div class="encart astuce">
+<span class="titre-encart">Astuce</span>
+Pour un Hub jetable, utile en test, ajoutez <code>--ephemeral-state
+--ephemeral-secret</code> : rien n'est écrit sur disque, tout disparaît à l'arrêt
+du processus.
+</div>
+
+<h3>3.4 Vérifier que ça fonctionne</h3>
+
+<p>Dans un second terminal, la commande <code>discover</code> (chapitre 6) liste les
+agents actuellement connus du Hub. Sans agent connecté, elle renvoie une
+liste vide — c'est le comportement attendu à ce stade.</p>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Démarrez un Hub avec <code>intermesh hub</code>. Observez les lignes affichées au
+démarrage : quel port, quelle organisation, quelle source pour la clé de
+signature ? Gardez ce terminal ouvert — le chapitre suivant vous fera
+écrire un agent qui s'y connecte.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><code>pip install intermesh</code> installe le SDK Python <strong>et</strong> la commande <code>intermesh</code>.</li>
+<li><code>intermesh hub</code> suffit à démarrer un Hub complet, sans configuration.</li>
+<li>L'état persiste automatiquement dans <code>~/.intermesh/</code> — utilisez <code>--ephemeral-*</code> pour un Hub jetable.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 4 -->
+<div class="chapitre">
+<div class="repere-chapitre debutant">Partie I — Débutant</div>
+<h2 class="titre-chapitre">4. Écrire son premier agent</h2>
+
+<p>Un agent minimal tient en moins de dix lignes. Voici un agent qui sait
+additionner deux nombres.</p>
+
+<div class="etiquette-code">worker.py</div>
+<pre>from intermesh import InterMeshAgent
+
+agent = InterMeshAgent(name="calc_bot", capabilities=["calculate"], roles=["worker"])
+
+@agent.on_task
+async def run(input_data, task):
+    return {"result": input_data["a"] + input_data["b"]}
+
+agent.run()          # se connecte, puis reste en service</pre>
+
+<p>Trois éléments à comprendre ligne par ligne :</p>
+
+<table>
+<tr><th>Ligne</th><th>Rôle</th></tr>
+<tr><td><code>InterMeshAgent(name=..., capabilities=..., roles=...)</code></td><td>Déclare l'identité de l'agent : son nom, ce qu'il sait faire, son rôle (<code>worker</code>, <code>admin</code>…).</td></tr>
+<tr><td><code>@agent.on_task</code></td><td>Enregistre la fonction appelée à chaque tâche reçue. Elle reçoit les données d'entrée et l'objet tâche, et renvoie le résultat.</td></tr>
+<tr><td><code>agent.run()</code></td><td>Version bloquante : se connecte au Hub et reste en service jusqu'à interruption (Ctrl+C).</td></tr>
+</table>
+
+<div class="encart attention">
+<span class="titre-encart">Piège fréquent en Python</span>
+<code>await agent.connect()</code> ne s'écrit <strong>pas</strong> au niveau d'un module Python
+— c'est une erreur de syntaxe, pas une erreur d'exécution, et elle échoue
+avant que quoi que ce soit ne démarre. Pour un agent de service, utilisez
+<code>agent.run()</code> comme ci-dessus. Pour un script qui a besoin d'<code>asyncio</code>
+directement (un orchestrateur, par exemple), enveloppez le tout dans une
+coroutine <code>async def main(): ...</code> lancée par <code>asyncio.run(main())</code>.
+</div>
+
+<h3>Lancer l'agent</h3>
+
+<p>Avec un Hub déjà démarré (chapitre précédent), dans un nouveau terminal :</p>
+
+<pre>python3 worker.py</pre>
+
+<p>L'agent affiche sa connexion réussie et reste en attente de tâches. Il est
+maintenant visible dans <code>intermesh discover --capability calculate</code>.</p>
+
+<h3>La forme équivalente avec <code>asyncio</code> explicite</h3>
+
+<p>Si votre code a besoin de contrôler la boucle d'événements — par exemple
+pour lancer plusieurs agents dans le même processus — la forme longue :</p>
+
+<pre>import asyncio
+from intermesh import InterMeshAgent
+
+async def compute(input_data, task):
+    return {"result": input_data["a"] + input_data["b"]}
+
+async def main():
+    agent = InterMeshAgent(name="calc_bot", capabilities=["calculate"], roles=["worker"])
+    agent.on_task(compute)
+    await agent.connect()
+    await asyncio.Future()   # reste en ligne indéfiniment
+
+asyncio.run(main())</pre>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Modifiez <code>worker.py</code> pour qu'il sache aussi multiplier, en inspectant
+un champ <code>"operation"</code> dans <code>input_data</code> (valeurs <code>"add"</code> ou
+<code>"multiply"</code>). Relancez l'agent et vérifiez le nouveau comportement au
+chapitre suivant, qui vous montre comment lui envoyer une tâche.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Un agent minimal se déclare, enregistre un gestionnaire de tâche, puis appelle <code>agent.run()</code>.</li>
+<li><code>await</code> hors d'une fonction <code>async</code> est une erreur de syntaxe en Python — pas en JavaScript.</li>
+<li>L'agent reste actif tant que le processus tourne ; il se réenregistre automatiquement à la reconnexion.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 5 -->
+<div class="chapitre">
+<div class="repere-chapitre debutant">Partie I — Débutant</div>
+<h2 class="titre-chapitre">5. Déléguer une tâche depuis la ligne de commande</h2>
+
+<p>Avec le Hub et l'agent <code>calc_bot</code> du chapitre précédent actifs, la
+commande <code>task</code> lui délègue du travail sans écrire une seule ligne de
+code :</p>
+
+<pre>intermesh task calc_bot "Add two numbers" '{"a": 20, "b": 22}'</pre>
+
+<p>Réponse attendue :</p>
+
+<pre>{
+  "result": 42
+}</pre>
+
+<p>Trois arguments positionnels :</p>
+
+<table>
+<tr><th>Argument</th><th>Rôle</th></tr>
+<tr><td><code>calc_bot</code></td><td>L'agent exécutant, désigné par son nom.</td></tr>
+<tr><td><code>"Add two numbers"</code></td><td>L'intitulé de la tâche — apparaît dans le journal d'audit et la console.</td></tr>
+<tr><td><code>'{"a": 20, "b": 22}'</code></td><td>Les données d'entrée, en JSON.</td></tr>
+</table>
+
+<h3>Ce qui se passe réellement</h3>
+
+<p>Sous le capot, la CLI se comporte comme un agent orchestrateur temporaire :
+elle se connecte au Hub, soumet la tâche à <code>calc_bot</code>, attend le
+résultat (ou l'échec), l'affiche, puis se déconnecte. C'est exactement ce
+qu'un vrai orchestrateur ferait via le SDK — voir le chapitre 8.</p>
+
+<div class="encart astuce">
+<span class="titre-encart">Astuce</span>
+D'autres commandes suivent le même principe, en plus léger : <code>intermesh
+ping calc_bot</code> vérifie simplement qu'un agent répond, et <code>intermesh ask
+calc_bot '{"question": "..."}'</code> envoie une requête à laquelle l'agent doit
+répondre via un gestionnaire <code>on_request</code> plutôt que <code>on_task</code>.
+</div>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Envoyez une tâche à un agent qui n'existe pas. Observez le message
+d'erreur renvoyé — c'est ce même comportement qu'un orchestrateur écrit
+avec le SDK reçoit sous forme d'exception.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><code>intermesh task &lt;agent&gt; "&lt;titre&gt;" '&lt;JSON&gt;'</code> délègue une tâche sans écrire de code.</li>
+<li>La CLI se comporte comme un orchestrateur jetable : elle attend le résultat puis se déconnecte.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 6 -->
+<div class="chapitre">
+<div class="repere-chapitre debutant">Partie I — Débutant</div>
+<h2 class="titre-chapitre">6. La CLI InterMesh en détail</h2>
+
+<p>La commande <code>intermesh</code> regroupe onze sous-commandes. Ce chapitre
+sert de référence rapide ; le détail complet de chaque option figure en
+annexe A.</p>
+
+<table>
+<tr><th>Commande</th><th>Rôle</th></tr>
+<tr><td><code>hub</code></td><td>Démarrer un Hub de coordination.</td></tr>
+<tr><td><code>serve</code></td><td>Exposer un programme existant (n'importe quel langage) comme agent InterMesh.</td></tr>
+<tr><td><code>ping</code></td><td>Vérifier qu'un agent répond.</td></tr>
+<tr><td><code>ask</code></td><td>Poser une question à un agent (gestionnaire <code>on_request</code>).</td></tr>
+<tr><td><code>task</code></td><td>Déléguer une tâche à un agent (gestionnaire <code>on_task</code>).</td></tr>
+<tr><td><code>discover</code></td><td>Rechercher des agents par capacité ou rôle.</td></tr>
+<tr><td><code>snapshot</code></td><td>Sauvegarder ou restaurer l'état complet du Hub.</td></tr>
+<tr><td><code>dashboard</code></td><td>Lancer la console d'administration locale.</td></tr>
+<tr><td><code>keygen</code></td><td>Générer une paire de clés RSA.</td></tr>
+<tr><td><code>security-check</code></td><td>Auditer la sécurité de l'installation locale.</td></tr>
+<tr><td><code>docs</code></td><td>Afficher la documentation embarquée.</td></tr>
+</table>
+
+<h3>6.1 Rechercher des agents : <code>discover</code></h3>
+
+<pre>intermesh discover --capability calculate
+intermesh discover --role worker</pre>
+
+<p>Sans filtre, la commande liste tous les agents connus du Hub —
+<strong>y compris ceux actuellement hors ligne</strong>, une distinction utile pour
+retrouver un agent qui devrait être là mais ne répond plus.</p>
+
+<h3>6.2 Vérifier qu'un agent répond : <code>ping</code></h3>
+
+<pre>intermesh ping calc_bot --timeout 5</pre>
+
+<h3>6.3 Sauvegarder et restaurer l'état : <code>snapshot</code></h3>
+
+<pre>intermesh snapshot create --name avant_migration
+intermesh snapshot list
+intermesh snapshot restore --name avant_migration
+intermesh snapshot delete --name avant_migration</pre>
+
+<p>Un instantané capture l'état complet du Hub — identités, tâches, journal
+d'audit. <code>--encrypt</code> chiffre le fichier produit avec une phrase de passe
+demandée à l'exécution ; ces commandes exigent une clé d'API administrateur
+(<code>--api-key</code> ou variable <code>INTERMESH_API_KEY</code>).</p>
+
+<h3>6.4 Générer une paire de clés : <code>keygen</code></h3>
+
+<pre>intermesh keygen --out ma_cle.pem</pre>
+
+<p>Produit <code>ma_cle.pem</code> (clé privée) et <code>ma_cle.pem.pub</code> (clé publique).
+Utile pour des besoins de chiffrement en dehors du cycle de vie normal d'un
+agent, qui génère sa propre paire de clés automatiquement.</p>
+
+<div class="encart astuce">
+<span class="titre-encart">Astuce</span>
+Chaque sous-commande accepte <code>--help</code> pour afficher ses options
+complètes et à jour : <code>intermesh hub --help</code>, <code>intermesh serve --help</code>,
+etc. C'est la source la plus fiable en cas de doute, la CLI évoluant plus
+vite qu'un document imprimé.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Onze sous-commandes couvrent le cycle de vie complet : démarrer, découvrir, interroger, déléguer, sauvegarder.</li>
+<li><code>discover</code> montre aussi les agents hors ligne — utile pour le diagnostic.</li>
+<li><code>--help</code> sur chaque sous-commande est la référence la plus à jour.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 7 -->
+<div class="chapitre">
+<div class="repere-chapitre debutant">Partie I — Débutant</div>
+<h2 class="titre-chapitre">7. La console d'administration</h2>
+
+<p>InterMesh fournit une interface web locale pour observer et administrer un
+Hub sans écrire de code.</p>
+
+<pre>intermesh dashboard</pre>
+
+<p>Cette commande sert l'application sur <code>http://localhost:8080</code>. Elle est
+livrée <strong>dans le paquet</strong> — aucune dépendance externe, aucun compte à
+créer, aucun accès Internet requis pour l'ouvrir : elle fonctionne aussi
+sur un réseau totalement fermé, tant qu'elle peut atteindre le Hub qu'on
+lui indique.</p>
+
+<div class="encart astuce">
+<span class="titre-encart">À ne pas confondre</span>
+Il existe <strong>deux</strong> interfaces distinctes, et c'est volontaire :
+<ul style="margin-bottom:0;">
+<li>la <strong>console locale</strong> (<code>intermesh dashboard</code>) — celle-ci, sans compte, connectée au Hub de votre choix ;</li>
+<li>le <strong>Control Plane hébergé</strong> sur <code>intermesh.site</code> — une application web avec comptes et gestion d'équipe, qui exige un accès Internet.</li>
+</ul>
+</div>
+
+<h3>Se connecter à la console</h3>
+
+<p>Au premier chargement, la console demande l'adresse du Hub (par défaut
+<code>ws://localhost:8765</code>) et une clé d'API portant le rôle <code>admin</code>. Un
+agent qui se déclarerait lui-même administrateur sans clé est
+<strong>refusé</strong> — voir le modèle d'autorisation détaillé au chapitre 22.</p>
+
+<p>Deux points de sécurité à connaître dès ce stade :</p>
+<ul>
+<li>la clé saisie <strong>n'est jamais écrite</strong> dans le navigateur (ni
+<code>localStorage</code> ni <code>sessionStorage</code>) — elle vit en mémoire le temps de
+l'onglet, et un rechargement la redemande ;</li>
+<li>les empreintes de clés affichées sont tronquées à 12 caractères — assez
+pour identifier une clé, trop peu pour aider une attaque si l'écran est
+capturé.</li>
+</ul>
+
+<h3>Ce que la console permet de voir et de faire</h3>
+
+<table>
+<tr><th>Fonction</th><th>Détail</th></tr>
+<tr><td>Vue d'ensemble</td><td>Agents en ligne, tâches en cours, état de l'audit, statut de fédération.</td></tr>
+<tr><td>Topologie</td><td>Carte visuelle du maillage et de la santé de chaque nœud.</td></tr>
+<tr><td>Agents</td><td>Inventaire complet, y compris les agents hors ligne.</td></tr>
+<tr><td>Résumés</td><td>Historique des tâches et de leurs résultats.</td></tr>
+<tr><td>Clés d'API</td><td>Créer et révoquer des comptes de service.</td></tr>
+<tr><td>Journal d'audit</td><td>Historique complet avec vérification d'intégrité en un clic.</td></tr>
+</table>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Lancez <code>intermesh dashboard</code> avec le Hub et l'agent <code>calc_bot</code> des
+chapitres précédents actifs. Envoyez une tâche depuis un autre terminal
+avec <code>intermesh task</code>, et observez-la apparaître dans la console en
+temps réel.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><code>intermesh dashboard</code> lance une console locale, sans dépendance externe ni compte.</li>
+<li>Elle est distincte du Control Plane hébergé sur intermesh.site.</li>
+<li>La clé d'API n'est jamais persistée côté navigateur.</li>
+</ul>
+</div>
+</div>
+
+<!-- =========================================================== PARTIE II -->
+<div class="page-partie intermediaire">
+  <div class="num-partie">PARTIE II</div>
+  <h1>Intermédiaire</h1>
+  <p class="chapo">Maîtriser les deux SDK officiels, brancher des agents écrits dans n'importe quel langage ou framework, orchestrer plusieurs agents, et comprendre le modèle de chiffrement et d'identité qui rend tout cela sûr.</p>
+  <div class="liste-chapitres">
+    <div>8 — Le SDK Python en profondeur</div>
+    <div>9 — Le SDK JavaScript / TypeScript</div>
+    <div>10 — Un agent dans n'importe quel langage</div>
+    <div>11 — Brancher un agent déjà écrit</div>
+    <div>12 — Orchestrer plusieurs agents</div>
+    <div>13 — Comprendre le chiffrement de bout en bout</div>
+    <div>14 — Identité vérifiable et authentification</div>
+  </div>
+</div>
+
+<!-- =============================================== CHAPITRE 8 -->
+<div class="chapitre">
+<div class="repere-chapitre intermediaire">Partie II — Intermédiaire</div>
+<h2 class="titre-chapitre">8. Le SDK Python en profondeur</h2>
+
+<p>Le chapitre 4 a montré l'essentiel. Voici la référence complète des
+méthodes de <code>InterMeshAgent</code>.</p>
+
+<h3>8.1 Tableau de référence</h3>
+
+<table>
+<tr><th>Méthode</th><th>Rôle</th></tr>
+<tr><td><code>connect()</code></td><td>Ouvre la connexion et obtient un jeton JWT.</td></tr>
+<tr><td><code>send(to, content)</code></td><td>Message chiffré, sans attendre de réponse.</td></tr>
+<tr><td><code>ask(to, content)</code></td><td>Requête chiffrée, attend la réponse.</td></tr>
+<tr><td><code>discover(...)</code></td><td>Recherche d'agents par capacité, rôle ou métadonnée.</td></tr>
+<tr><td><code>submit_task(title, assignee, input_data)</code></td><td>Délègue une tâche et attend son résultat.</td></tr>
+<tr><td><code>who_is(name)</code></td><td>Récupère l'identité certifiée et la clé publique d'un agent.</td></tr>
+<tr><td><code>on_message / on_request / on_task</code></td><td>Enregistrent les gestionnaires entrants.</td></tr>
+<tr><td><code>run()</code></td><td>Version bloquante : connecte puis reste en service.</td></tr>
+<tr><td><code>serve_forever()</code></td><td>Version asynchrone équivalente.</td></tr>
+<tr><td><code>close()</code></td><td>Ferme volontairement la connexion — aucune reconnexion n'est tentée ensuite.</td></tr>
+</table>
+
+<h3>8.2 Orchestrer depuis Python</h3>
+
+<pre>import asyncio
+from intermesh import InterMeshAgent
+
+async def main():
+    orchestrateur = InterMeshAgent(name="lead", roles=["admin"])
+    await orchestrateur.connect()
+
+    trouve = await orchestrateur.discover(capabilities=["calculate"])
+    resultat = await orchestrateur.submit_task(
+        title="Addition",
+        assignee=trouve["agents"][0]["name"],
+        input_data={"a": 20, "b": 22},
+    )
+    print(resultat)   # {"result": 42} — chiffré de bout en bout en transit
+
+asyncio.run(main())</pre>
+
+<h3>8.3 Les trois gestionnaires entrants</h3>
+
+<table>
+<tr><th>Gestionnaire</th><th>Déclenché par</th><th>Usage typique</th></tr>
+<tr><td><code>on_message</code></td><td><code>send()</code> d'un autre agent</td><td>Notification, événement, sans réponse attendue.</td></tr>
+<tr><td><code>on_request</code></td><td><code>ask()</code> d'un autre agent</td><td>Question/réponse synchrone.</td></tr>
+<tr><td><code>on_task</code></td><td><code>submit_task()</code> d'un orchestrateur</td><td>Travail délégué, avec cycle de vie suivi.</td></tr>
+</table>
+
+<h3>8.4 Reconnexion automatique</h3>
+
+<p>Un agent peut être configuré pour se reconnecter tout seul si le Hub qui le
+porte devient inaccessible :</p>
+
+<pre>agent = InterMeshAgent(
+    name="worker",
+    hub_url=["ws://hub-a:8765", "ws://hub-b:8765"],
+    auto_reconnect=True,
+)
+agent.on_failover(lambda ancien, nouveau: print(f"bascule : {ancien} → {nouveau}"))</pre>
+
+<p><code>hub_url</code> accepte une adresse unique ou une liste. Dans une grappe
+(chapitre 18), le Hub annonce lui-même ses frères vivants à
+l'enregistrement, et l'agent les ajoute à sa liste de repli sans
+configuration supplémentaire.</p>
+
+<div class="encart mesure">
+<span class="titre-encart">Mesuré</span>
+Sur une grappe de cinq Hubs, un agent orphelin après la perte de son Hub
+d'attache se rattache à un frère en <strong>0,5 seconde</strong> en moyenne.
+</div>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Écrivez un orchestrateur qui découvre un agent par capacité plutôt que par
+nom fixe, puis lui délègue une tâche. Testez son comportement quand aucun
+agent ne correspond à la capacité recherchée.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Sept méthodes suffisent à couvrir l'essentiel : connexion, envoi, requête, découverte, délégation, identité, gestionnaires.</li>
+<li>Trois gestionnaires distincts selon le type d'échange attendu.</li>
+<li>La reconnexion automatique et la bascule vers un Hub frère sont natives, avec un délai mesuré.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 9 -->
+<div class="chapitre">
+<div class="repere-chapitre intermediaire">Partie II — Intermédiaire</div>
+<h2 class="titre-chapitre">9. Le SDK JavaScript / TypeScript</h2>
+
+<p>Le SDK JavaScript reproduit la même sémantique que le SDK Python, avec les
+adaptations naturelles du langage : callbacks et Promises plutôt que
+décorateurs et coroutines.</p>
+
+<h3>9.1 Un agent minimal</h3>
+
+<pre>import { InterMeshAgent } from 'intermesh';
+
+const agent = new InterMeshAgent({
+  name: 'calc_bot',
+  capabilities: ['calculate'],
+  roles: ['worker'],
+});
+
+agent.onTask(async (input, task) => {
+  return { result: input.a + input.b };
+});
+
+await agent.connect();</pre>
+
+<div class="encart astuce">
+<span class="titre-encart">Différence avec Python</span>
+En JavaScript, <code>await</code> au niveau supérieur d'un module <strong>est valide</strong>
+dans un module ES (<code>type: "module"</code>). Le piège de syntaxe du chapitre 4,
+propre à Python, ne s'applique pas ici.
+</div>
+
+<h3>9.2 Reconnexion et bascule</h3>
+
+<pre>const agent = new InterMeshAgent({
+  name: 'worker',
+  hubUrl: 'ws://hub-a:8765',
+  autoReconnect: true,
+});
+agent.onFailover((ancien, nouveau) => console.log(`bascule ${ancien} → ${nouveau}`));</pre>
+
+<p>Comme côté Python, la reconnexion est désactivée par défaut :
+l'activer d'office changerait le comportement d'agents existants écrits
+pour s'arrêter proprement à la déconnexion.</p>
+
+<h3>9.3 Ce que le SDK JS ne fait pas</h3>
+
+<p>Deux frameworks n'ont pas de pont dédié côté JavaScript, faute de port
+établi : <strong>CrewAI</strong> et <strong>AutoGen</strong> restent Python uniquement. Pour ces
+deux-là, utilisez le SDK Python même si le reste de votre stack est en
+JavaScript.</p>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Même sémantique que le SDK Python, adaptée aux conventions JavaScript (Promises, callbacks).</li>
+<li><code>await</code> au niveau module est valide en JS — contrairement à Python.</li>
+<li>CrewAI et AutoGen n'ont pas d'équivalent JS ; restez sur le SDK Python pour ces frameworks.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 10 -->
+<div class="chapitre">
+<div class="repere-chapitre intermediaire">Partie II — Intermédiaire</div>
+<h2 class="titre-chapitre">10. Un agent dans n'importe quel langage</h2>
+
+<p>Aucun SDK n'est nécessaire pour rejoindre le maillage. La commande
+<code>intermesh serve</code> transforme n'importe quel programme externe en agent
+InterMesh, à condition qu'il respecte un contrat minimal : <strong>JSON sur
+l'entrée standard, JSON sur la sortie standard</strong>.</p>
+
+<h3>10.1 Exposer un exécutable</h3>
+
+<pre>intermesh serve --name pricing --exec "./pricing-engine" --capability pricing</pre>
+
+<p>Cela fonctionne pour un binaire Go ou Rust, un script Node ou Ruby, ou même
+une ligne de shell. Chaque tâche reçue lance une nouvelle instance du
+programme, lui transmet les données en JSON sur son entrée standard, et
+récupère sa sortie standard comme résultat.</p>
+
+<div class="encart astuce">
+<span class="titre-encart">Sortie non-JSON tolérée</span>
+Si le programme n'écrit pas de JSON valide sur sa sortie, InterMesh
+l'enveloppe automatiquement sous la forme <code>{"output": "..."}</code>. Un simple
+<code>echo</code> est donc un agent valide — utile pour un premier test.
+</div>
+
+<h3>10.2 Exposer un service HTTP déjà en ligne</h3>
+
+<pre>intermesh serve --name scoring --http http://localhost:9000/task</pre>
+
+<p>Chaque tâche reçue devient un <code>POST</code> JSON vers cette URL. Rien à
+redémarrer côté service existant.</p>
+
+<h3>10.3 Depuis Python, en une ligne</h3>
+
+<pre>InterMeshAgent.from_command(["node", "agent.js"], name="pricing").run()</pre>
+
+<h3>10.4 Options utiles</h3>
+
+<table>
+<tr><th>Option</th><th>Rôle</th></tr>
+<tr><td><code>--capability</code> / <code>-c</code></td><td>Répétable : un agent peut annoncer plusieurs capacités.</td></tr>
+<tr><td><code>--timeout</code></td><td>Délai maximal accordé au programme externe.</td></tr>
+<tr><td><code>--no-encrypt</code></td><td>Désactive le chiffrement E2E — réservé au débogage local.</td></tr>
+</table>
+
+<div class="encart danger">
+<span class="titre-encart">Attention</span>
+Un programme externe qui dépasse <code>--timeout</code> est <strong>tué, avec ses
+processus enfants</strong>. C'est volontaire : un exécutant qui ne répond jamais
+bloquerait indéfiniment l'orchestrateur qui attend son résultat.
+</div>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Écrivez un script shell de trois lignes qui lit du JSON sur l'entrée
+standard avec <code>cat</code>, et renvoie un JSON fixe. Exposez-le avec
+<code>intermesh serve --exec</code> et délé­guez-lui une tâche.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><code>intermesh serve --exec</code> transforme n'importe quel exécutable en agent, sans SDK.</li>
+<li><code>--http</code> fait la même chose pour un service déjà en ligne.</li>
+<li>Le contrat est minimal : JSON en entrée, JSON en sortie — même une sortie non-JSON est tolérée.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 11 -->
+<div class="chapitre">
+<div class="repere-chapitre intermediaire">Partie II — Intermédiaire</div>
+<h2 class="titre-chapitre">11. Brancher un agent déjà écrit</h2>
+
+<p>Un agent LangChain, CrewAI, AutoGen ou LlamaIndex n'a pas besoin d'être
+réécrit pour rejoindre InterMesh. Les adaptateurs le branchent sans changer
+une ligne de son code métier. Aucun adaptateur n'importe le framework
+qu'il ponte : installer le SDK n'entraîne jamais LangChain et ses
+dépendances transitives.</p>
+
+<div class="encart astuce">
+<span class="titre-encart">Différence entre les deux SDK</span>
+Le SDK <strong>JavaScript</strong> détecte automatiquement la convention d'appel de
+l'objet qu'on lui confie (<code>invoke</code>, <code>run</code>, <code>kickoff</code>, <code>query</code>…). Le
+SDK <strong>Python</strong> ne fait cette détection que pour LangChain
+(<code>from_langchain</code>) ; pour tout le reste, on écrit soi-même une petite
+fonction d'adaptation passée à <code>from_callable</code>.
+</div>
+
+<h3>11.1 Python — trois points d'entrée</h3>
+
+<p><strong><code>from_langchain</code></strong> pour une chaîne ou un <code>Runnable</code> LangChain. Il
+essaie dans l'ordre <code>ainvoke</code>, <code>invoke</code>, <code>run</code>, puis l'objet
+lui-même s'il est appelable :</p>
+
+<pre>from intermesh import from_langchain
+
+agent = from_langchain(ma_chaine, name="analyste", capabilities=["market_analysis"])
+agent.run()</pre>
+
+<p><strong><code>from_callable</code></strong> pour tout le reste — un <code>Crew</code> CrewAI, un agent
+AutoGen, un moteur LlamaIndex, ou une simple fonction. La fonction reçoit le
+dictionnaire de tâche tel quel ; c'est à elle d'adapter la convention du
+framework :</p>
+
+<pre>import asyncio
+from intermesh import from_callable
+
+async def executer_crew(data):
+    resultat = await asyncio.to_thread(lambda: mon_crew.kickoff(inputs=data))
+    return {"output": getattr(resultat, "raw", str(resultat))}
+
+agent = from_callable(executer_crew, name="recherche", capabilities=["research"])</pre>
+
+<p><strong><code>@intermesh_service</code></strong> — le même mécanisme en décorateur. Attention :
+il <strong>remplace</strong> la fonction décorée par l'agent lui-même.</p>
+
+<pre>from intermesh import intermesh_service
+
+@intermesh_service(name="resumeur", capabilities=["summarize"])
+def mon_service(data):
+    return {"summary": mon_modele(data["text"])}
+
+mon_service.run()</pre>
+
+<div class="encart danger">
+<span class="titre-encart">Piège classique : les appels bloquants</span>
+<code>from_callable</code> exécute votre fonction telle quelle. Si elle est
+synchrone, elle bloque <strong>toute la boucle asyncio</strong> pendant sa durée —
+plus aucune tâche reçue, plus aucun message routé. Un appel à un modèle de
+langage bloque plusieurs secondes : enveloppez-le systématiquement dans
+<code>asyncio.to_thread(...)</code>, comme dans l'exemple ci-dessus.
+</div>
+
+<h3>11.2 JavaScript / TypeScript</h3>
+
+<p>Frameworks couverts : <strong>LangChain.js</strong> et <strong>LlamaIndex.TS</strong>.</p>
+
+<pre>import { InterMeshLangChainAdapter } from 'intermesh/adapters/langchain';
+
+const agent = new InterMeshLangChainAdapter(monRunnable, {
+  name: 'analyste',
+  capabilities: ['market_analysis'],
+});
+await agent.connect();</pre>
+
+<pre>import { InterMeshLlamaIndexAdapter } from 'intermesh/adapters/llamaindex';
+
+const agent = new InterMeshLlamaIndexAdapter(index.asQueryEngine(), {
+  name: 'base_documentaire',
+  capabilities: ['document_search', 'rag'],
+});</pre>
+
+<p>Pour un framework sans pont dédié, <code>adapt()</code> détecte la méthode
+d'invocation de l'objet :</p>
+
+<pre>import { adapt } from 'intermesh/adapters';
+
+const agent = adapt(monAgentExistant, { name: 'x', capabilities: ['c'] });</pre>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Trois points d'entrée Python : <code>from_langchain</code>, <code>from_callable</code>, <code>@intermesh_service</code>.</li>
+<li>Tout appel synchrone lourd doit passer par <code>asyncio.to_thread</code>, sous peine de geler l'agent entier.</li>
+<li>Côté JS, l'adaptateur détecte automatiquement la convention d'appel — sauf pour CrewAI et AutoGen, absents en JS.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 12 -->
+<div class="chapitre">
+<div class="repere-chapitre intermediaire">Partie II — Intermédiaire</div>
+<h2 class="titre-chapitre">12. Orchestrer plusieurs agents</h2>
+
+<p><code>discover()</code> et <code>submit_task()</code> suffisent à écrire un flux de travail à
+la main. <code>InterMeshPipeline</code> et <code>fan_out</code> capturent les deux patrons les
+plus courants pour ne pas les réécrire à chaque fois.</p>
+
+<h3>12.1 Enchaîner des étapes : <code>InterMeshPipeline</code></h3>
+
+<p>Chaque étape peut nommer un agent explicitement, ou le chercher par
+capacité — la recherche a lieu <strong>à l'exécution</strong>, pas à la déclaration,
+donc un agent qui rejoint le maillage entre-temps est pris en compte.</p>
+
+<pre>from intermesh import InterMeshPipeline
+
+pipeline = (
+    InterMeshPipeline(orchestrateur)
+    .step("Traduire", capabilities=["translate"])
+    .step("Calculer", capabilities=["calculate"],
+          input_fn=lambda prev: {"expression": prev["translated_text"]})
+)
+resultat = await pipeline.run({"text": "compute forty two doubled"})
+
+resultat.output    # sortie de la dernière étape
+resultat.history   # liste de StepResult(titre, agent, sortie)</pre>
+
+<p>Une étape en échec — délai dépassé, erreur distante, aucun agent trouvé —
+<strong>interrompt le pipeline immédiatement</strong>. Les étapes suivantes ne
+s'exécutent jamais sur une sortie invalide. L'erreur d'origine se propage
+telle quelle (<code>TimeoutError</code>, <code>RuntimeError</code>, <code>PipelineError</code>).</p>
+
+<h3>12.2 Interroger plusieurs agents en parallèle : <code>fan_out</code></h3>
+
+<pre>from intermesh import fan_out
+
+resultats = await fan_out(
+    orchestrateur,
+    [("fr", {"region": "FR"}), ("de", {"region": "DE"})],
+    capabilities={"fr": ["market_analysis"], "de": ["market_analysis"]},
+)
+resultats["fr"]  # sortie de la branche, ou l'exception levée</pre>
+
+<p>Contrairement au pipeline, une branche en échec <strong>n'empêche pas de lire
+les autres</strong> : son entrée dans le résultat est l'exception elle-même,
+jamais levée directement. Vérifiez donc systématiquement le type de chaque
+valeur avant de l'utiliser.</p>
+
+<h3>Équivalents JavaScript</h3>
+
+<pre>import { InterMeshPipeline, fanOut } from 'intermesh';
+
+const pipeline = new InterMeshPipeline(orchestrateur)
+  .step('Traduire', { capabilities: ['translate'] })
+  .step('Calculer', {
+    capabilities: ['calculate'],
+    inputFn: (prev) => ({ expression: prev.translated_text }),
+  });
+const resultat = await pipeline.run({ text: 'compute forty two doubled' });
+
+const resultats = await fanOut(orchestrateur, [
+  ['fr', { region: 'FR' }],
+  ['de', { region: 'DE' }],
+], { capabilities: { fr: ['market_analysis'], de: ['market_analysis'] } });</pre>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Construisez un pipeline à deux étapes utilisant les agents des chapitres
+précédents. Provoquez volontairement l'échec de la première étape (agent
+introuvable) et observez que la seconde ne s'exécute jamais.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><code>InterMeshPipeline</code> enchaîne des étapes séquentielles ; un échec interrompt tout le reste.</li>
+<li><code>fan_out</code> lance des branches indépendantes en parallèle ; un échec d'une branche n'affecte pas les autres.</li>
+<li>La recherche d'agent par capacité a lieu à l'exécution, pas à la déclaration du pipeline.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 13 -->
+<div class="chapitre">
+<div class="repere-chapitre intermediaire">Partie II — Intermédiaire</div>
+<h2 class="titre-chapitre">13. Comprendre le chiffrement de bout en bout</h2>
+
+<h3>13.1 Le modèle cryptographique</h3>
+
+<table>
+<tr><th>Composant</th><th>Algorithme</th></tr>
+<tr><td>Chiffrement asymétrique</td><td>RSA-2048 avec padding OAEP (SHA-256)</td></tr>
+<tr><td>Chiffrement symétrique</td><td>AES-256-GCM (IV 12 octets, tag d'authentification 16 octets)</td></tr>
+</table>
+
+<p>C'est un schéma <strong>hybride</strong> classique : RSA chiffre une clé AES éphémère,
+générée pour chaque message, et AES chiffre le contenu réel. Cela combine
+la sécurité de l'asymétrique pour l'échange de clé et la rapidité du
+symétrique pour le volume de données.</p>
+
+<p><strong>Le Hub ne peut pas lire le contenu des flux.</strong> Il route des enveloppes
+chiffrées dont il ne détient pas les clés privées correspondantes.</p>
+
+<h3>13.2 Ce que le Hub voit malgré tout</h3>
+
+<p>Le chiffrement de bout en bout protège le <strong>contenu</strong>, pas les
+<strong>métadonnées</strong>. Le Hub sait toujours qui parle à qui, à quelle heure, et
+avec quel type de message. Pour un besoin de confidentialité des
+métadonnées elles-mêmes, une terminaison TLS sur le transport WebSocket est
+nécessaire — voir le chapitre 15.</p>
+
+<h3>13.3 Intégrité des identités</h3>
+
+<p>Chaque agent calcule une <strong>empreinte SHA-256</strong> de ses propres privilèges
+(rôles, permissions, capacités) à l'enregistrement. Toute altération locale
+de ces valeurs après coup entraîne un rejet immédiat par le Hub — l'agent
+ne peut pas s'octroyer discrètement des droits supplémentaires en modifiant
+son état en mémoire.</p>
+
+<h3>13.4 La clé de signature du Hub</h3>
+
+<p>Le Hub signe les jetons JWT qu'il distribue aux agents. Cette clé doit
+rester <strong>stable d'un démarrage à l'autre</strong> : si elle change, tous les
+jetons déjà distribués deviennent invalides et l'intégralité de la flotte
+d'agents est éjectée.</p>
+
+<table>
+<tr><th>Priorité</th><th>Source</th><th>Usage visé</th></tr>
+<tr><td>1</td><td>Variable d'environnement <code>INTERMESH_HUB_SECRET</code></td><td>Production, Docker, Kubernetes — la clé ne touche jamais le disque.</td></tr>
+<tr><td>2</td><td>Fichier <code>~/.intermesh/hub_secret</code> (créé en <code>0600</code>)</td><td>Développement local.</td></tr>
+<tr><td>3</td><td>Clé éphémère via <code>--ephemeral-secret</code></td><td>Tests et intégration continue.</td></tr>
+</table>
+
+<div class="encart danger">
+<span class="titre-encart">Contrainte de sécurité</span>
+Une clé fournie via <code>INTERMESH_HUB_SECRET</code> doit faire <strong>au moins 32
+caractères</strong>. En dessous, le Hub refuse de démarrer plutôt que de signer
+avec une clé faible. Générez-en une avec :
+<pre style="margin-top:2mm;">python3 -c "import secrets; print(secrets.token_hex(32))"</pre>
+</div>
+
+<h3>13.5 Filtrage de sortie (egress)</h3>
+
+<p>Le chiffrement protège le contenu du regard du Hub, mais ne décide pas de
+ce qui a le droit de quitter votre organisation vers un partenaire fédéré.
+C'est le rôle d'une <strong>politique d'egress</strong>, déclarée en JSON :</p>
+
+<pre>{
+  "name": "due_diligence",
+  "rules": [
+    {"name": "no_margin", "action": "drop", "field": "marge_reelle"},
+    {"name": "no_iban", "action": "redact", "pattern": "FR\\d{10,}", "replacement": "[IBAN]"},
+    {"name": "classified", "action": "block", "pattern": "SECRET-DEFENSE"}
+  ]
+}</pre>
+
+<p>Trois actions possibles : <code>drop</code> retire un champ entier, <code>redact</code>
+remplace un motif par un texte de substitution, <code>block</code> refuse le message
+en bloc.</p>
+
+<p>La politique s'applique <strong>à deux niveaux distincts</strong>, qui voient des
+choses différentes :</p>
+
+<table>
+<tr><th>Niveau</th><th>Ce qu'il voit</th><th>Rôle</th></tr>
+<tr><td>Agent</td><td>Le contenu en clair, avant chiffrement</td><td>C'est le seul endroit où le texte brut existe encore quand E2E est actif — filtrer plus tard serait trop tard.</td></tr>
+<tr><td>Hub</td><td>Ce qui n'est pas chiffré de bout en bout</td><td>Filet de sécurité : un agent qui a oublié sa politique ne peut toujours pas fuiter ce que le Hub peut inspecter.</td></tr>
+</table>
+
+<p>Les échanges internes à une même organisation ne sont <strong>jamais filtrés</strong>.
+Les règles sont opt-in : sans politique déclarée, rien n'est touché.</p>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>RSA-2048-OAEP pour l'échange de clé, AES-256-GCM pour le contenu — le Hub ne lit jamais le texte en clair.</li>
+<li>Le chiffrement protège le contenu, pas les métadonnées : ajoutez TLS pour ces dernières.</li>
+<li>La clé de signature du Hub doit être stable et faire au moins 32 caractères en production.</li>
+<li>L'egress filtre en deux points complémentaires : l'agent avant chiffrement, le Hub au relais.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 14 -->
+<div class="chapitre">
+<div class="repere-chapitre intermediaire">Partie II — Intermédiaire</div>
+<h2 class="titre-chapitre">14. Identité vérifiable et authentification</h2>
+
+<h3>14.1 L'authentification JWT</h3>
+
+<p>Après l'enregistrement, chaque message porte un <strong>jeton JWT</strong> signé avec
+la clé Ed25519 du Hub (algorithme EdDSA). Un pair fédéré vérifie ce jeton
+avec la clé publique correspondante — il n'existe <strong>aucun secret de
+signature partagé</strong> entre deux organisations.</p>
+
+<h3>14.2 Comptes de service (clés d'API)</h3>
+
+<p>Une clé d'API identifie un compte de service — typiquement un
+orchestrateur ou une console d'administration — plutôt qu'un agent qui
+s'auto-déclare. Le Hub n'en conserve <strong>que l'empreinte SHA-256</strong> : il peut
+vérifier une clé présentée, jamais la révéler, même si sa configuration
+venait à fuiter.</p>
+
+<table>
+<tr><th>Priorité</th><th>Source</th></tr>
+<tr><td>1</td><td><code>INTERMESH_API_KEYS</code> (JSON en ligne) — Kubernetes, intégration continue</td></tr>
+<tr><td>2</td><td><code>INTERMESH_API_KEYS_FILE</code> — chemin de fichier explicite</td></tr>
+<tr><td>3</td><td><code>~/.intermesh/api_keys.json</code> — développement local</td></tr>
+<tr><td>4</td><td>aucune — comptes de service <strong>désactivés</strong></td></tr>
+</table>
+
+<pre>intermesh apikey --org acme --roles admin,service_account --permissions "admin:*"</pre>
+
+<p>La commande affiche la valeur de la clé <strong>une seule fois</strong>. Le Hub ne
+pourra ensuite jamais la retrouver — seule son empreinte reste stockée.</p>
+
+<div class="encart danger">
+<span class="titre-encart">Ne jamais faire</span>
+<code>--dev-api-keys</code> active deux clés publiques, réservées aux tests : leurs
+valeurs figurent dans le code source du dépôt public. Le Hub affiche un
+avertissement en rouge à chaque démarrage dans ce mode. Ne l'utilisez
+jamais sur un Hub exposé.
+</div>
+
+<h3>14.3 Vérification à temps constant</h3>
+
+<p>La comparaison d'une clé présentée à son empreinte stockée utilise
+<code>secrets.compare_digest</code>, et non un simple <code>==</code>. Une comparaison
+naïve laisse fuir, par le temps de réponse, le nombre d'octets déjà
+corrects — assez d'information pour reconstruire une clé valide octet par
+octet, à force de tentatives.</p>
+
+<h3>14.4 Persistance de l'état</h3>
+
+<p>Le Hub conserve son état par défaut dans une base SQLite locale (créée en
+permissions <code>0600</code>) :</p>
+
+<table>
+<tr><th>Donnée</th><th>Persistée</th><th>Raison</th></tr>
+<tr><td>Registre d'identités</td><td>Oui</td><td><code>who_is</code> et <code>discover</code> restent utilisables pour un agent hors ligne.</td></tr>
+<tr><td>Tâches et leur statut</td><td>Oui</td><td>Une tâche en cours au moment de l'arrêt n'est pas perdue.</td></tr>
+<tr><td>Journal d'audit</td><td>Oui</td><td>Un journal qui disparaît au redémarrage ne prouve rien à un auditeur.</td></tr>
+<tr><td>Connexions actives</td><td>Non</td><td>Être « en ligne » est une propriété du processus, pas un fait durable.</td></tr>
+</table>
+
+<p>Le journal d'audit persisté est <strong>revérifié au démarrage</strong> : si une
+entrée a été modifiée directement dans la base, en dehors du Hub, la chaîne
+de Merkle est rompue et le Hub l'annonce explicitement :</p>
+
+<pre>🚨 ALERTE : la chaîne d'audit persistée est rompue.
+   Le journal a été modifié en dehors du Hub.</pre>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Les jetons JWT sont signés en Ed25519 ; aucun secret n'est partagé entre organisations fédérées.</li>
+<li>Le Hub ne stocke que l'empreinte des clés d'API, jamais leur valeur.</li>
+<li>La comparaison de clés se fait à temps constant, pour ne pas laisser fuir d'information par le chronométrage.</li>
+<li>L'état persisté inclut le journal d'audit, revérifié à chaque démarrage.</li>
+</ul>
+</div>
+</div>
+
+<!-- =========================================================== PARTIE III -->
+<div class="page-partie expert">
+  <div class="num-partie">PARTIE III</div>
+  <h1>Expert</h1>
+  <p class="chapo">Déployer un Hub accessible depuis l'extérieur, fédérer plusieurs organisations, répartir la charge sur une grappe, dimensionner la capacité, durcir l'authentification, et faire tourner l'ensemble en réseau totalement fermé.</p>
+  <div class="liste-chapitres">
+    <div>15 — Exposer un Hub à distance</div>
+    <div>16 — Identité auto-déclarée : le modèle de confiance</div>
+    <div>17 — Fédération inter-organisations</div>
+    <div>18 — Grappe : plusieurs Hubs, un seul maillage</div>
+    <div>19 — Capacité et contre-pression</div>
+    <div>20 — Authentification mutuelle TLS</div>
+    <div>21 — Déploiement en réseau fermé</div>
+    <div>22 — Bonnes pratiques et pièges connus</div>
+  </div>
+</div>
+
+<!-- =============================================== CHAPITRE 15 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">15. Exposer un Hub à distance</h2>
+
+<p>Par défaut, un Hub écoute sur <code>localhost</code> et seule la machine qui
+l'héberge peut lui parler. Ce chapitre couvre l'autre cas : un Hub sur un
+serveur, accessible depuis des agents ailleurs sur le réseau.</p>
+
+<h3>15.1 La règle qui décide de tout</h3>
+
+<div class="encart danger">
+<span class="titre-encart">Règle absolue</span>
+Un Hub distant doit servir en <code>wss://</code>, jamais en <code>ws://</code>. Ce n'est pas
+une recommandation : une page servie en HTTPS ne peut techniquement pas
+ouvrir une connexion WebSocket en clair vers une autre machine — le
+navigateur refuse dans le constructeur <code>WebSocket</code> lui-même, avant même
+d'envoyer le moindre paquet.
+</div>
+
+<p><code>localhost</code> est la seule exception : les navigateurs le considèrent
+comme une origine de confiance, ce qui explique pourquoi le développement
+local en <code>ws://</code> fonctionne sans TLS.</p>
+
+<h3>15.2 Option A — le Hub termine le TLS lui-même</h3>
+
+<p>À utiliser sur un serveur que vous administrez (VPS, machine dédiée).</p>
+
+<pre>intermesh hub \
+  --port 8765 \
+  --org votre-org \
+  --tls-cert /etc/letsencrypt/live/hub.exemple.com/fullchain.pem \
+  --tls-key  /etc/letsencrypt/live/hub.exemple.com/privkey.pem</pre>
+
+<p><code>--tls-cert</code> et <code>--tls-key</code> doivent être fournis <strong>ensemble</strong> — le
+Hub refuse de démarrer avec un seul des deux. Il écoute alors sur toutes
+les interfaces (<code>0.0.0.0</code>), donc n'oubliez pas d'ouvrir le port dans le
+pare-feu :</p>
+
+<pre>sudo ufw allow 8765/tcp</pre>
+
+<div class="encart attention">
+<span class="titre-encart">Les certificats expirent</span>
+Certbot les renouvelle automatiquement, mais le Hub les lit <strong>au
+démarrage</strong> — il faut le redémarrer après chaque renouvellement, sans quoi
+il continue de servir un certificat expiré que chaque navigateur refusera.
+</div>
+
+<h3>15.3 Option B — un relais inverse termine le TLS</h3>
+
+<p>À utiliser si la machine fait déjà tourner nginx ou Caddy. Le Hub tourne
+en <code>ws://</code> simple, lié à <code>localhost</code>, et le relais gère le TLS :</p>
+
+<pre>hub.exemple.com {
+    reverse_proxy localhost:8765
+}</pre>
+
+<div class="encart danger">
+<span class="titre-encart">Le contrôle d'origine ne protège plus rien</span>
+Derrière un relais inverse, <strong>toute connexion paraît locale</strong> au Hub — le
+relais est son unique interlocuteur TCP. L'identité auto-déclarée
+redevient donc acceptée depuis l'internet entier, malgré les apparences.
+<code>X-Forwarded-For</code> n'est délibérément pas consulté : un client fournit
+cet en-tête lui-même à moins qu'un relais de confiance ne le réécrive, donc
+lui faire confiance reviendrait à ne vérifier qu'une formalité.
+Dans ce scénario, <strong><code>--require-api-key</code> est le seul réglage qui
+tienne.</strong> Le Hub affiche un avertissement au démarrage si aucune clé n'est
+configurée, précisément pour ce cas.
+</div>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Identifiez, sur votre propre infrastructure, laquelle des deux options
+s'applique. Si un relais inverse existe déjà, vérifiez que
+<code>--require-api-key</code> est bien activé sur le Hub qu'il protège.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Un Hub distant exige <code>wss://</code> — aucune exception hors de <code>localhost</code>.</li>
+<li>Le Hub peut terminer le TLS lui-même, ou le déléguer à un relais inverse.</li>
+<li>Derrière un relais, le contrôle d'origine ne protège plus rien : seule une clé d'API obligatoire tient.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 16 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">16. Identité auto-déclarée : le modèle de confiance</h2>
+
+<p>Sans clé d'API, un agent qui s'enregistre <strong>choisit lui-même</strong> son
+organisation, ses rôles et ses permissions. C'est un confort de
+développement sur <code>localhost</code> — et un risque grave depuis une adresse
+distante, où n'importe qui connaissant l'adresse pourrait se déclarer
+administrateur de n'importe quelle organisation.</p>
+
+<p>Le Hub écoute toujours sur toutes les interfaces réseau : « exposé » ne se
+déduit d'aucun réglage. La décision se prend <strong>par connexion</strong>, selon son
+origine :</p>
+
+<table>
+<tr><th>Origine de la connexion</th><th>Sans clé d'API</th><th>Avec une clé valide</th></tr>
+<tr><td>Depuis <code>localhost</code></td><td>Autorisé</td><td>Autorisé</td></tr>
+<tr><td>Depuis ailleurs</td><td><strong>Refusé</strong></td><td>Autorisé</td></tr>
+</table>
+
+<p>Un enregistrement refusé reçoit le code <code>SELF_DECLARED_REFUSED</code>, avec
+l'indication de la marche à suivre. C'est le comportement <strong>par défaut</strong> —
+rien à activer.</p>
+
+<h3>Les deux réglages qui l'ajustent</h3>
+
+<pre># Réseau privé ou test : accepter l'auto-déclaration à distance.
+intermesh hub --allow-self-declared
+
+# Le plus strict : exiger une clé partout, y compris depuis localhost.
+intermesh hub --require-api-key</pre>
+
+<div class="encart mesure">
+<span class="titre-encart">Ce qui a été mesuré</span>
+La console d'exploitation en donne un exemple concret : elle déclare les
+rôles <code>["admin", "observer"]</code> à l'enregistrement. Sans clé d'API, cette
+auto-déclaration serait refusée sur un Hub distant — exactement le
+comportement voulu, puisqu'un administrateur ne devrait jamais pouvoir
+s'auto-proclamer depuis un poste inconnu.
+</div>
+
+<h3>Émettre des clés</h3>
+
+<pre>intermesh apikey --org votre-org</pre>
+
+<p>Les clés sont lues depuis <code>INTERMESH_API_KEYS</code> (JSON) ou
+<code>~/.intermesh/api_keys.json</code>.</p>
+
+<div class="encart danger">
+<span class="titre-encart">Détenir une clé n'est pas tout autoriser</span>
+Une clé d'API authentifie, elle n'autorise pas tout par défaut. Si le Hub
+est accessible publiquement, ajoutez une restriction au niveau réseau
+également — liste d'accès pare-feu, VPN, ou réseau privé.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Sans clé, un agent choisit lui-même son identité — accepté seulement depuis <code>localhost</code> par défaut.</li>
+<li><code>--require-api-key</code> exige une clé partout, y compris en local : le seul réglage fiable derrière un relais.</li>
+<li>Une clé authentifie ; elle ne remplace pas une restriction réseau sur un Hub exposé.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 17 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">17. Fédération inter-organisations</h2>
+
+<p>Deux organisations, chacune avec son propre Hub, peuvent se relier pour
+que leurs agents collaborent — sans jamais partager de secret ni fusionner
+leurs infrastructures.</p>
+
+<h3>17.1 Établir un lien de fédération</h3>
+
+<pre>intermesh hub --port 8766 --org globex</pre>
+<pre>intermesh hub --port 8765 --org acme --peer globex=ws://localhost:8766</pre>
+
+<p><code>--peer ORG=ws(s)://host:port</code> ouvre un lien fédéré, répétable pour
+plusieurs partenaires, et se reconnecte automatiquement en cas de coupure.
+Un agent du Hub Acme peut ensuite adresser directement
+<code>globex/financial_engine</code> — messages, tâches et résultats sont relayés
+sur le lien. <strong>Sans lien actif, l'adressage inter-organisations reste
+refusé</strong> par l'isolement multi-tenant.</p>
+
+<h3>17.2 Ce qui s'échange à la poignée de main</h3>
+
+<p>Les Hubs pairs échangent leurs <strong>clés publiques</strong> à la connexion, jamais
+un secret partagé. Chaque Hub signe ses jetons avec une clé privée Ed25519
+qui ne quitte jamais sa machine : un pair peut <strong>vérifier</strong> l'origine d'un
+message relayé, mais ne peut jamais <strong>en forger un</strong> au nom d'une autre
+organisation. Une demande de pairage sans clé publique est refusée d'office.</p>
+
+<h3>17.3 Le lien lui-même doit être infalsifiable</h3>
+
+<p>Cette poignée de main portant les clés, le canal qui la transporte doit
+être protégé. Au-delà de <code>localhost</code>, servez en TLS des deux côtés :</p>
+
+<pre>intermesh hub --port 8766 --org globex \
+  --tls-cert hub.crt --tls-key hub.key</pre>
+<pre>intermesh hub --port 8765 --org acme \
+  --peer globex=wss://hub.globex.com:8766 --peer-ca globex-ca.crt</pre>
+
+<p><code>--peer-ca</code> désigne l'autorité de certification du partenaire quand elle
+n'est pas déjà dans le magasin de confiance système ; la vérification du
+certificat et du nom d'hôte reste active dans tous les cas.</p>
+
+<div class="encart danger">
+<span class="titre-encart">Le pairage en clair vers un hôte distant est refusé</span>
+Il laisserait un attaquant en position d'interception substituer les clés
+publiques pendant la poignée de main. <code>localhost</code> est exempté (développement
+local) ; <code>--allow-insecure-peering</code> lève l'interdiction si vous maîtrisez
+entièrement le réseau — à réserver à des cas très spécifiques.
+</div>
+
+<h3>17.4 Contrôler ce qui sort réellement</h3>
+
+<p>Le pairage dit <strong>qui</strong> peut parler à qui. La politique d'egress, vue au
+chapitre 13, dit <strong>quoi</strong> peut traverser la frontière — elle est
+indispensable dès qu'une fédération est en place, sans quoi tout le
+contenu non chiffré de bout en bout traverse sans filtre.</p>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Reproduisez l'exemple Acme/Globex du chapitre en local avec deux Hubs sur
+deux ports différents. Depuis un agent Acme, adressez un agent Globex par
+son nom qualifié <code>globex/nom_agent</code>. Coupez le lien de pairage et
+observez le refus d'adressage inter-organisations.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><code>--peer ORG=url</code> établit un lien fédéré ; sans lien, l'isolement multi-tenant refuse tout adressage inter-organisations.</li>
+<li>Seules des clés publiques s'échangent — jamais de secret partagé — donc un pair ne peut jamais forger un message au nom d'un autre.</li>
+<li>Le pairage en clair vers un hôte distant est refusé par construction ; TLS est obligatoire hors <code>localhost</code>.</li>
+<li>L'egress complète le pairage : qui peut parler n'est pas la même question que quoi peut sortir.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 18 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">18. Grappe : plusieurs Hubs, un seul maillage</h2>
+
+<p>Un seul Hub est un seul processus : une seule machine, un seul point de
+défaillance, et un plafond de débit mesuré (chapitre 19). Plusieurs Hubs
+d'une <strong>même</strong> organisation peuvent servir un seul maillage ensemble —
+à ne pas confondre avec la fédération du chapitre 17, qui franchit une
+frontière d'organisation.</p>
+
+<h3>18.1 Démarrer une grappe</h3>
+
+<p>Chaque Hub d'une grappe a besoin de trois éléments partagés avec ses
+frères, et d'un élément qui lui est propre :</p>
+
+<pre>intermesh hub --port 8765 --org acme \
+  --state-dsn postgresql://utilisateur:motdepasse@db:5432/intermesh \
+  --secret-file /etc/intermesh/hub_secret \
+  --cluster-url ws://hub-1.interne:8765</pre>
+
+<table>
+<tr><th>Paramètre</th><th>Partagé entre frères ?</th><th>Rôle</th></tr>
+<tr><td><code>--state-dsn</code></td><td>Oui, identique</td><td>La même base PostgreSQL — sans elle, pas de table de présence commune, donc rien ne s'achemine entre Hubs.</td></tr>
+<tr><td><code>--secret-file</code></td><td>Oui, identique</td><td>La même clé de signature — un jeton émis par un Hub doit être accepté par les autres, et cette clé authentifie aussi les frères entre eux.</td></tr>
+<tr><td><code>--cluster-url</code></td><td>Propre à chaque Hub</td><td>L'adresse à laquelle <strong>ce</strong> Hub est joignable par les autres. Sa présence active le mode grappe.</td></tr>
+<tr><td><code>--hub-id</code></td><td>Propre, optionnel</td><td>Généré automatiquement si absent.</td></tr>
+</table>
+
+<p>Placez un répartiteur de charge devant la grappe et pointez les agents
+vers lui — ils se connectent où qu'ils atterrissent.</p>
+
+<h3>18.2 Comment un message trouve son chemin</h3>
+
+<p>Chaque Hub enregistre, dans la table <code>presence</code> partagée, quels agents
+lui sont connectés. Quand un Hub doit livrer à un agent qu'il ne détient
+pas, il consulte cette table, trouve le Hub propriétaire, et transmet le
+message par un lien direct entre les deux Hubs. Le Hub receveur livre
+localement et <strong>ne retransmet jamais une seconde fois</strong> — un seul saut,
+ce qui rend les boucles impossibles sans avoir à les compter.</p>
+
+<p>Les entrées de présence portent un horodatage, rafraîchi toutes les 15
+secondes. Une entrée vieille de plus de 45 secondes est ignorée : un Hub
+tué brutalement ne peut pas nettoyer derrière lui, et sans expiration ses
+frères continueraient d'acheminer dans le vide.</p>
+
+<h3>18.3 Démarrage à froid d'une grappe</h3>
+
+<div class="encart mesure">
+<span class="titre-encart">Corrigé et mesuré</span>
+Des Hubs démarrés simultanément sur une base PostgreSQL vierge se
+disputaient auparavant la création du schéma, provoquant l'échec des
+premiers. Ce défaut ne touchait <strong>que</strong> le tout premier démarrage
+d'une grappe — précisément le moment où personne ne s'y attend, puisque
+c'est le cas d'usage typique d'un déploiement Kubernetes ou docker-compose
+qui lance tous ses Hubs d'un coup. C'est corrigé : cinq Hubs démarrent
+désormais à froid sur une base vide sans aucune perte.
+</div>
+
+<h3>18.4 Ce que la grappe n'est pas</h3>
+
+<p><strong>Pas une fédération.</strong> La fédération franchit une frontière
+d'organisation : elle vérifie une signature Ed25519 et applique une
+politique d'egress à ce qui sort. La grappe reste à l'intérieur d'un seul
+tenant, donc ni l'une ni l'autre ne s'applique — un frère qui présente un
+jeton signé par une autre clé est refusé, et une demande de rejoindre la
+grappe venant d'une autre organisation est refusée d'emblée, avec un
+renvoi vers la fédération.</p>
+
+<p><strong>Pas une garantie absolue contre toute course.</strong> Si un agent change de
+Hub entre le moment où sa présence est consultée et celui où le message
+arrive, le Hub receveur enregistre l'événement plutôt que de deviner. Les
+tâches sont réassignées à la reconnexion ; un simple message sans réponse
+attendue, dans cette fenêtre précise, peut être perdu.</p>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Une grappe partage un état PostgreSQL et une clé de signature entre plusieurs Hubs d'une même organisation.</li>
+<li>Le routage entre Hubs se fait en un seul saut, via une table de présence partagée avec expiration.</li>
+<li>La grappe n'est ni de la fédération, ni une garantie absolue contre les conditions de course.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 19 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">19. Capacité et contre-pression</h2>
+
+<p>Un Hub qui accepte tout n'est pas un Hub qui peut tout faire. Avant la
+contre-pression, un Hub saturé mettait tout simplement les tâches en file
+d'attente en silence, la latence grimpait, et les clients finissaient par
+mourir sur un dépassement de délai de <em>ping</em> WebSocket — sans aucun
+signal expliquant que le Hub était en cause.</p>
+
+<h3>19.1 Le plafond mesuré</h3>
+
+<table>
+<tr><th>Mesure</th><th>Valeur</th></tr>
+<tr><td>Tâches soutenues sur un Hub</td><td><strong>≈ 11 / seconde</strong></td></tr>
+<tr><td>Zone saine, chiffrement E2E actif</td><td><strong>≤ 8 / seconde</strong>, p50 sous la seconde</td></tr>
+<tr><td>Indépendant de la taille de la flotte</td><td>78 agents et 234 agents atteignent le même plafond</td></tr>
+</table>
+
+<p>Ce dernier point est le plus important à retenir : <strong>c'est le Hub qui
+borne, pas le nombre d'agents.</strong> Ajouter des agents n'ajoute pas de débit
+de tâches — ajouter des Hubs, si (voir chapitre 18).</p>
+
+<div class="encart mesure">
+<span class="titre-encart">Les requêtes vont bien plus loin</span>
+Une requête (<code>ask</code>) est beaucoup moins coûteuse qu'une tâche : environ
+1 500/s contre 11/s. Une tâche traverse la persistance, les garde-fous, le
+séquestre éventuel et le journal d'audit Merkle ; une requête, non. Si un
+flux de travail peut s'exprimer en requêtes plutôt qu'en tâches, il ira
+environ cent fois plus loin.
+</div>
+
+<h3>19.2 Le comportement sous saturation</h3>
+
+<pre>intermesh hub --max-tasks-per-sec 8</pre>
+
+<p>Au-delà du budget, une soumission est <strong>refusée</strong>, jamais mise en file
+silencieusement. L'émetteur reçoit une erreur exploitable par une machine :</p>
+
+<pre>{
+  "code": "HUB_SATURATED",
+  "reason": "rate_limited",
+  "retry_after_ms": 121,
+  "queue_depth": 8,
+  "in_flight": 8,
+  "hub_tasks_per_sec_limit": 8,
+  "task_id": "…"
+}</pre>
+
+<p><code>reason</code> vaut <code>rate_limited</code>, <code>in_flight_limit</code> ou
+<code>task_queue_full</code> — trois murs distincts, trois réponses différentes.
+<code>retry_after_ms</code> indique le délai avant qu'un jeton soit réellement
+disponible : réessayer plus tôt ne fait qu'aggraver la congestion qu'on
+vient de rencontrer.</p>
+
+<h3>19.3 Réglages</h3>
+
+<table>
+<tr><th>Variable</th><th>Option CLI</th><th>Défaut</th><th>Borne</th></tr>
+<tr><td><code>INTERMESH_MAX_TASKS_PER_SEC</code></td><td><code>--max-tasks-per-sec</code></td><td>10</td><td>Soumissions par seconde, à l'échelle du Hub entier</td></tr>
+<tr><td><code>INTERMESH_MAX_TASKS_IN_FLIGHT</code></td><td><code>--max-tasks-in-flight</code></td><td>200</td><td>Tâches acceptées et pas encore terminées</td></tr>
+<tr><td><code>INTERMESH_MAX_TASK_QUEUE_DEPTH</code></td><td><code>--max-task-queue-depth</code></td><td>100</td><td>Tâches acceptées mais pas encore prises en charge</td></tr>
+<tr><td><code>INTERMESH_BACKPRESSURE_ENABLED</code></td><td><code>--no-backpressure</code></td><td>actif</td><td>Interrupteur général</td></tr>
+</table>
+
+<p>Ces valeurs par défaut viennent directement de la mesure ci-dessus, pas
+d'une intuition. Un déploiement qui mesure autre chose sur son propre
+matériel doit les ajuster — c'est pour cela que ce sont des réglages, pas
+des constantes figées.</p>
+
+<h3>19.4 Observer la charge</h3>
+
+<p>La commande d'administration <code>hub.info</code> porte un bloc <code>load</code>, pour
+que la saturation soit visible <strong>avant</strong> que les clients ne commencent à
+tomber en dépassement de délai :</p>
+
+<pre>"load": {
+  "in_flight": 12, "queue_depth": 4,
+  "accepted_total": 100, "rejected_total": 440,
+  "rejected_by_reason": {"rate_limited": 304, "task_queue_full": 136},
+  "saturation": {"in_flight_pct": 6, "queue_depth_pct": 4}
+}</pre>
+
+<p><code>saturation</code> est la paire à surveiller en priorité. <code>rejected_by_reason</code>
+indique <strong>quel</strong> mur est heurté — et les trois murs appellent des réponses
+différentes.</p>
+
+<h3>19.5 Pièges connus</h3>
+
+<div class="encart danger">
+<span class="titre-encart">Le quota par agent ne protège pas le Hub</span>
+Le garde-fou existant (60 tâches/minute par agent, hérité du système de
+garde-fous) arrête un agent devenu fou. Il ne fait rien contre cent agents
+parfaitement sages, chacun à un tiers de son propre quota : cela représente
+200 tâches/seconde, vingt fois ce qu'un Hub soutient. Les deux limites ne
+sont pas substituables l'une à l'autre.
+</div>
+
+<ul>
+<li><strong>Réessayer immédiatement après un refus</strong> convertit une surcharge
+brève en surcharge soutenue. Respectez <code>retry_after_ms</code>.</li>
+<li><strong>Soumettre à un agent hors ligne</strong> fait s'accumuler la tâche en file.
+Assez de tâches ainsi bloquées, et <code>queue_depth</code> atteint son plafond — le
+Hub refuse alors <strong>tout</strong>, y compris le travail destiné à des agents
+parfaitement disponibles. Vérifiez avec <code>discover</code> avant de soumettre.</li>
+<li><strong>Utiliser des tâches là où une requête suffirait</strong> gaspille un facteur
+cent de débit disponible.</li>
+</ul>
+
+<h3>19.6 Ce que la contre-pression ne protège pas</h3>
+
+<p>Elle agit quand un message est <strong>dépilé et analysé</strong> par le Hub. Un
+client qui inonde plus vite que le Hub ne lit sa connexion s'accumule dans
+le transport réseau, hors de portée du mécanisme — limitez en amont, sur un
+relais, si des clients non fiables peuvent atteindre le Hub directement.
+Rien n'est non plus annulé rétroactivement : baisser le budget ralentit les
+admissions, il ne délestera jamais ce qui est déjà en cours.</p>
+
+<div class="exercice">
+<span class="titre-encart">Exercice</span>
+Démarrez un Hub avec <code>--max-tasks-per-sec 2</code>. Envoyez rapidement une
+dizaine de tâches depuis un script, et observez les codes de refus reçus
+au-delà des deux premières.
+</div>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Un Hub soutient environ 11 tâches/seconde, quel que soit le nombre d'agents connectés.</li>
+<li>Au-delà du budget configuré, une tâche est refusée explicitement, avec le délai avant réessai.</li>
+<li>Le quota par agent (anti-abus) et le budget global du Hub (anti-saturation) sont deux mécanismes complémentaires, pas interchangeables.</li>
+<li><code>hub.info</code> expose la charge en temps réel, avant que la saturation ne devienne visible côté client.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 20 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">20. Authentification mutuelle TLS (mTLS)</h2>
+
+<p>Le Hub sait déjà servir en <code>wss://</code> : le trafic est chiffré, et l'agent
+vérifie le certificat du Hub. L'authentification mutuelle ajoute
+l'inverse : le Hub vérifie aussi <strong>le certificat du client</strong> avant
+d'accepter la connexion.</p>
+
+<h3>20.1 Activer l'exigence côté Hub</h3>
+
+<pre>intermesh hub \
+  --tls-cert hub.crt --tls-key hub.key \
+  --tls-client-ca autorite-interne.crt \
+  --require-api-key</pre>
+
+<p>Avec <code>--tls-client-ca</code>, un client sans certificat signé par cette
+autorité est refusé <strong>pendant la poignée de main TLS elle-même</strong> —
+avant le premier octet de protocole, donc avant tout enregistrement, toute
+clé d'API, et toute écriture au journal.</p>
+
+<div class="encart attention">
+<span class="titre-encart">Cela ne remplace pas les clés d'API</span>
+Le certificat atteste que la <strong>machine</strong> fait partie du parc autorisé ;
+la clé d'API dit <strong>quel agent</strong> se connecte et avec quels rôles. Un
+porteur de certificat valide mais sans clé d'API reste refusé sous
+<code>--require-api-key</code>. « On a du mTLS, donc on peut alléger les clés » est
+la mauvaise lecture à éviter : les deux contrôles se cumulent.
+</div>
+
+<h3>20.2 Présenter un certificat en tant que Hub</h3>
+
+<p>Quand ce Hub appelle un pair ou un frère de grappe qui exige lui-même
+l'authentification mutuelle, il présente son propre certificat :</p>
+
+<pre>intermesh hub --mtls-cert client.crt --mtls-key client.key ...</pre>
+
+<h3>20.3 Traçabilité</h3>
+
+<p>Le nom porté par le certificat client (son <em>common name</em>) est écrit
+dans le journal d'audit sur l'entrée d'enregistrement, sous
+<code>client_cert_cn</code>. Sans cette trace, l'authentification mutuelle
+refuserait bien les inconnus, mais sans jamais consigner qui elle a laissé
+entrer — la première question que pose une revue de sécurité. Seul le nom
+est journalisé, jamais le certificat lui-même : le journal d'audit ne
+porte aucune matière cryptographique.</p>
+
+<h3>20.4 Les liens de grappe aussi</h3>
+
+<p>Les liens entre Hubs frères d'une même grappe empruntent le même chemin
+TLS que les liens de fédération : une adresse <code>--cluster-url</code> en
+<code>wss://</code> est chiffrée, et présente un certificat client si l'authentification
+mutuelle est configurée sur le frère de destination.</p>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li><code>--tls-client-ca</code> exige un certificat client valide, vérifié avant tout protocole applicatif.</li>
+<li>Le certificat atteste la machine ; la clé d'API dit qui parle. Les deux se cumulent, ni ne se remplacent.</li>
+<li>Le nom du certificat client est journalisé pour la traçabilité, jamais le certificat lui-même.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 21 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">21. Déploiement en réseau fermé et Docker durci</h2>
+
+<p>Ce chapitre s'adresse au cas où la machine n'a <strong>aucune route vers
+Internet</strong>, et où quelqu'un doit répondre de ce qui y tourne — une banque,
+un hôpital, un site sensible.</p>
+
+<h3>21.1 Ce que le logiciel ne fait pas</h3>
+
+<p>Vérifié en lisant le code source, pas affirmé sur parole :</p>
+
+<ul>
+<li><strong>Aucune vérification de licence, aucune télémétrie, aucune analytique,
+aucun rapport de plantage.</strong> Il n'existe aucun code qui « appelle chez
+lui ». Un Hub coupé d'Internet se comporte exactement comme un Hub
+connecté.</li>
+<li><strong>Un seul appel sortant existe</strong> : le pont HTTP (<code>bridge.py</code>) envoie
+vers l'URL que <strong>vous</strong> lui indiquez avec <code>--http</code>. Il ne va nulle
+part ailleurs.</li>
+<li><strong>Trois dépendances Python</strong> : <code>websockets</code>, <code>PyJWT</code>,
+<code>cryptography</code>, plus <code>psycopg</code> si PostgreSQL est utilisé. Toutes
+installables depuis un miroir interne.</li>
+</ul>
+
+<h3>21.2 La pile Docker durcie</h3>
+
+<pre>cp docker/hardened.env.example docker/hardened.env
+chmod 600 docker/hardened.env          # puis remplir les trois secrets
+
+docker compose --env-file docker/hardened.env \
+               -f docker-compose.hardened.yml up -d</pre>
+
+<div class="encart attention">
+<span class="titre-encart"><code>--env-file</code> n'est pas facultatif</span>
+<code>env_file:</code> injecte des variables <em>dans</em> les conteneurs, mais
+l'interpolation <code>${...}</code> du fichier compose lui-même est résolue par la
+CLI Docker contre son propre environnement. Sans le drapeau
+<code>--env-file</code>, la pile s'arrête en réclamant des variables qu'elle
+semble pourtant déjà porter.
+</div>
+
+<table>
+<tr><th>Aspect</th><th>Comportement de la pile durcie</th></tr>
+<tr><td>État</td><td>PostgreSQL, pas un fichier attaché au conteneur</td></tr>
+<tr><td>Enregistrement</td><td>Clé d'API exigée partout, y compris depuis localhost</td></tr>
+<tr><td>Console</td><td>Clé d'API exigée pour l'ouvrir ; refusée sans elle</td></tr>
+<tr><td>TLS mutuel</td><td>Disponible via <code>--tls-client-ca</code>, désactivé sans autorité fournie</td></tr>
+<tr><td>Saturation</td><td>Refus explicite au-delà du budget, jamais une file silencieuse</td></tr>
+<tr><td>Réseau de la base</td><td>Interne — aucune route sortante, aucun port publié</td></tr>
+<tr><td>Systèmes de fichiers</td><td>Lecture seule, avec des zones temporaires pour les rares chemins d'écriture</td></tr>
+<tr><td>Privilèges</td><td>Sans droits root (uid 10001), toutes les capacités système retirées</td></tr>
+<tr><td>Images</td><td>Épinglées par empreinte, jamais par étiquette</td></tr>
+<tr><td>Ports publiés</td><td>Boucle locale uniquement</td></tr>
+</table>
+
+<h3>21.3 Vérifications, pas affirmations</h3>
+
+<p>À exécuter contre la pile réellement démarrée :</p>
+
+<pre>docker exec intermesh-hub id
+# uid=10001(intermesh) gid=10001(intermesh)
+
+docker exec intermesh-hub touch /app/test
+# touch: cannot touch '/app/test': Read-only file system
+
+docker exec intermesh-postgres getent hosts pypi.org
+# (aucune réponse — la résolution DNS échoue)
+
+nc -z 127.0.0.1 5432
+# (le port de la base n'est pas publié)</pre>
+
+<h3>21.4 Construire sans index de paquets</h3>
+
+<p>La construction de l'image exige un index <code>pip</code>. Sur une machine sans
+Internet, pointez vers votre miroir interne :</p>
+
+<pre># Dans docker/Dockerfile.hub.hardened, à côté de pip install :
+#   --index-url https://pypi.interne.exemple/simple --trusted-host pypi.interne.exemple</pre>
+
+<p>Ou construisez l'image sur une machine connectée et transférez-la :</p>
+
+<pre>docker save intermesh/hub:hardened | gzip > intermesh-hub.tar.gz
+# transfert, puis sur la machine fermée :
+gunzip -c intermesh-hub.tar.gz | docker load</pre>
+
+<p>Les images de base sont épinglées par empreinte cryptographique, donc
+l'image construite ailleurs est <em>l'image</em> qui tourne ici — c'est le but
+d'épingler par empreinte plutôt que par étiquette.</p>
+
+<h3>21.5 La console est le Control Plane, en version locale</h3>
+
+<p>La console (<code>sdk-python/intermesh/console/</code>) et le Control Plane
+hébergé servent la même application React. La version locale se distingue
+sur trois points seulement : pas de compte (connexion directe au Hub
+indiqué), une police système plutôt qu'une police téléchargée — ce qui
+permet de la <strong>construire sans aucun réseau</strong> —, et l'absence des routes
+qui appartiennent au site hébergé (devis, invitations, licences).</p>
+
+<h3>21.6 Ce qui manque encore pour un déploiement réglementé</h3>
+
+<p>Nommé plutôt que passé sous silence, car une revue de sécurité le
+trouvera de toute façon :</p>
+
+<ul>
+<li><strong>Pas d'annuaire LDAP ou Active Directory.</strong> Les agents comme la
+console s'authentifient par clé d'API — adapté à des programmes, moins à
+des personnes : une clé est partagée, pas attribuable individuellement.</li>
+<li><strong>Pas d'intégration HSM.</strong> La clé de signature est un secret
+d'environnement, pas un module matériel dédié.</li>
+<li><strong>Pas de nomenclature logicielle (SBOM), ni d'images signées, ni
+d'attestation de construction reproductible.</strong> L'épinglage par empreinte
+est un plancher, pas un substitut.</li>
+</ul>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>Le logiciel ne contient aucun appel réseau caché ; un seul point de sortie explicite existe (<code>bridge.py --http</code>).</li>
+<li>La pile Docker durcie combine PostgreSQL, clés obligatoires, systèmes de fichiers en lecture seule et images épinglées.</li>
+<li>La console se construit sans aucun accès réseau grâce à la police système.</li>
+<li>LDAP, HSM et SBOM restent des manques assumés — à considérer avant un déploiement réglementé.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== CHAPITRE 22 -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Partie III — Expert</div>
+<h2 class="titre-chapitre">22. Bonnes pratiques et pièges connus</h2>
+
+<p>Synthèse des pièges rencontrés en conditions réelles, chacun documenté
+dans le code source ou les guides techniques du projet.</p>
+
+<h3>22.1 Développement</h3>
+<table>
+<tr><th>Piège</th><th>Remède</th></tr>
+<tr><td><code>await</code> au niveau module en Python</td><td>Erreur de syntaxe immédiate. Utilisez <code>agent.run()</code> ou enveloppez dans <code>async def main(): ...</code> + <code>asyncio.run(main())</code>.</td></tr>
+<tr><td>Fonction synchrone lourde dans <code>from_callable</code></td><td>Gèle toute la boucle asyncio. Enveloppez avec <code>asyncio.to_thread(...)</code>.</td></tr>
+<tr><td><code>@intermesh_service</code> remplace la fonction décorée</td><td>Elle n'est plus appelable comme une fonction ordinaire ensuite — normal, pas un bug.</td></tr>
+</table>
+
+<h3>22.2 Sécurité</h3>
+<table>
+<tr><th>Piège</th><th>Remède</th></tr>
+<tr><td><code>--dev-api-keys</code> en production</td><td>Jamais. Les valeurs figurent dans le dépôt public.</td></tr>
+<tr><td>Relais inverse sans <code>--require-api-key</code></td><td>Le contrôle d'origine ne protège plus rien : toute connexion paraît locale.</td></tr>
+<tr><td>Pairage fédéré en <code>ws://</code> vers un hôte distant</td><td>Refusé par construction, hors <code>localhost</code> — n'utilisez <code>--allow-insecure-peering</code> qu'en réseau totalement maîtrisé.</td></tr>
+<tr><td>mTLS considéré comme substitut des clés d'API</td><td>Les deux se cumulent ; un certificat valide sans clé reste refusé sous <code>--require-api-key</code>.</td></tr>
+</table>
+
+<h3>22.3 Capacité</h3>
+<table>
+<tr><th>Piège</th><th>Remède</th></tr>
+<tr><td>Compter sur le quota par agent pour protéger le Hub</td><td>Cent agents sages dépassent vingt fois le plafond du Hub. Configurez la contre-pression globale.</td></tr>
+<tr><td>Réessayer immédiatement après <code>HUB_SATURATED</code></td><td>Aggrave la congestion. Respectez <code>retry_after_ms</code>.</td></tr>
+<tr><td>Soumettre à un agent hors ligne</td><td>La tâche s'accumule en file jusqu'à saturer <code>queue_depth</code> pour tout le monde. Vérifiez avec <code>discover</code> d'abord.</td></tr>
+<tr><td>Utiliser des tâches là où une requête suffit</td><td>Facteur cent de débit perdu inutilement.</td></tr>
+</table>
+
+<h3>22.4 Exploitation</h3>
+<table>
+<tr><th>Piège</th><th>Remède</th></tr>
+<tr><td>Redémarrer un Hub sans redémarrer après renouvellement de certificat</td><td>Le certificat est lu au démarrage seulement — un renouvellement Certbot sans redémarrage sert un certificat expiré.</td></tr>
+<tr><td>Changer <code>INTERMESH_HUB_SECRET</code> sans prévenir</td><td>Éjecte instantanément toute la flotte connectée — aucune rotation sans coupure n'existe à ce jour.</td></tr>
+<tr><td>Exécutants non idempotents</td><td>Une tâche interrompue est réémise depuis le début, jamais reprise en cours — un exécutant qui n'est pas rejouable en toute sécurité créera des effets de bord dupliqués.</td></tr>
+</table>
+
+<div class="resume-chapitre">
+<span class="titre-encart">Ce qu'il faut retenir</span>
+<ul>
+<li>La grande majorité des pièges viennent d'un contrôle non cumulé avec un autre — clé d'API et mTLS, quota par agent et budget global.</li>
+<li>Chaque refus explicite du protocole (<code>SELF_DECLARED_REFUSED</code>, <code>HUB_SATURATED</code>) porte l'action corrective à prendre.</li>
+</ul>
+</div>
+</div>
+
+<!-- =============================================== ANNEXE A -->
+<div class="chapitre annexe-cli">
+<div class="repere-chapitre expert">Annexe</div>
+<h2 class="titre-chapitre">Annexe A — Référence complète de la CLI</h2>
+
+<h4>intermesh hub</h4>
+<table>
+<tr><th>Option</th><th>Rôle</th></tr>
+<tr><td><code>--port</code></td><td>Port d'écoute (défaut 8765).</td></tr>
+<tr><td><code>--org</code></td><td>Organisation portée par ce Hub.</td></tr>
+<tr><td><code>--ephemeral-state</code></td><td>État en mémoire, rien sur disque.</td></tr>
+<tr><td><code>--state-file</code></td><td>Chemin de la base d'état SQLite.</td></tr>
+<tr><td><code>--state-dsn</code></td><td>Base PostgreSQL, pour découpler l'état de la machine.</td></tr>
+<tr><td><code>--cluster-url</code></td><td>Adresse à laquelle ce Hub est joignable par ses frères de grappe.</td></tr>
+<tr><td><code>--hub-id</code></td><td>Identifiant de ce Hub dans la grappe (généré si absent).</td></tr>
+<tr><td><code>--allow-self-declared</code></td><td>Accepte l'identité auto-déclarée depuis des connexions distantes.</td></tr>
+<tr><td><code>--require-api-key</code></td><td>Exige une clé partout, y compris depuis <code>localhost</code>.</td></tr>
+<tr><td><code>--max-agents</code></td><td>Plafond d'agents simultanés (0 = illimité).</td></tr>
+<tr><td><code>--ephemeral-secret</code></td><td>Clé de signature JWT jetable.</td></tr>
+<tr><td><code>--secret-file</code></td><td>Chemin du fichier de clé JWT.</td></tr>
+<tr><td><code>--snapshot-dir</code></td><td>Dossier des instantanés d'état.</td></tr>
+<tr><td><code>--dev-api-keys</code></td><td>Active des clés de démonstration — jamais en production.</td></tr>
+<tr><td><code>--peer</code></td><td><code>ORG=wss://host:port</code> — ouvre un lien de fédération.</td></tr>
+<tr><td><code>--tls-cert</code> / <code>--tls-key</code></td><td>Certificat et clé pour servir en <code>wss://</code>.</td></tr>
+<tr><td><code>--tls-client-ca</code></td><td>Autorité de certification des clients — active l'authentification mutuelle.</td></tr>
+<tr><td><code>--mtls-cert</code> / <code>--mtls-key</code></td><td>Certificat que ce Hub présente à ses pairs/frères.</td></tr>
+<tr><td><code>--peer-ca</code></td><td>Autorité de certification d'un pair (PKI privée).</td></tr>
+<tr><td><code>--allow-insecure-peering</code></td><td>Autorise le pairage en clair vers un hôte distant.</td></tr>
+<tr><td><code>--max-tasks-per-sec</code></td><td>Budget global de tâches par seconde (défaut 10).</td></tr>
+<tr><td><code>--max-tasks-in-flight</code></td><td>Plafond de tâches acceptées non terminées (défaut 200).</td></tr>
+<tr><td><code>--max-task-queue-depth</code></td><td>Profondeur de file avant refus (défaut 100).</td></tr>
+<tr><td><code>--no-backpressure</code></td><td>Désactive le refus sous saturation.</td></tr>
+<tr><td><code>--approval-policy</code></td><td>Politique de validation humaine (fichier JSON).</td></tr>
+<tr><td><code>--egress-policy</code></td><td>Politique de filtrage de sortie (fichier JSON).</td></tr>
+</table>
+
+<h4>intermesh serve</h4>
+<table>
+<tr><th>Option</th><th>Rôle</th></tr>
+<tr><td><code>--name</code> / <code>-n</code></td><td>Nom de l'agent (obligatoire).</td></tr>
+<tr><td><code>--exec</code></td><td>Commande lancée par tâche (JSON entrée/sortie standard).</td></tr>
+<tr><td><code>--http</code></td><td>URL recevant la tâche en <code>POST</code> JSON.</td></tr>
+<tr><td><code>--capability</code> / <code>-c</code></td><td>Capacité annoncée, répétable.</td></tr>
+<tr><td><code>--org</code></td><td>Organisation.</td></tr>
+<tr><td><code>--hub</code></td><td>URL du Hub cible.</td></tr>
+<tr><td><code>--timeout</code></td><td>Délai maximal accordé au programme externe.</td></tr>
+<tr><td><code>--no-encrypt</code></td><td>Désactive le chiffrement E2E (débogage uniquement).</td></tr>
+</table>
+
+<h4>intermesh ping / ask / task</h4>
+<table>
+<tr><th>Commande</th><th>Syntaxe</th></tr>
+<tr><td><code>ping</code></td><td><code>intermesh ping &lt;agent&gt; [--hub URL] [--timeout N]</code></td></tr>
+<tr><td><code>ask</code></td><td><code>intermesh ask &lt;agent&gt; '&lt;JSON&gt;' [--hub URL] [--timeout N]</code></td></tr>
+<tr><td><code>task</code></td><td><code>intermesh task &lt;agent&gt; "&lt;titre&gt;" '&lt;JSON&gt;' [--hub URL] [--timeout N]</code></td></tr>
+</table>
+
+<h4>intermesh discover</h4>
+<table>
+<tr><th>Option</th><th>Rôle</th></tr>
+<tr><td><code>--capability</code> / <code>-c</code></td><td>Filtrer par capacité.</td></tr>
+<tr><td><code>--role</code> / <code>-r</code></td><td>Filtrer par rôle.</td></tr>
+</table>
+
+<h4>intermesh snapshot</h4>
+<table>
+<tr><th>Sous-commande</th><th>Rôle</th></tr>
+<tr><td><code>create</code></td><td>Créer un instantané (<code>--name</code>).</td></tr>
+<tr><td><code>list</code></td><td>Lister les instantanés existants.</td></tr>
+<tr><td><code>restore</code></td><td>Restaurer un instantané par son nom.</td></tr>
+<tr><td><code>delete</code></td><td>Supprimer un instantané.</td></tr>
+</table>
+<p style="font-size:9pt;color:#5a6070;">Options communes : <code>--api-key</code> (clé admin), <code>--encrypt</code> (chiffre/déchiffre le fichier).</p>
+
+<h4>intermesh keygen</h4>
+<table>
+<tr><th>Option</th><th>Rôle</th></tr>
+<tr><td><code>--out</code> / <code>-o</code></td><td>Chemin de la clé privée générée (la publique reçoit l'extension <code>.pub</code>).</td></tr>
+</table>
+
+<h4>intermesh dashboard / security-check / docs</h4>
+<p>Sans option obligatoire. <code>dashboard</code> lance la console locale sur le
+port 8080 ; <code>security-check</code> audite l'installation locale ;
+<code>docs</code> affiche la documentation embarquée.</p>
+</div>
+
+<!-- =============================================== ANNEXE B -->
+<div class="chapitre">
+<div class="repere-chapitre expert">Annexe</div>
+<h2 class="titre-chapitre">Annexe B — Glossaire</h2>
+
+<dl class="glossaire">
+<dt>Agent</dt>
+<dd>Tout programme connecté au Hub, quel que soit son langage, capable d'envoyer et de recevoir des messages, requêtes ou tâches.</dd>
+
+<dt>Capacité</dt>
+<dd>Étiquette libre décrivant ce qu'un agent sait faire, utilisée pour la découverte sans connaître son nom exact.</dd>
+
+<dt>Chiffrement de bout en bout (E2E)</dt>
+<dd>RSA-2048-OAEP + AES-256-GCM. Le Hub route le contenu chiffré sans pouvoir le lire.</dd>
+
+<dt>Console d'administration</dt>
+<dd>Interface web locale (<code>intermesh dashboard</code>), livrée dans le paquet, sans dépendance externe ni compte.</dd>
+
+<dt>Contre-pression (backpressure)</dt>
+<dd>Mécanisme de refus explicite d'une soumission de tâche quand le Hub dépasse son budget configuré, plutôt qu'une mise en file silencieuse.</dd>
+
+<dt>Control Plane</dt>
+<dd>Application web hébergée sur intermesh.site, avec comptes et gestion d'équipe — distincte de la console locale.</dd>
+
+<dt>Egress (politique de sortie)</dt>
+<dd>Ensemble de règles JSON contrôlant ce qui a le droit de quitter une organisation vers un partenaire fédéré : suppression de champ, occultation de motif, ou blocage complet.</dd>
+
+<dt>Fédération</dt>
+<dd>Lien entre deux Hubs de deux organisations différentes, établi par échange de clés publiques et vérification de signature Ed25519 — jamais de secret partagé.</dd>
+
+<dt>Grappe (cluster)</dt>
+<dd>Plusieurs Hubs d'une <strong>même</strong> organisation, partageant un état PostgreSQL et une clé de signature, formant un seul maillage.</dd>
+
+<dt>Hub</dt>
+<dd>Le serveur de coordination : registre des agents, routage des messages, authentification, journal d'audit.</dd>
+
+<dt>Identité auto-déclarée</dt>
+<dd>Enregistrement sans clé d'API, où l'agent choisit lui-même son organisation, ses rôles et ses permissions — accepté par défaut seulement depuis <code>localhost</code>.</dd>
+
+<dt>JWT (JSON Web Token)</dt>
+<dd>Jeton signé par la clé Ed25519 du Hub, porté par chaque message après l'enregistrement.</dd>
+
+<dt>Journal d'audit (chaîné par Merkle)</dt>
+<dd>Historique infalsifiable des événements du Hub : toute modification rétroactive d'une entrée brise la chaîne, détectée au redémarrage.</dd>
+
+<dt>mTLS (authentification mutuelle TLS)</dt>
+<dd>Le Hub vérifie le certificat du client, en plus de présenter le sien — se cumule aux clés d'API, ne les remplace pas.</dd>
+
+<dt>Tâche</dt>
+<dd>Unité de travail déléguée, avec un cycle de vie <code>pending → running → completed/failed</code> et une reprise automatique en cas d'interruption.</dd>
+
+<dt>Wss:// / ws://</dt>
+<dd><code>wss://</code> est le WebSocket chiffré par TLS, obligatoire pour tout Hub distant. <code>ws://</code> est le WebSocket en clair, réservé à <code>localhost</code>.</dd>
+</dl>
+
+<div class="resume-chapitre" style="margin-top:12mm;">
+<span class="titre-encart">Fin de la formation</span>
+Cette formation couvre l'installation, l'usage quotidien des deux SDK
+officiels, l'intégration de frameworks existants, l'orchestration
+multi-agents, et le déploiement en production — fédération, grappe,
+capacité, authentification mutuelle et réseau fermé. Pour toute question
+non couverte ici, la documentation embarquée (<code>intermesh docs</code>) et le
+dépôt source font foi en cas de divergence, le protocole évoluant plus
+vite qu'un document imprimé.
+</div>
+</div>
+
+</body>
+</html>
