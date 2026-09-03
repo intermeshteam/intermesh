@@ -1,5 +1,6 @@
 'use client';
 
+import BrandName from '@/components/BrandName';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -293,7 +294,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-4">
           <Link href="/" className={`flex items-center gap-2.5 text-lg font-bold tracking-[0.18em] transition hover:opacity-80 notranslate ${HEADING}`} translate="no">
             <InterMeshLogo className="h-5 w-5 shrink-0" />
-            <span>INTERMESH</span>
+            <BrandName />
           </Link>
 
           <nav className={`hidden items-center gap-8 text-sm font-medium md:flex ${BODY}`}>
@@ -699,7 +700,7 @@ export default function LandingPage() {
                   <td className={`px-6 py-5 ${BODY}`}>A peer-to-peer exchange format, backed by a broad coalition.</td>
                 </tr>
                 <tr className="bg-gradient-to-r from-cyan-500/[0.07] to-violet-500/[0.05]">
-                  <td className="px-6 py-5 font-semibold text-cyan-700 dark:text-cyan-300">InterMesh</td>
+                  <td className="px-6 py-5 font-semibold text-cyan-700 dark:text-cyan-300 notranslate" translate="no">InterMesh</td>
                   <td className={`px-6 py-5 ${HEADING}`}>Organizations to each other</td>
                   <td className={`px-6 py-5 ${HEADING}`}>
                     The hub, end-to-end encryption, verifiable federated identity,

@@ -1,5 +1,6 @@
 'use client';
 
+import BrandName from '@/components/BrandName';
 import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -45,7 +46,7 @@ export default function AuthShell({
               className="inline-flex items-center gap-2.5 text-lg font-bold tracking-[0.18em] text-slate-900 transition hover:opacity-80 dark:text-white"
             >
               <InterMeshLogo className="h-5 w-5 shrink-0" />
-              <span>INTERMESH</span>
+              <BrandName />
             </Link>
 
             <div className="max-w-md space-y-8">{aside}</div>

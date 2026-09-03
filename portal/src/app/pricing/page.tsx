@@ -1,5 +1,6 @@
 'use client';
 
+import BrandName from '@/components/BrandName';
 import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Check, Github, Terminal } from 'lucide-react';
@@ -51,7 +52,7 @@ export default function PricingPage() {
             translate="no"
           >
             <InterMeshLogo className="h-4 w-4 shrink-0" />
-            <span>INTERMESH</span>
+            <BrandName />
           </Link>
           <ThemeToggle />
         </div>

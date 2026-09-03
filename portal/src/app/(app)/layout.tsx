@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import DashboardTopbar from '@/components/DashboardTopbar';
+import BrandName from '@/components/BrandName';
 import InterMeshLogo from '@/components/InterMeshLogo';
 import HubConnection from '@/components/HubConnection';
 import { BORDER, CAPTION, SURFACE_BASE, SURFACE_CHROME } from '@/lib/ui';
@@ -51,7 +52,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className={`flex h-14 items-center gap-2.5 border-b px-5 ${BORDER}`}>
             <Link href="/" className="flex items-center gap-2.5 transition hover:opacity-80">
               <InterMeshLogo className="h-5 w-5 shrink-0" />
-              <span className="text-sm font-bold tracking-[0.16em] text-white">INTERMESH</span>
+              <BrandName className="text-sm font-bold tracking-[0.16em] text-white" />
             </Link>
           </div>
 
