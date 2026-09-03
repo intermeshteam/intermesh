@@ -143,7 +143,8 @@ export default function QuoteRequestForm() {
       </div>
 
       {error && (
-        <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">
+        <p className="notranslate text-sm text-rose-600 dark:text-rose-400"
+           translate="no" role="alert">
           {error}
         </p>
       )}
@@ -154,7 +155,15 @@ export default function QuoteRequestForm() {
         className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
       >
         {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-        {busy ? 'Sending…' : 'Request a quote'}
+        {/* Texte qui change en place : Google Traduction enveloppe le
+            nœud, React ne le retrouve plus en le remplaçant, et la page
+            entière tombe sur « une exception côté client s'est produite ».
+            Soustraire ces nœuds-là à la traduction est le remède ciblé —
+            marquer tout le formulaire priverait un lecteur francophone
+            des libellés, ce qui coûte plus que ça ne rapporte. */}
+        <span className="notranslate" translate="no">
+          {busy ? 'Sending…' : 'Request a quote'}
+        </span>
       </button>
     </form>
   );
