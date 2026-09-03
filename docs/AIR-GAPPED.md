@@ -42,6 +42,7 @@ Verified by reading the source, not by assertion:
 | Registration | API key required everywhere, including from localhost |
 | Console | API key required to open it; refused without one |
 | Mutual TLS | available (`--tls-client-ca`), off unless you supply a CA |
+| Saturation | explicit refusal past the budget, not a silent queue — see [CAPACITY.md](CAPACITY.md) |
 | Database network | `internal` — no route out, no published port |
 | Filesystems | read-only, with tmpfs for the few writable paths |
 | Privileges | non-root (uid 10001), all capabilities dropped, `no-new-privileges` |

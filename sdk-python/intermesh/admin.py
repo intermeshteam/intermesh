@@ -97,6 +97,7 @@ class AdminContext:
         snapshot_dir: Any = None,
         pending_approvals: Any = None,
         finalize_task: Callable | None = None,
+        backpressure: Any = None,
     ):
         # Tâches retenues en attente d'arbitrage humain, et le moyen de les
         # relâcher. `finalize_task` est le même chemin que celui d'une
@@ -116,6 +117,10 @@ class AdminContext:
         self.my_org = my_org
         self.remember_task = remember_task
         self.send_to_agent = send_to_agent
+        # Portail de contre-pression, pour exposer la saturation : sans ce
+        # chiffre, un exploitant ne voit la saturation qu'au moment où les
+        # clients tombent en délai d'attente.
+        self.backpressure = backpressure
         self.hub_version = hub_version
         # Organisation du porteur du token, et `True` si son rôle est
         # `org_admin` — auquel cas chaque commande doit filtrer sa vue et
@@ -216,8 +221,31 @@ def _hub_info(ctx: AdminContext, params: dict) -> dict:
         "api_keys": api_keys_count,
         "api_keys_source": ctx.api_keys.source,
         "api_keys_mutable": ctx.api_keys.mutable,
+        "load": _load_snapshot(ctx),
         "server_time": time.time(),
     }
+
+
+def _load_snapshot(ctx: AdminContext) -> dict:
+    """Charge et saturation, ou `None` hors contre-pression.
+
+    Rendu dans `hub.info` plutôt que dans une commande à part : c'est la
+    première chose qu'un exploitant consulte, et l'y cacher derrière un
+    second appel revient à ne pas l'exposer.
+    """
+    gate = getattr(ctx, "backpressure", None)
+    if gate is None:
+        return {"enabled": False, "note": "contre-pression non configurée"}
+
+    in_flight = 0
+    queued = 0
+    for task in ctx.task_registry.values():
+        if task.status.value in ("completed", "failed"):
+            continue
+        in_flight += 1
+        if task.status.value == "pending":
+            queued += 1
+    return gate.snapshot(in_flight, queued)
 
 
 def _agents_list(ctx: AdminContext, params: dict) -> dict:

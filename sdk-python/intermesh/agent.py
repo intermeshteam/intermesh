@@ -465,9 +465,27 @@ class InterMeshAgent:
                                 future.set_exception(PermissionError(msg.content))
                             else:
                                 future.set_exception(RuntimeError(msg.content))
-                    for tid, fut in list(self._pending_tasks.items()):
-                        if not fut.done():
+                    # Un refus qui nomme sa tâche ne concerne qu'elle. Faire
+                    # échouer toutes les tâches en vol sur un refus ciblé
+                    # était sans conséquence tant que les erreurs étaient
+                    # rares ; sous contre-pression elles sont fréquentes, et
+                    # un seul refus aurait anéanti tout le travail légitime
+                    # du même orchestrateur.
+                    named = (msg.content.get("task_id")
+                             if isinstance(msg.content, dict) else None)
+                    if named:
+                        fut = self._pending_tasks.pop(named, None)
+                        if fut is not None and not fut.done():
                             fut.set_exception(RuntimeError(msg.content))
+                    else:
+                        # Erreur qui ne nomme aucune tâche : escrow refusé,
+                        # garde-fou, rupture de lien. On ne peut pas savoir
+                        # laquelle est visée, donc toutes tombent — c'est le
+                        # comportement historique, et le restreindre ici
+                        # laissait ces refus sans effet.
+                        for tid, fut in list(self._pending_tasks.items()):
+                            if not fut.done():
+                                fut.set_exception(RuntimeError(msg.content))
                             self._pending_tasks.pop(tid)
 
         except websockets.ConnectionClosed:

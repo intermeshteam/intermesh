@@ -21,6 +21,7 @@ from intermesh.admin import execute as admin_execute
 from intermesh.apikeys import ApiKeyStore
 from intermesh.approval import ApprovalPolicy, requires_approval
 from intermesh.audit import ImmutableAuditLog
+from intermesh.backpressure import BackpressureGate, BackpressureLimits
 from intermesh.egress import EgressBlocked, EgressPolicy, apply_egress
 from intermesh.escrow import EscrowError, EscrowManager
 from intermesh.guardrails import AsimovGuardrailEngine, PolicyViolationError
@@ -54,6 +55,12 @@ TOKEN_EXPIRY_SECONDS = 3600
 # Certificat que ce Hub présente lorsqu'il se connecte à un pair ou à un
 # frère de grappe qui exige l'authentification mutuelle. Renseigné depuis la
 # ligne de commande au démarrage.
+# Contre-pression : refuser explicitement plutôt que d'accepter une tâche
+# qu'on sait devoir mettre dans une file qui n'avancera pas. Le garde-fou
+# par agent (60/min) ne protège pas de cent agents sages qui saturent
+# ensemble.
+backpressure = BackpressureGate()
+
 MTLS_CERT: str | None = None
 MTLS_KEY: str | None = None
 MTLS_CA: str | None = None
@@ -347,6 +354,28 @@ def sibling_hub_urls() -> list[str]:
         return []
     return [h["hub_url"] for h in found
             if h["hub_id"] != HUB_ID and h["hub_url"]]
+
+
+def task_load() -> tuple[int, int]:
+    """(en vol, profondeur de file) à cet instant.
+
+    Dérivé du registre plutôt que de compteurs entretenus à la main : un
+    compteur parallèle dérive dès qu'un chemin de sortie est oublié, et
+    c'est précisément sous charge qu'on ne s'en aperçoit pas.
+
+    « En vol » = acceptée et pas encore terminale. « En file » = acceptée
+    mais pas encore prise en charge, typiquement parce que l'exécutant est
+    hors ligne — c'est ce sous-ensemble qui gonfle quand le Hub sature.
+    """
+    in_flight = 0
+    queued = 0
+    for task in task_registry.values():
+        if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED):
+            continue
+        in_flight += 1
+        if task.status == TaskStatus.PENDING:
+            queued += 1
+    return in_flight, queued
 
 
 def snapshot_agents() -> list[dict]:
@@ -738,6 +767,7 @@ async def _handle_admin_request(websocket, msg: InterMeshMessage) -> None:
             audit_log=audit_log, api_keys=api_keys, peered_hubs=peered_hubs, store=store,
             my_org=HUB_ORG, remember_task=remember_task, send_to_agent=send_task_to_agent,
             caller_org=caller_org, scoped=scoped, asimov_engine=asimov_engine, escrow_manager=escrow_manager,
+            backpressure=backpressure,
             snapshot_dir=SNAPSHOT_DIR,
             pending_approvals=pending_approvals, finalize_task=finalize_task_submission,
         )
@@ -1220,6 +1250,47 @@ async def handle_agent(websocket, my_org: str):
                         ).to_json())
                         continue
 
+                    # Contre-pression, après le quota par agent et avant tout
+                    # engagement : ni séquestre constitué, ni tâche mémorisée,
+                    # ni entrée d'audit. Une tâche refusée ici n'a rien à
+                    # défaire.
+                    #
+                    # Le refus voyage sur l'enveloppe `error` et non sous un
+                    # type nouveau : `InterMeshMessage.from_json` lève sur un
+                    # type inconnu, et la boucle d'écoute des SDK 0.3 à 0.4
+                    # ne l'attrape pas par message — un type inédit tuerait
+                    # la connexion de tous les agents déjà déployés. Le
+                    # contenu, lui, porte exactement la structure attendue.
+                    in_flight, queue_depth = task_load()
+                    refusal = backpressure.admit(in_flight, queue_depth)
+                    if refusal is not None:
+                        # Un refus doit être bon marché. Écrire chaque refus
+                        # dans la chaîne d'audit — donc un hachage Merkle — et
+                        # le diffuser à tous les observateurs rendait le refus
+                        # coûteux exactement quand le Hub est saturé : mesuré,
+                        # le Hub ne traitait plus que 60 soumissions sur 439.
+                        # On journalise donc l'entrée en saturation et la
+                        # sortie, pas chaque refus.
+                        if backpressure.note_rejection(time.time()):
+                            audit_log.log("HUB_SATURATED", msg.sender,
+                                          raw_task.get("assignee"), {
+                                "reason": refusal.reason,
+                                "in_flight": in_flight, "queue_depth": queue_depth,
+                                "note": "premier refus de cette période ; "
+                                        "les suivants sont comptés, pas journalisés",
+                            })
+                            await broadcast("hub_saturated", refusal.to_dict())
+                        # Le refus nomme la tâche : sans cela l'émetteur ne
+                        # peut pas savoir laquelle a été écartée, et le SDK
+                        # faisait échouer *toutes* ses tâches en vol.
+                        payload = refusal.to_dict()
+                        payload["task_id"] = raw_task.get("task_id")
+                        await websocket.send(InterMeshMessage(
+                            type=MessageType.ERROR, sender="hub", to=msg.sender,
+                            reply_to=msg.id, content=payload, token=msg.token,
+                        ).to_json())
+                        continue
+
                     # Validation humaine, avant toute constitution de séquestre :
                     # rien ne doit être immobilisé tant qu'une personne n'a pas
                     # tranché, et une tâche refusée n'a donc rien à défaire.
@@ -1362,6 +1433,7 @@ async def main(argv: list[str] | None = None):
     global HUB_PRIVATE_KEY, HUB_PUBLIC_PEM, HUB_KEY_ID, egress_policy, approval_policy
     global MAX_AGENTS, ALLOW_SELF_DECLARED, REQUIRE_API_KEY
     global MTLS_CERT, MTLS_KEY, MTLS_CA
+    global backpressure
     global HUB_ID, CLUSTER_URL
 
     parser = argparse.ArgumentParser(description="InterMesh Hub")
@@ -1398,6 +1470,21 @@ async def main(argv: list[str] | None = None):
     parser.add_argument("--peer", action="append", default=[], help="Pair fédéré ORG=wss://host:port")
     parser.add_argument("--tls-cert", type=str, default=None, help="Certificat TLS (sert en wss://)")
     parser.add_argument("--tls-key", type=str, default=None, help="Clé privée du certificat TLS")
+    parser.add_argument("--max-tasks-per-sec", type=int, default=None,
+                        help="Budget global de soumissions par seconde (défaut 10, mesuré : "
+                             "un Hub soutient ~11/s, zone saine ~8/s). Se cumule au quota "
+                             "par agent, qui ne protège pas de cent agents sages saturant "
+                             "ensemble. Aussi via $INTERMESH_MAX_TASKS_PER_SEC.")
+    parser.add_argument("--max-tasks-in-flight", type=int, default=None,
+                        help="Plafond de tâches acceptées non terminées (défaut 200). "
+                             "$INTERMESH_MAX_TASKS_IN_FLIGHT")
+    parser.add_argument("--max-task-queue-depth", type=int, default=None,
+                        help="Profondeur de file avant refus (défaut 100). "
+                             "$INTERMESH_MAX_TASK_QUEUE_DEPTH")
+    parser.add_argument("--no-backpressure", action="store_true",
+                        help="Désactive le refus sous saturation. Le Hub accepte alors tout, "
+                             "met en file, et la latence monte sans qu'aucun signal ne le dise "
+                             "— c'est le comportement d'avant. $INTERMESH_BACKPRESSURE_ENABLED=0")
     parser.add_argument("--tls-client-ca", type=str, default=None,
                         help="Autorité qui signe les certificats clients. L'exiger active "
                              "l'authentification mutuelle : une connexion sans certificat "
@@ -1512,6 +1599,24 @@ async def main(argv: list[str] | None = None):
                      "sans TLS il n'y a pas de poignée de main où exiger un certificat client")
 
     MTLS_CERT, MTLS_KEY, MTLS_CA = args.mtls_cert, args.mtls_key, args.peer_ca
+
+    # L'environnement d'abord (conteneurs), la ligne de commande par-dessus.
+    bp_limits = BackpressureLimits.from_env()
+    if args.max_tasks_per_sec is not None:
+        bp_limits.max_tasks_per_sec = args.max_tasks_per_sec
+    if args.max_tasks_in_flight is not None:
+        bp_limits.max_in_flight = args.max_tasks_in_flight
+    if args.max_task_queue_depth is not None:
+        bp_limits.max_queue_depth = args.max_task_queue_depth
+    if args.no_backpressure:
+        bp_limits.enabled = False
+    backpressure = BackpressureGate(bp_limits)
+
+    if bp_limits.enabled:
+        print(f"  charge  : {bp_limits.max_tasks_per_sec} tâches/s, "
+              f"{bp_limits.max_in_flight} en vol, file {bp_limits.max_queue_depth}")
+    else:
+        print("  charge  : contre-pression DÉSACTIVÉE — le Hub acceptera tout")
 
     server_ssl = (build_server_ssl_context(args.tls_cert, args.tls_key, args.tls_client_ca)
                   if args.tls_cert else None)
