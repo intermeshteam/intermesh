@@ -479,6 +479,23 @@ export class InterMeshAgent {
             delete this.pendingRequests[msg.reply_to];
             reject(new Error(msg.content));
           }
+
+          // Un refus qui nomme sa tâche — contre-pression du Hub saturé —
+          // doit la faire échouer tout de suite. Cette branche ne touchait
+          // que les requêtes : une tâche refusée attendait son propre
+          // délai sans que l'appelant apprenne jamais pourquoi.
+          const named = msg.content && typeof msg.content === 'object'
+            ? msg.content.task_id : null;
+          if (named && this.pendingTasks[named]) {
+            const { reject } = this.pendingTasks[named];
+            delete this.pendingTasks[named];
+            const err = new Error(
+              typeof msg.content === 'object'
+                ? JSON.stringify(msg.content) : String(msg.content));
+            err.code = msg.content.code || null;
+            err.retryAfterMs = msg.content.retry_after_ms || null;
+            reject(err);
+          }
         }
       } catch (err) {
         // En cas de paquet malformé, ne pas crasher la boucle d'écoute

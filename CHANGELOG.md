@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.5] — 2026-09-02
+
+### Added
+
+- **Explicit backpressure.** Past its budget the hub now refuses a task
+  instead of queueing it silently. Before this, a saturated hub accepted
+  everything, latency climbed, and clients died on a WebSocket ping timeout
+  with nothing anywhere saying the hub was the problem.
+
+  The refusal is machine-readable — `reason` (`rate_limited`,
+  `in_flight_limit`, `task_queue_full`), `retry_after_ms`, and the current
+  load — so a sender can wait the right amount, slow down, or go elsewhere.
+
+  Three configurable ceilings (`--max-tasks-per-sec`,
+  `--max-tasks-in-flight`, `--max-task-queue-depth`) plus a kill switch
+  (`--no-backpressure`) that restores the previous behaviour exactly.
+  Defaults come from measurement: 10/s rounds the observed ceiling and
+  leaves the healthy zone of 8/s untouched.
+
+  The per-agent quota (60/minute) is unchanged and is not a substitute: a
+  hundred well-behaved agents at a third of their quota is 200/s, twenty
+  times what one hub sustains.
+
+- **`hub.info` carries a `load` block** — counters, refusal reasons and two
+  saturation percentages. Without it, saturation is only visible once
+  clients start timing out.
+
+- **`docs/CAPACITY.md`** — the measured ceiling, the settings, the
+  anti-patterns, and what backpressure does *not* protect.
+
+### Fixed
+
+- **One error failed every task an agent had in flight.** The SDK failed
+  all pending tasks on any `error` message. That was survivable while
+  errors were rare; with backpressure they are routine, and a single
+  refusal would have destroyed unrelated work. A refusal now names its
+  task, and only that task fails — the narrowing applies only to named
+  refusals, since an escrow or guardrail refusal names none.
+
+- **The JavaScript SDK ignored task refusals entirely.** Its `error` branch
+  only settled pending *requests*, so a refused task waited out its own
+  timeout without the caller ever learning why. It now rejects the named
+  task with `code` and `retryAfterMs` attached. The JavaScript SDK jumps
+  from 0.4.2, where it had stood since nothing had touched it.
+
+### Note on the wire format
+
+The refusal travels on the `error` envelope rather than under a new message
+type. `from_json` raises on an unknown type, and the listen loop in SDKs
+0.3 through 0.4 does not catch it per message — a new type would have
+killed the connection of every already-deployed agent. The content carries
+the full structure.
+
+---
+
 ## [0.4.4] — 2026-09-02
 
 ### Changed
