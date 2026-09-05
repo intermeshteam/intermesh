@@ -100,7 +100,11 @@ def run_docs(args):
 
 
 async def run_discover(args):
-    agent = InterMeshAgent(name="cli_inspector", roles=["admin"], encrypt=False)
+    # `discover` a longtemps été la seule commande sans --hub ni --org : un
+    # agent lancé avec `serve --org demo` était connecté, fonctionnel, et
+    # introuvable — sans qu'aucun message ne dise pourquoi.
+    agent = InterMeshAgent(name="cli_inspector", roles=["admin"],
+                           org_id=args.org, hub_url=args.hub, encrypt=False)
     await agent.connect()
     query = {}
     if args.capability: query["capabilities"] = [args.capability]
@@ -109,6 +113,14 @@ async def run_discover(args):
     result = await agent.discover(**query, timeout=4.0)
     agents = result.get("agents", [])
     print(f"\n\033[32m✓ {len(agents)} agent(s) trouvé(s) sur le réseau :\033[0m\n")
+    # Seul l'inspecteur lui-même répond : dire où l'on a cherché épargne la
+    # demi-heure passée à soupçonner l'agent alors qu'il est dans une autre
+    # organisation.
+    if len([a for a in agents if a.get("name") != "cli_inspector"]) == 0:
+        print(f"  \033[33mRecherche faite sur {args.hub}, organisation "
+              f"'{args.org}'.\033[0m")
+        print("  \033[33mUn agent lancé avec un autre --org ou un autre --hub "
+              "n'apparaît pas ici.\033[0m\n")
     print(f"{'NOM':<20} {'RÔLES':<18} {'CAPACITÉS':<30} {'E2E'}")
     print("-" * 75)
     for a in agents:
@@ -118,6 +130,28 @@ async def run_discover(args):
         print(f"{a['name']:<20} {roles:<18} {caps:<30} {e2e}")
     print()
     await agent.ws.close()
+
+
+def _run_or_explain(coro, target: str, args):
+    """Exécute une coroutine CLI en traduisant l'expiration en explication.
+
+    Un délai dépassé veut presque toujours dire « cet agent n'est pas là »,
+    et la cause est le plus souvent une organisation ou un Hub différents.
+    """
+    try:
+        asyncio.run(coro)
+    except (TimeoutError, asyncio.TimeoutError) as exc:
+        print(f"\n\033[31m✗ {exc}\033[0m")
+        print(f"  \033[33m'{target}' n'a pas répondu sur {args.hub}, "
+              f"organisation '{args.org}'.\033[0m")
+        # Hors de l'organisation par défaut, un agent s'adresse par son nom
+        # qualifié. `discover` l'affiche ainsi, mais on l'oublie en recopiant.
+        if args.org != "default" and "/" not in target:
+            print(f"  \033[33mDans l'organisation '{args.org}', essayez le nom "
+                  f"qualifié : {args.org}/{target}\033[0m")
+        print("  \033[33mVérifiez qu'il tourne : intermesh discover "
+              f"--hub {args.hub} --org {args.org}\033[0m\n")
+        sys.exit(1)
 
 
 def _parse_json_arg(raw: str, label: str):
@@ -130,7 +164,8 @@ def _parse_json_arg(raw: str, label: str):
 
 async def run_ping(args):
     """Vérifie qu'un agent est joignable et mesure le temps d'aller-retour."""
-    agent = InterMeshAgent(name="cli_ping", roles=["admin"], hub_url=args.hub, encrypt=False)
+    agent = InterMeshAgent(name="cli_ping", roles=["admin"], org_id=args.org,
+                           hub_url=args.hub, encrypt=False)
     await agent.connect()
     try:
         started = time.monotonic()
@@ -157,7 +192,8 @@ async def run_ping(args):
 async def run_ask(args):
     """Pose une question à un agent et affiche sa réponse."""
     content = _parse_json_arg(args.content, "Le contenu")
-    agent = InterMeshAgent(name="cli_asker", roles=["admin"], hub_url=args.hub)
+    agent = InterMeshAgent(name="cli_asker", roles=["admin"], org_id=args.org,
+                           hub_url=args.hub)
     await agent.connect()
     try:
         print(f"\033[33m💬 Question à '{args.agent}'...\033[0m")
@@ -170,7 +206,8 @@ async def run_ask(args):
 async def run_task(args):
     """Délègue une tâche à un agent et attend son résultat."""
     input_data = _parse_json_arg(args.input, "Les données d'entrée")
-    agent = InterMeshAgent(name="cli_orchestrator", roles=["admin"], hub_url=args.hub)
+    agent = InterMeshAgent(name="cli_orchestrator", roles=["admin"],
+                           org_id=args.org, hub_url=args.hub)
     await agent.connect()
     try:
         print(f"\033[33m📝 Tâche '{args.title}' ➜ {args.assignee}...\033[0m")
@@ -418,6 +455,9 @@ def main():
     disc_parser = subparsers.add_parser("discover", help="Rechercher des agents")
     disc_parser.add_argument("--capability", "-c", type=str, help="Capacité")
     disc_parser.add_argument("--role", "-r", type=str, help="Rôle")
+    disc_parser.add_argument("--hub", type=str, default="ws://localhost:8765")
+    disc_parser.add_argument("--org", type=str, default="default",
+                             help="Organisation interrogée")
 
     # Command: snapshot
     snap_parser = subparsers.add_parser("snapshot", help="Sauvegarder / restaurer l'état du Hub")
@@ -454,6 +494,7 @@ def main():
     ping_parser = subparsers.add_parser("ping", help="Vérifier qu'un agent répond")
     ping_parser.add_argument("agent", type=str, help="Nom de l'agent")
     ping_parser.add_argument("--hub", type=str, default="ws://localhost:8765")
+    ping_parser.add_argument("--org", type=str, default="default", help="Organisation")
     ping_parser.add_argument("--timeout", type=float, default=5.0)
 
     # Command: ask
@@ -461,6 +502,7 @@ def main():
     ask_parser.add_argument("agent", type=str, help="Nom de l'agent")
     ask_parser.add_argument("content", type=str, help="Contenu JSON de la question")
     ask_parser.add_argument("--hub", type=str, default="ws://localhost:8765")
+    ask_parser.add_argument("--org", type=str, default="default", help="Organisation")
     ask_parser.add_argument("--timeout", type=float, default=10.0)
 
     # Command: task
@@ -469,6 +511,7 @@ def main():
     task_parser.add_argument("title", type=str, help="Intitulé de la tâche")
     task_parser.add_argument("input", type=str, help="Données d'entrée en JSON")
     task_parser.add_argument("--hub", type=str, default="ws://localhost:8765")
+    task_parser.add_argument("--org", type=str, default="default", help="Organisation")
     task_parser.add_argument("--timeout", type=float, default=15.0)
 
     # Command: keygen
@@ -490,9 +533,11 @@ def main():
     elif args.command == "snapshot": asyncio.run(run_snapshot(args))
     elif args.command == "dashboard": run_dashboard(args)
     elif args.command == "serve": run_serve(args)
+    # Viser un agent absent est une erreur d'usage courante, pas un plantage :
+    # elle mérite une phrase, pas quarante lignes de pile d'appels.
     elif args.command == "ping": asyncio.run(run_ping(args))
-    elif args.command == "ask": asyncio.run(run_ask(args))
-    elif args.command == "task": asyncio.run(run_task(args))
+    elif args.command == "ask": _run_or_explain(run_ask(args), args.agent, args)
+    elif args.command == "task": _run_or_explain(run_task(args), args.assignee, args)
     elif args.command == "keygen": run_keygen(args)
 
 

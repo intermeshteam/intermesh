@@ -170,5 +170,55 @@ def test_ping_reports_an_unknown_agent_as_a_failure(cli_hub):
     assert "introuvable" in result.stdout
 
 
+# ----------------------------------------------------------------------
+# Viser un autre Hub, une autre organisation
+# ----------------------------------------------------------------------
+
+def test_discover_can_target_a_hub_and_an_org():
+    """
+    Régression : `discover` était la seule commande sans --hub ni --org.
+    Un agent lancé avec `serve --org demo` était connecté, joignable, et
+    introuvable — sans qu'aucun message n'explique pourquoi.
+    """
+    result = _run("discover", "--help")
+
+    assert result.returncode == 0
+    assert "--hub" in result.stdout
+    assert "--org" in result.stdout
+
+
+@pytest.mark.parametrize("command", ["ping", "ask", "task"])
+def test_every_addressing_command_accepts_an_org(command):
+    """`--org` sur `serve` est un piège si l'on ne peut pas viser cette org."""
+    result = _run(command, "--help")
+
+    assert result.returncode == 0
+    assert "--org" in result.stdout, f"'{command}' doit accepter --org"
+
+
+def test_discover_says_where_it_looked_when_it_finds_nothing(cli_hub):
+    """Sans cette phrase, on soupçonne l'agent plutôt que l'adresse."""
+    result = _run("discover", "--hub", HUB_URL, "--org", "vide")
+
+    assert result.returncode == 0
+    assert HUB_URL in result.stdout
+    assert "vide" in result.stdout
+
+
+def test_timeout_explains_itself_instead_of_dumping_a_traceback(cli_hub):
+    """
+    Régression : viser un agent absent produisait quarante lignes de pile
+    d'appels Python. C'est une erreur d'usage courante, pas un plantage.
+    """
+    result = _run("task", "fantome", "Titre", "{}",
+                  "--hub", HUB_URL, "--org", "demo", "--timeout", "3", timeout=40)
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stdout + result.stderr
+    assert "expirée" in result.stdout
+    # Hors de l'organisation par défaut, le nom qualifié est la cause n° 1.
+    assert "demo/fantome" in result.stdout
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
