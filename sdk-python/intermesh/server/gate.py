@@ -19,18 +19,19 @@ que pour un nonce que ce serveur a lui-même émis, une seule fois.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import Dict, Optional
 
 from ..payments.challenge import DEFAULT_TTL, PaymentChallenge
+from ..payments.clock import now_ms
 from ..payments.keyring import Keyring, UnknownPayer
 from ..payments.ledger import Ledger, LedgerError
 from ..payments.price import Price
 from ..payments.proof import HEADER, PaymentProof, ProofError, verify_proof
 
 # Au-delà, un défi non honoré n'est plus qu'une fuite mémoire.
-PENDING_GRACE = 60.0
+# En millisecondes, comme tout horodatage du protocole.
+PENDING_GRACE = 60_000
 
 
 class PaymentRequired(Exception):
@@ -89,7 +90,7 @@ class PaymentGate:
         return challenge
 
     def admit(self, resource: str, price, header_value: Optional[str],
-              now: Optional[float] = None) -> Settled:
+              now: Optional[int] = None) -> Settled:
         """Laisse passer la requête, ou lève de quoi répondre 402.
 
         `PaymentRequired` veut dire « voici ce qu'il faut payer » et
@@ -138,8 +139,8 @@ class PaymentGate:
 
     # ------------------------------------------------------------------
 
-    def _evict(self, now: Optional[float] = None) -> None:
-        moment = now if now is not None else time.time()
+    def _evict(self, now: Optional[int] = None) -> None:
+        moment = now if now is not None else now_ms()
         expired = [n for n, c in self._pending.items()
                    if c.expires_at + PENDING_GRACE < moment]
         for nonce in expired:

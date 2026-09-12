@@ -12,10 +12,10 @@ ressource visée, sans quoi une preuve achetée pour un point d'entrée à
 from __future__ import annotations
 
 import secrets
-import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from .clock import now_ms, seconds_to_ms
 from .price import Price, parse_price
 
 # Deux minutes : assez pour un aller-retour réseau et une signature, trop
@@ -32,7 +32,9 @@ class PaymentChallenge:
     pay_to: str
     resource: str
     nonce: str = field(default_factory=lambda: secrets.token_urlsafe(16))
-    expires_at: float = field(default_factory=lambda: time.time() + DEFAULT_TTL)
+    # Millisecondes entières : voir `clock.py`, c'est ce qui rend la
+    # signature identique en Python et en JavaScript.
+    expires_at: int = field(default_factory=lambda: now_ms() + seconds_to_ms(DEFAULT_TTL))
     ledger: Optional[str] = None
 
     @classmethod
@@ -44,7 +46,7 @@ class PaymentChallenge:
             currency=parsed.currency,
             pay_to=pay_to,
             resource=resource,
-            expires_at=time.time() + ttl,
+            expires_at=now_ms() + seconds_to_ms(ttl),
             ledger=ledger,
         )
 
@@ -52,8 +54,9 @@ class PaymentChallenge:
     def price(self) -> Price:
         return parse_price(f"{self.amount} {self.currency}")
 
-    def is_expired(self, now: Optional[float] = None) -> bool:
-        return (now if now is not None else time.time()) > self.expires_at
+    def is_expired(self, now: Optional[int] = None) -> bool:
+        """`now` en millisecondes, comme tout horodatage de ce module."""
+        return (now if now is not None else now_ms()) > self.expires_at
 
     def to_dict(self) -> dict:
         body = {
@@ -79,6 +82,7 @@ class PaymentChallenge:
             pay_to=str(data["pay_to"]),
             resource=str(data["resource"]),
             nonce=str(data["nonce"]),
-            expires_at=float(data.get("expires_at", time.time() + DEFAULT_TTL)),
+            expires_at=int(data.get("expires_at",
+                                    now_ms() + seconds_to_ms(DEFAULT_TTL))),
             ledger=data.get("ledger"),
         )

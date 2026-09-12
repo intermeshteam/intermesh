@@ -16,12 +16,12 @@ rendent sérialisable, et c'est le serveur relais qui choisit son stockage.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Callable, Dict, List, Optional
 
 from ..audit import ImmutableAuditLog
+from .clock import now_ms
 from .price import Price, parse_price, quantize
 from .proof import PaymentProof
 
@@ -75,7 +75,7 @@ class Charge:
     currency: str
     resource: str
     nonce: str
-    at: float
+    at: int  # millisecondes, voir `clock.py`
 
     def to_dict(self) -> dict:
         return {
@@ -143,7 +143,7 @@ class Ledger:
     # Écritures
     # ------------------------------------------------------------------
 
-    def charge(self, proof: PaymentProof, now: Optional[float] = None) -> Charge:
+    def charge(self, proof: PaymentProof, now: Optional[int] = None) -> Charge:
         """Passe l'écriture correspondant à une preuve vérifiée.
 
         La signature doit avoir été validée **avant** — `verify_proof` dit
@@ -179,7 +179,7 @@ class Ledger:
         charge = Charge(payer=proof.payer, payee=proof.pay_to,
                         amount=amount.amount, currency=self.currency,
                         resource=proof.resource, nonce=proof.nonce,
-                        at=now if now is not None else time.time())
+                        at=now if now is not None else now_ms())
         self._charges.append(charge)
         self._seen_nonces.add(proof.nonce)
         self.audit.log("CHARGE", sender=proof.payer, target=proof.pay_to,
@@ -209,16 +209,16 @@ class Ledger:
     # Relevés
     # ------------------------------------------------------------------
 
-    def statement(self, agent_id: str, since: Optional[float] = None,
-                  until: Optional[float] = None) -> List[Charge]:
+    def statement(self, agent_id: str, since: Optional[int] = None,
+                  until: Optional[int] = None) -> List[Charge]:
         """Les écritures où l'agent apparaît — la matière d'une facture."""
         return [c for c in self._charges
                 if (c.payer == agent_id or c.payee == agent_id)
                 and (since is None or c.at >= since)
                 and (until is None or c.at < until)]
 
-    def total_owed(self, agent_id: str, since: Optional[float] = None,
-                   until: Optional[float] = None) -> Price:
+    def total_owed(self, agent_id: str, since: Optional[int] = None,
+                   until: Optional[int] = None) -> Price:
         """Ce que l'agent doit sur la période, hors règlements."""
         total = sum((c.amount for c in self.statement(agent_id, since, until)
                      if c.payer == agent_id), Decimal("0"))

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import base64
 import json
-import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -35,6 +34,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 
 from .challenge import PaymentChallenge
+from .clock import now_ms
 
 HEADER = "X-InterMesh-Payment"
 VERSION = "im1"
@@ -68,8 +68,9 @@ class PaymentProof:
     pay_to: str
     resource: str
     nonce: str
-    issued_at: float
-    expires_at: float
+    # Millisecondes entières : voir `clock.py`.
+    issued_at: int
+    expires_at: int
 
     def payload(self) -> dict:
         return {
@@ -84,8 +85,8 @@ class PaymentProof:
             "expires_at": self.expires_at,
         }
 
-    def is_expired(self, now: Optional[float] = None) -> bool:
-        return (now if now is not None else time.time()) > self.expires_at
+    def is_expired(self, now: Optional[int] = None) -> bool:
+        return (now if now is not None else now_ms()) > self.expires_at
 
 
 def sign_proof(challenge: PaymentChallenge, payer: str,
@@ -98,7 +99,7 @@ def sign_proof(challenge: PaymentChallenge, payer: str,
         pay_to=challenge.pay_to,
         resource=challenge.resource,
         nonce=challenge.nonce,
-        issued_at=time.time(),
+        issued_at=now_ms(),
         expires_at=challenge.expires_at,
     )
     body = _canonical(proof.payload())
@@ -107,7 +108,7 @@ def sign_proof(challenge: PaymentChallenge, payer: str,
 
 def verify_proof(header_value: str, public_key: Ed25519PublicKey,
                  challenge: Optional[PaymentChallenge] = None,
-                 now: Optional[float] = None) -> PaymentProof:
+                 now: Optional[int] = None) -> PaymentProof:
     """Vérifie une preuve et la rend exploitable, ou lève `ProofError`.
 
     Passer le défi correspondant est vivement recommandé : sans lui, on
@@ -143,8 +144,8 @@ def verify_proof(header_value: str, public_key: Ed25519PublicKey,
             pay_to=str(payload["pay_to"]),
             resource=str(payload["resource"]),
             nonce=str(payload["nonce"]),
-            issued_at=float(payload["issued_at"]),
-            expires_at=float(payload["expires_at"]),
+            issued_at=int(payload["issued_at"]),
+            expires_at=int(payload["expires_at"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ProofError(f"preuve incomplète : {exc}") from exc

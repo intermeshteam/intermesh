@@ -129,7 +129,8 @@ def test_les_defis_non_honores_finissent_par_etre_oublies(gate):
             gate.admit(f"/r{i}", "$0.001", None)
     assert gate.pending_count == 5
 
-    gate._evict(now=gate._pending[next(iter(gate._pending))].expires_at + 3600)
+    # +1 h en millisecondes, bien au-delà du délai de grâce.
+    gate._evict(now=gate._pending[next(iter(gate._pending))].expires_at + 3_600_000)
     assert gate.pending_count == 0
 
 

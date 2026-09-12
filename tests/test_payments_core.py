@@ -4,7 +4,6 @@ Aucun réseau, aucun socket — si un de ces tests devient lent ou instable,
 c'est que la couche de paiement s'est mise à dépendre du transport.
 """
 
-import time
 from decimal import Decimal
 
 import pytest
@@ -23,6 +22,7 @@ from intermesh.payments import (
     sign_proof,
     verify_proof,
 )
+from intermesh.payments.clock import now_ms
 from intermesh.signing import derive_signing_key
 
 KEY = derive_signing_key("secret-de-test-payeur")
@@ -151,7 +151,34 @@ def test_une_preuve_perimee_est_refusee():
     entete = sign_proof(defi, "client", KEY)
 
     with pytest.raises(ProofError, match="périmée"):
-        verify_proof(entete, PUB, defi, now=time.time() + 10)
+        verify_proof(entete, PUB, defi, now=now_ms() + 10_000)
+
+
+def test_les_horodatages_signes_sont_des_entiers():
+    """
+    Régression inter-langages. Python sérialise `1788459123.0` en
+    « 1788459123.0 », JavaScript en « 1788459123 » : octets différents,
+    donc signature différente. Le cas ne se produit que lorsque l'horloge
+    tombe pile sur une seconde ronde — assez rare pour passer tous les
+    tests, assez fréquent pour casser en production.
+
+    Un entier se sérialise identiquement dans les deux langages.
+    """
+    import json
+
+    defi = _defi()
+    preuve = verify_proof(sign_proof(defi, "client", KEY), PUB, defi)
+
+    assert isinstance(defi.expires_at, int)
+    assert isinstance(preuve.issued_at, int)
+    assert isinstance(preuve.expires_at, int)
+
+    encode = json.dumps(preuve.payload(), sort_keys=True, separators=(",", ":"))
+    for champ in ("issued_at", "expires_at"):
+        rendu = encode.split(f'"{champ}":', 1)[1].split(",", 1)[0]
+        assert "." not in rendu, (
+            f"{champ} est sérialisé en flottant ({rendu}) — JavaScript "
+            "écrirait autre chose et la signature ne correspondrait plus")
 
 
 @pytest.mark.parametrize("entete", ["", "pas-de-point", "aaa.bbb", "."])
