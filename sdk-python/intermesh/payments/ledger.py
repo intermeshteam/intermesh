@@ -19,7 +19,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from ..audit import ImmutableAuditLog
 from .price import Price, parse_price, quantize
@@ -88,12 +88,21 @@ class Charge:
 class Ledger:
     """Comptes, écritures et journal scellé. Sans effet de bord externe."""
 
-    def __init__(self, currency: str = "USD", entries: Optional[List[dict]] = None):
+    def __init__(self, currency: str = "USD", entries: Optional[List[dict]] = None,
+                 on_change: Optional[Callable[["Ledger"], None]] = None):
+        """`on_change` est appelé après chaque mutation.
+
+        C'est ce qui permet au relais de persister une écriture passée par
+        un serveur tiers. Sans ce crochet, seules les opérations traversant
+        le relais étaient sauvegardées : une requête payée disparaissait au
+        redémarrage, et le compte repartait à zéro.
+        """
         self.currency = currency
         self._accounts: Dict[str, Account] = {}
         self._charges: List[Charge] = []
         self._seen_nonces: set[str] = set()
         self.audit = ImmutableAuditLog(entries=entries)
+        self.on_change = on_change
 
     # ------------------------------------------------------------------
     # Comptes
@@ -118,6 +127,7 @@ class Ledger:
         self.audit.log("ACCOUNT_OPENED", sender=agent_id,
                        metadata={"credit_limit": str(limit.amount),
                                  "currency": self.currency})
+        self._changed()
         return account
 
     def account(self, agent_id: str) -> Account:
@@ -174,6 +184,7 @@ class Ledger:
         self._seen_nonces.add(proof.nonce)
         self.audit.log("CHARGE", sender=proof.payer, target=proof.pay_to,
                        metadata=charge.to_dict())
+        self._changed()
         return charge
 
     def settle(self, agent_id: str, amount: str | Price) -> Account:
@@ -191,6 +202,7 @@ class Ledger:
                        metadata={"amount": str(received.amount),
                                  "currency": self.currency,
                                  "balance": str(updated.balance)})
+        self._changed()
         return updated
 
     # ------------------------------------------------------------------
@@ -242,6 +254,10 @@ class Ledger:
                 resource=row["resource"], nonce=row["nonce"], at=row["at"]))
             ledger._seen_nonces.add(row["nonce"])
         return ledger
+
+    def _changed(self) -> None:
+        if self.on_change:
+            self.on_change(self)
 
     def _require_currency(self, currency: str) -> None:
         if currency != self.currency:

@@ -47,6 +47,13 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.1"]
 
+# La couche de paiement HTTP 402. Le noyau (prix, défi, preuve, registre)
+# et le relais n'ont besoin de rien : le relais tourne sur `http.server`
+# de la bibliothèque standard, précisément pour qu'un registre reste
+# installable partout. Ces extras ne servent qu'aux adaptateurs.
+fastapi = ["fastapi>=0.110"]
+http = ["httpx>=0.27"]
+
 [project.urls]
 Homepage = "https://github.com/intermeshteam/intermesh"
 Repository = "https://github.com/intermeshteam/intermesh"

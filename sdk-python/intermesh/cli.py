@@ -132,6 +132,13 @@ async def run_discover(args):
     await agent.ws.close()
 
 
+def run_ledger(args):
+    """Démarre le relais de registre : annuaire des clés et livre de comptes."""
+    from intermesh.relay import serve
+
+    return serve(state=args.state, host=args.host, port=args.port)
+
+
 def _run_or_explain(coro, target: str, args):
     """Exécute une coroutine CLI en traduisant l'expiration en explication.
 
@@ -514,6 +521,17 @@ def main():
     task_parser.add_argument("--org", type=str, default="default", help="Organisation")
     task_parser.add_argument("--timeout", type=float, default=15.0)
 
+    # Command: ledger — le relais de paiement HTTP 402
+    ledger_parser = subparsers.add_parser(
+        "ledger", help="Démarrer le registre de paiement (HTTP 402)")
+    ledger_parser.add_argument("--port", type=int, default=8402,
+                               help="Port d'écoute (défaut : 8402)")
+    ledger_parser.add_argument("--host", type=str, default="127.0.0.1",
+                               help="Interface d'écoute — localhost par défaut, "
+                                    "le relais n'étant pas authentifié")
+    ledger_parser.add_argument("--state", type=str, default=None,
+                               help="Fichier JSON où persister comptes et clés")
+
     # Command: keygen
     key_parser = subparsers.add_parser("keygen", help="Générer une paire de clés RSA")
     key_parser.add_argument("--out", "-o", type=str, default=None,
@@ -538,6 +556,7 @@ def main():
     elif args.command == "ping": asyncio.run(run_ping(args))
     elif args.command == "ask": _run_or_explain(run_ask(args), args.agent, args)
     elif args.command == "task": _run_or_explain(run_task(args), args.assignee, args)
+    elif args.command == "ledger": run_ledger(args)
     elif args.command == "keygen": run_keygen(args)
 
 
