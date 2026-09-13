@@ -1,23 +1,116 @@
 <div align="center">
 
-# 🌐 INTERMESH PROTOCOL
+# INTERMESH
 
-### The universal open-source coordination protocol for AI agents
+### Autonomous Action Assurance
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Protocol](https://img.shields.io/badge/Protocol-intermesh%2Fv1-00D4FF.svg)]()
+[![Spec](https://img.shields.io/badge/Action%20Evidence-v0.1%20draft-00D4FF.svg)](specs/action-evidence-v0.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-green.svg)]()
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)]()
-[![Encryption](https://img.shields.io/badge/E2E-RSA--2048%20%2B%20AES--256--GCM-red.svg)]()
+[![Any language](https://img.shields.io/badge/Client-any%20language-brightgreen.svg)]()
 
-**InterMesh is the neutral, open standard that lets AI agents — regardless of language,
-framework, or vendor — discover each other, communicate securely, and collaborate.**
+**Every critical autonomous action should be authorized, controlled and provable.**
 
-[Manifesto](docs/MANIFESTO.md) · [RFC 001](docs/RFC-001-CORE-PROTOCOL.md) · [Security model](docs/SECURITY-AND-ENCRYPTION.md) · [API reference](docs/API-REFERENCE.md) · [Agent integration](docs/AGENT-INTEGRATION.md) · [Remote hub](docs/REMOTE-HUB.md) · [Benchmarks](docs/BENCHMARKS.md) · [Enterprise SSO](docs/ENTERPRISE-SSO.md) · [Air-gapped](docs/AIR-GAPPED.md) · [Contributing](CONTRIBUTING.md)
+*Toute action autonome critique doit être autorisée, contrôlée et prouvable.*
+
+[Action Evidence spec](specs/action-evidence-v0.md) · [Assurance guide](docs/ASSURANCE.md) · [Demo](examples/assurance/) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
 ---
+
+## The problem
+
+An AI agent no longer just answers. It calls APIs, moves money, deploys
+code, deletes resources. When one of those actions goes wrong, the
+question is not *what did the model say* — it is:
+
+> **Prove that this action was authorized, controlled, and actually executed.**
+
+Logs cannot answer that. A log is what a system remembers. **Evidence is
+what someone who does not trust that system can verify themselves.**
+
+## How it works
+
+InterMesh sits on the network path, not in your code:
+
+```bash
+intermesh proxy --config policy.yaml --evidence evidence.jsonl
+export HTTP_PROXY=http://localhost:8443
+```
+
+```text
+  Agent  ──►  InterMesh  ──►  risk (R0–R5)  ──►  policy  ──►  allow / block / approval
+                  │
+                  └──►  signed Action Evidence  ──►  intermesh verify
+```
+
+**Zero lines of code, in any language.** Your agent is a normal program
+making normal HTTP calls — Python, Node, Go, Rust, a shell script. It
+needs no SDK and no modification. That is deliberate: a proxy records
+what *actually left the system*, while an SDK records only what the agent
+*claims* it did. For evidence meant for a third party, the difference is
+the whole point.
+
+## Try it
+
+```bash
+python3 examples/assurance/demo.py
+```
+
+```text
+1. ACTION DANGEREUSE — POST /delete/database
+   HTTP 403   risque R5   → BLOCKED        evidence: 2fdbfae5…
+
+2. ACTION À VALIDER  — POST /transfer
+   HTTP 403   risque R4   → APPROVAL_REQUIRED
+
+3. ACTION AUTORISÉE  — POST /items
+   HTTP 200   risque R2   → executed, evidence written
+
+4. VÉRIFICATION      Evidence VALID · Integrity VALID · Signature VALID
+
+5. FALSIFICATION     un champ modifié  →  INVALID, détecté
+```
+
+## Verify without trusting us
+
+```bash
+intermesh verify evidence.jsonl
+```
+
+This runs offline. No account, no server, no network call. A proof you
+would have to ask us to validate would not be a proof.
+
+## What this does not claim
+
+Stated as plainly as the rest, because a security tool that oversells is
+worse than none:
+
+- **Absence of evidence is not evidence of absence.** An agent that
+  bypasses the proxy leaves no record at all.
+- **The key is not authenticated by the proof.** Valid means *intact and
+  signed by the key it carries*. Binding that key to a real organization
+  happens out of band.
+- **Under TLS, the proof covers the host, not the path.** `CONNECT`
+  hides everything else. See [the spec](specs/action-evidence-v0.md#6-limite-du-tls).
+
+---
+
+---
+
+## The coordination protocol
+
+InterMesh began as an open protocol for AI agents to discover each other
+and delegate work — hub, federation, end-to-end encryption, 326 tests.
+That layer still works and is documented below, but **it is no longer the
+product**. It is a technical foundation the assurance layer draws on:
+identity, signing, the Merkle-chained journal.
+
+The last release before the pivot is tagged `v0.4.5-mesh`.
+
+<details>
+<summary><b>Coordination protocol — architecture and usage</b></summary>
 
 ## Architecture
 
@@ -235,6 +328,8 @@ docker compose up --build -d
 ```
 
 ---
+
+</details>
 
 ## Contributing
 

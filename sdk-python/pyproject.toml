@@ -54,6 +54,12 @@ postgres = ["psycopg[binary]>=3.1"]
 fastapi = ["fastapi>=0.110"]
 http = ["httpx>=0.27"]
 
+# La couche d'assurance : le proxy et le vérificateur tournent sur la
+# bibliothèque standard. PyYAML ne sert qu'à lire une politique en YAML —
+# le JSON fonctionne sans rien installer, pour qu'un vérificateur reste
+# exécutable partout.
+assurance = ["PyYAML>=6.0"]
+
 [project.urls]
 Homepage = "https://github.com/intermeshteam/intermesh"
 Repository = "https://github.com/intermeshteam/intermesh"

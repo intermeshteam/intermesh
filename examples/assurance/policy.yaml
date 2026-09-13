@@ -1,0 +1,65 @@
+# Politique d'assurance — exemple minimal, agent DevOps.
+#
+# L'ordre compte : la PREMIÈRE règle qui correspond gagne. Ce que vous lisez
+# de haut en bas est ce que le moteur exécute. Placez donc les interdits
+# avant les permissions, jamais l'inverse.
+#
+# Le classement suit la réversibilité, pas la gravité ressentie : une
+# suppression passe avant un virement, parce qu'un virement se conteste et
+# qu'une ressource détruite ne revient pas.
+
+name: devops-v1
+
+# À partir de ce niveau, toute action laisse une preuve signée.
+# En dessous, on considère que la trace coûterait plus qu'elle ne vaut.
+evidence_threshold: R2
+
+rules:
+  # ------------------------------------------------------------------
+  # Interdits — en tête, pour qu'aucune règle permissive ne les précède
+  # ------------------------------------------------------------------
+  - name: destructive_action
+    match:
+      path_regex: "/(delete|destroy|terminate|drop)"
+    risk: R5
+    decision: block
+    reason: "Destruction de ressource — irréversible, jamais automatique."
+
+  - name: production_deploy
+    match:
+      path_contains: "/deploy/prod"
+    risk: R4
+    decision: approval
+    reason: "Déploiement en production — validation humaine requise."
+
+  - name: financial_transfer
+    match:
+      path_contains: "/transfer"
+    risk: R4
+    decision: approval
+    reason: "Mouvement financier — validation humaine requise."
+
+  # ------------------------------------------------------------------
+  # Autorisations
+  # ------------------------------------------------------------------
+  - name: modify_data
+    match:
+      method: POST
+    risk: R2
+    decision: allow
+    reason: "Écriture courante — tracée, non bloquée."
+
+  - name: read_public
+    match:
+      method: GET
+    risk: R0
+    decision: allow
+    reason: "Lecture — sans conséquence."
+
+# Ce qui ne correspond à aucune règle. Le défaut est OBLIGATOIRE : laisser
+# le moteur choisir reviendrait à décider de votre sécurité à votre place.
+# `block` est le choix prudent — une action non prévue par la politique est
+# une action que personne n'a examinée.
+default:
+  decision: block
+  risk: R3

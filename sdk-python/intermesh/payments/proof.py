@@ -22,7 +22,6 @@ nonce déjà honoré, parce que lui seul sait ce qui a été servi.
 
 from __future__ import annotations
 
-import base64
 import json
 from dataclasses import dataclass
 from typing import Optional
@@ -33,6 +32,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 
+from ..canonical import b64 as _b64, canonical_bytes, unb64 as _unb64
 from .challenge import PaymentChallenge
 from .clock import now_ms
 
@@ -42,20 +42,6 @@ VERSION = "im1"
 
 class ProofError(ValueError):
     """Preuve absente, illisible, altérée ou périmée."""
-
-
-def _b64(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-
-
-def _unb64(raw: str) -> bytes:
-    return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
-
-
-def _canonical(payload: dict) -> bytes:
-    """Un objet, un seul encodage possible."""
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False).encode("utf-8")
 
 
 @dataclass(frozen=True)
@@ -102,7 +88,7 @@ def sign_proof(challenge: PaymentChallenge, payer: str,
         issued_at=now_ms(),
         expires_at=challenge.expires_at,
     )
-    body = _canonical(proof.payload())
+    body = canonical_bytes(proof.payload())
     return f"{_b64(body)}.{_b64(private_key.sign(body))}"
 
 

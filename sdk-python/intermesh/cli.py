@@ -7,6 +7,7 @@ import os
 import socketserver
 import sys
 import time
+from pathlib import Path
 
 from intermesh import InterMeshAgent, InterMeshMessage, MessageType
 from intermesh.crypto import generate_keypair, get_public_key_pem
@@ -130,6 +131,102 @@ async def run_discover(args):
         print(f"{a['name']:<20} {roles:<18} {caps:<30} {e2e}")
     print()
     await agent.ws.close()
+
+
+def run_proxy(args):
+    """Démarre le proxy d'assurance : intercepte, classe, décide, prouve."""
+    from intermesh.assurance import AssuranceProxy, EvidenceStore, Policy
+    from intermesh.assurance.policy import PolicyError
+    from intermesh.assurance.proxy import make_proxy_server
+    from intermesh.secret import resolve_hub_secret
+    from intermesh.signing import derive_signing_key
+
+    try:
+        policy = Policy.load(args.config)
+    except PolicyError as exc:
+        print(f"\033[31m✗ Politique refusée : {exc}\033[0m")
+        return 2
+
+    store = EvidenceStore(args.evidence)
+    secret, source = resolve_hub_secret(secret_file=args.secret_file,
+                                        ephemeral=args.ephemeral_secret)
+    key = derive_signing_key(secret)
+    proxy = AssuranceProxy(policy, key, store, agent_id=args.agent,
+                           organization_id=args.org)
+    server = make_proxy_server(proxy, host=args.host, port=args.port)
+
+    print(f"\033[32m✓ InterMesh Assurance sur http://{args.host}:{args.port}\033[0m")
+    print(f"  politique : {policy.version_label()}  ({len(policy.rules)} règles)")
+    print(f"  défaut    : {policy.default_decision} / {policy.default_risk}")
+    print(f"  preuve dès : {policy.evidence_threshold}")
+    print(f"  journal   : {args.evidence or 'mémoire seule'}"
+          f"  ({store.count} preuve(s) reprises)")
+    print(f"  clé       : {source}")
+    print(f"\n  export HTTP_PROXY=http://{args.host}:{args.port}")
+    print("  Ctrl+C pour arrêter.\n")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print(f"\nArrêt. {store.count} preuve(s) au journal.")
+    finally:
+        server.server_close()
+    return 0
+
+
+def run_verify(args):
+    """Vérifie une preuve sans serveur, sans compte, sans nous faire confiance."""
+    import json as _json
+
+    from intermesh.assurance import verify_chain, verify_evidence
+
+    try:
+        raw = Path(args.evidence).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"\033[31m✗ Lecture impossible : {exc}\033[0m")
+        return 2
+
+    records = []
+    stripped = raw.strip()
+    try:
+        if stripped.startswith("["):
+            records = _json.loads(stripped)
+        elif "\n" in stripped and not stripped.startswith("{\n"):
+            records = [_json.loads(line) for line in stripped.splitlines() if line.strip()]
+        else:
+            records = [_json.loads(stripped)]
+    except _json.JSONDecodeError as exc:
+        print(f"\033[31m✗ JSON invalide : {exc}\033[0m")
+        return 2
+
+    report = verify_chain(records) if len(records) > 1 else verify_evidence(records[0])
+
+    if args.json:
+        print(_json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+        return 0 if report.valid else 1
+
+    tick = lambda ok: "\033[32mVALID\033[0m" if ok else "\033[31mINVALID\033[0m"  # noqa: E731
+    verdict = "\033[32mVALID\033[0m" if report.valid else "\033[31mINVALID\033[0m"
+    print(f"\nEvidence  : {verdict}")
+    print(f"Schema    : {tick(report.schema_ok)}")
+    print(f"Integrity : {tick(report.integrity_ok)}")
+    print(f"Signature : {tick(report.signature_ok)}")
+    if report.decision:
+        print(f"Decision  : {report.decision.upper()}   Risk: {report.risk}")
+    if report.issuer:
+        print(f"Issuer    : {report.issuer}  (clé {report.key_fingerprint})")
+    for error in report.errors:
+        print(f"  \033[31m→ {error}\033[0m")
+
+    # Dire ce que la vérification ne prouve pas vaut mieux que laisser
+    # croire qu'elle prouve tout.
+    if report.valid:
+        print("\n\033[33mLa preuve est intacte et signée par la clé qu'elle "
+              "porte.\033[0m")
+        print("\033[33mQue cette clé soit bien celle de l'émetteur annoncé "
+              "reste à établir hors bande.\033[0m")
+    print()
+    return 0 if report.valid else 1
 
 
 def run_ledger(args):
@@ -521,6 +618,33 @@ def main():
     task_parser.add_argument("--org", type=str, default="default", help="Organisation")
     task_parser.add_argument("--timeout", type=float, default=15.0)
 
+    # Command: proxy — InterMesh Assurance, le cœur du produit
+    proxy_parser = subparsers.add_parser(
+        "proxy", help="Intercepter, classer et prouver les actions d'un agent")
+    proxy_parser.add_argument("--config", "-c", type=str, required=True,
+                              help="Politique YAML ou JSON")
+    proxy_parser.add_argument("--port", type=int, default=8443)
+    proxy_parser.add_argument("--host", type=str, default="127.0.0.1",
+                              help="Interface d'écoute — localhost par défaut")
+    proxy_parser.add_argument("--evidence", type=str, default=None,
+                              help="Fichier JSON Lines où écrire les preuves")
+    proxy_parser.add_argument("--agent", type=str, default="unknown-agent",
+                              help="Identifiant de l'agent surveillé")
+    proxy_parser.add_argument("--org", type=str, default="default")
+    proxy_parser.add_argument("--secret-file", type=str, default=None,
+                              help="Clé de signature des preuves")
+    proxy_parser.add_argument("--ephemeral-secret", action="store_true",
+                              help="Clé jetable — les preuves ne seront plus "
+                                   "vérifiables après l'arrêt")
+
+    # Command: verify — utilisable sans nous, c'est tout l'intérêt
+    verify_parser = subparsers.add_parser(
+        "verify", help="Vérifier une preuve d'action, hors ligne")
+    verify_parser.add_argument("evidence", type=str,
+                               help="Fichier .json (une preuve) ou .jsonl (une chaîne)")
+    verify_parser.add_argument("--json", action="store_true",
+                               help="Sortie lisible par une machine")
+
     # Command: ledger — le relais de paiement HTTP 402
     ledger_parser = subparsers.add_parser(
         "ledger", help="Démarrer le registre de paiement (HTTP 402)")
@@ -556,6 +680,8 @@ def main():
     elif args.command == "ping": asyncio.run(run_ping(args))
     elif args.command == "ask": _run_or_explain(run_ask(args), args.agent, args)
     elif args.command == "task": _run_or_explain(run_task(args), args.assignee, args)
+    elif args.command == "proxy": sys.exit(run_proxy(args))
+    elif args.command == "verify": sys.exit(run_verify(args))
     elif args.command == "ledger": run_ledger(args)
     elif args.command == "keygen": run_keygen(args)
 
