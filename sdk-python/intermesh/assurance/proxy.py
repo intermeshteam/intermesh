@@ -41,6 +41,8 @@ from urllib.parse import urlsplit
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from ..canonical import sha256_hex
+from .approval import HEADER as APPROVAL_HEADER
+from .approval import ApprovalError, ApprovalStore
 from .evidence import GENESIS, ActionEvidence, payload_digest
 from .policy import ALLOW, APPROVAL, BLOCK, Policy
 from .risk import RiskLevel
@@ -87,8 +89,20 @@ class EvidenceStore:
     def last_hash(self) -> str:
         return self._last_hash
 
-    def append(self, record: dict) -> dict:
+    def append(self, evidence: ActionEvidence, sign) -> dict:
+        """Chaîne, signe et écrit — **le tout sous un seul verrou**.
+
+        Lire `last_hash`, signer, puis écrire laissait une fenêtre : deux
+        requêtes simultanées lisaient la même empreinte précédente et
+        produisaient deux preuves de même `prev_hash`. Le chaînage se
+        cassait dès qu'un agent émettait en parallèle, c'est-à-dire dans
+        le cas normal. Comme `prev_hash` entre dans le hachage, donc dans
+        la signature, l'affectation et la signature ne peuvent pas être
+        séparées.
+        """
         with self._lock:
+            evidence.prev_hash = self._last_hash
+            record = sign(evidence)
             self._last_hash = (record.get("evidence") or {}).get("hash", GENESIS)
             self.count += 1
             if self.path:
@@ -104,12 +118,14 @@ class AssuranceProxy:
 
     def __init__(self, policy: Policy, private_key: Ed25519PrivateKey,
                  store: EvidenceStore, agent_id: str = "unknown-agent",
-                 organization_id: str = "default"):
+                 organization_id: str = "default",
+                 approvals: Optional[ApprovalStore] = None):
         self.policy = policy
         self.key = private_key
         self.store = store
         self.agent_id = agent_id
         self.organization_id = organization_id
+        self.approvals = approvals if approvals is not None else ApprovalStore()
 
     def assess(self, method: str, url: str):
         return self.policy.evaluate(method, url)
@@ -127,10 +143,18 @@ class AssuranceProxy:
             rule=verdict.rule,
             payload_hash=payload_hash, status=status,
             response_status=response_status, response_hash=response_hash,
-            prev_hash=self.store.last_hash,
+            # `prev_hash` est posé par le magasin, sous verrou : le lire
+            # ici ouvrirait une course entre deux requêtes simultanées.
             extra={"reason": verdict.reason or None, **extra},
         )
-        return self.store.append(evidence.sign(self.key))
+        # Qui a validé, et sur quelle preuve : c'est la première chose que
+        # cherche un auditeur devant une action sensible exécutée.
+        approval_id = evidence.execution.pop("approval_id", None)
+        approved_by = evidence.execution.pop("approved_by", None)
+        if approval_id:
+            evidence.authorization["approval_id"] = approval_id
+            evidence.authorization["approved_by"] = approved_by
+        return self.store.append(evidence, lambda e: e.sign(self.key))
 
 
 class _ProxyHandler(BaseHTTPRequestHandler):
@@ -185,15 +209,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                        payload_hash=payload_digest(body))
             return self._refusal(403, "blocked", verdict, record)
 
+        approval = None
         if verdict.decision == APPROVAL:
-            record = self.proxy.record(method=method, url=url, verdict=verdict,
-                                       status="pending_approval",
-                                       payload_hash=payload_digest(body))
-            return self._refusal(403, "approval_required", verdict, record)
+            jeton = self.headers.get(APPROVAL_HEADER)
+            if not jeton:
+                record = self.proxy.record(method=method, url=url, verdict=verdict,
+                                           status="pending_approval",
+                                           payload_hash=payload_digest(body))
+                return self._refusal(403, "approval_required", verdict, record)
+            try:
+                approval = self.proxy.approvals.consume(jeton, method, url)
+            except ApprovalError as exc:
+                record = self.proxy.record(
+                    method=method, url=url, verdict=verdict,
+                    status="approval_rejected", payload_hash=payload_digest(body),
+                    approval_error=str(exc))
+                return self._refusal(403, "approval_invalid", verdict, record,
+                                     detail=str(exc))
 
-        self._forward(method, url, body, verdict)
+        self._forward(method, url, body, verdict, approval)
 
-    def _forward(self, method: str, url: str, body: bytes, verdict) -> None:
+    def _forward(self, method: str, url: str, body: bytes, verdict,
+                 approval=None) -> None:
         headers = {k: v for k, v in self.headers.items()
                    if k.lower() not in HOP_BY_HOP}
         try:
@@ -201,7 +238,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.proxy.record(method=method, url=url, verdict=verdict,
                               status="failed", payload_hash=payload_digest(body),
-                              error=type(exc).__name__)
+                              error=type(exc).__name__,
+                              approval_id=approval.action_id if approval else None)
             return self._json(502, {"error": "upstream_unreachable",
                                     "reason": str(exc)})
 
@@ -210,7 +248,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             record = self.proxy.record(
                 method=method, url=url, verdict=verdict, status="executed",
                 payload_hash=payload_digest(body), response_status=status,
-                response_hash=sha256_hex(payload) if payload else None)
+                response_hash=sha256_hex(payload) if payload else None,
+                approval_id=approval.action_id if approval else None,
+                approved_by=approval.approved_by if approval else None)
 
         extra = [(k, v) for k, v in out_headers if k.lower() != "content-length"]
         extra.append(("X-InterMesh-Risk", str(verdict.risk)))
@@ -277,9 +317,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         return self.rfile.read(length) if length else b""
 
-    def _refusal(self, status: int, kind: str, verdict, record: dict) -> None:
+    def _refusal(self, status: int, kind: str, verdict, record: dict,
+                 detail: Optional[str] = None) -> None:
         self._json(status, {
             "error": kind,
+            **({"detail": detail} if detail else {}),
             "risk": str(verdict.risk),
             "rule": verdict.rule,
             "reason": verdict.reason or None,

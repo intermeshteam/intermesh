@@ -133,12 +133,18 @@ class InterMeshStore:
         else:
             self.path = Path(path) if path else default_state_path()
             self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            if not self.path.exists():
-                # Créé en 0600 dès l'origine plutôt que corrigé après coup :
-                # entre la création et le chmod, le fichier serait lisible.
+            # Créé en 0600 dès l'origine plutôt que corrigé après coup :
+            # entre la création et le chmod, le fichier serait lisible.
+            #
+            # On tente la création sans vérifier d'abord. Un `if not
+            # exists()` laissait une fenêtre entre le test et l'appel : deux
+            # Hubs démarrant ensemble sur un fichier partagé se croisaient
+            # dedans, et le second mourait sur FileExistsError sans jamais
+            # écouter. C'est précisément le cas de la réplique à chaud.
+            try:
                 fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(fd)
-            else:
+            except FileExistsError:
                 os.chmod(self.path, 0o600)
             # `timeout` laisse SQLite attendre le verrou d'écriture au lieu
             # d'échouer aussitôt sur « database is locked ». Deux Hubs qui

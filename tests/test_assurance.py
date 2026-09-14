@@ -232,6 +232,37 @@ def test_le_corps_de_la_requete_n_est_jamais_stocke(stack):
     assert len(json.loads(brut)["action"]["payload_hash"]) == 64
 
 
+def test_le_chainage_resiste_a_des_ecritures_simultanees(tmp_path):
+    """
+    Régression : `prev_hash` était lu hors du verrou, puis la preuve
+    signée, puis écrite. Deux requêtes simultanées lisaient la même
+    empreinte précédente et produisaient deux preuves de même `prev_hash`.
+    Le chaînage cassait dès qu'un agent émettait en parallèle — c'est-à-
+    dire dans le cas normal, pas dans un cas limite.
+    """
+    from intermesh.assurance import AssuranceProxy, EvidenceStore
+    from intermesh.assurance.policy import Verdict
+
+    store = EvidenceStore(tmp_path / "e.jsonl")
+    proxy = AssuranceProxy(Policy.from_dict(POLICY), KEY, store)
+    verdict = Verdict("block", RiskLevel.R5, "destructive")
+
+    def ecrire(i):
+        proxy.record(method="POST", url=f"http://h/delete/{i}",
+                     verdict=verdict, status="blocked")
+
+    fils = [threading.Thread(target=ecrire, args=(i,)) for i in range(30)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join()
+
+    preuves = [json.loads(l) for l in
+               (tmp_path / "e.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(preuves) == 30
+    assert verify_chain(preuves).valid
+
+
 def test_la_chaine_detecte_une_preuve_retiree(stack):
     for chemin in ("/api/delete/a", "/api/transfer", "/api/delete/b"):
         requests.post(f"{stack['base']}{chemin}", json={},

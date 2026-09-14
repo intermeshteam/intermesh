@@ -10,6 +10,7 @@ leader ni une promotion automatique côté serveur. Voir le docstring de
 
 import asyncio
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -59,7 +60,21 @@ def shared_state_hubs():
          "--state-file", state_file, "--ephemeral-secret"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
-    time.sleep(2)
+    # Un `sleep(2)` fixe rendait ce test instable une fois sur cinq : quand
+    # le Hub A n'écoutait pas encore, l'agent basculait aussitôt sur le B et
+    # le test échouait avant même la panne qu'il voulait provoquer. On
+    # attend que les deux ports acceptent réellement une connexion.
+    for port in (PORT_A, PORT_B):
+        limite = time.monotonic() + 15.0
+        while True:
+            try:
+                socket.create_connection(("localhost", port), timeout=0.5).close()
+                break
+            except OSError:
+                if time.monotonic() > limite:
+                    raise RuntimeError(f"le Hub sur {port} n'a jamais écouté")
+                time.sleep(0.1)
+
     yield hub_a, hub_b
     for proc in (hub_a, hub_b):
         proc.terminate()

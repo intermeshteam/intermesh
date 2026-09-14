@@ -170,3 +170,39 @@ def test_default_path_follows_intermesh_home(monkeypatch, tmp_path):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+def test_deux_hubs_peuvent_ouvrir_le_meme_fichier_en_meme_temps(tmp_path):
+    """
+    Régression : la création du fichier d'état faisait `if not exists()`
+    puis `os.open(O_EXCL)`. Deux Hubs démarrant ensemble sur un fichier
+    partagé se croisaient dans cette fenêtre, et le second mourait sur
+    FileExistsError sans jamais écouter — cassant la réplique à chaud que
+    `--state-file` est censé permettre.
+
+    Le symptôme visible était un test de bascule instable une fois sur
+    cinq, ce qui masquait la cause pendant des semaines.
+    """
+    import threading
+
+    from intermesh.store import InterMeshStore
+
+    chemin = tmp_path / "partage.db"
+    erreurs = []
+    depart = threading.Barrier(8)
+
+    def ouvrir():
+        depart.wait()
+        try:
+            InterMeshStore(path=str(chemin))
+        except Exception as exc:  # noqa: BLE001 - c'est ce qu'on mesure
+            erreurs.append(exc)
+
+    fils = [threading.Thread(target=ouvrir) for _ in range(8)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join()
+
+    assert not erreurs, f"ouvertures simultanées refusées : {erreurs}"
+    assert oct(chemin.stat().st_mode)[-3:] == "600"

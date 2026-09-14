@@ -147,12 +147,15 @@ def run_proxy(args):
         print(f"\033[31m✗ Politique refusée : {exc}\033[0m")
         return 2
 
+    from intermesh.assurance.approval import ApprovalStore
+
     store = EvidenceStore(args.evidence)
+    approvals = ApprovalStore(args.approvals)
     secret, source = resolve_hub_secret(secret_file=args.secret_file,
                                         ephemeral=args.ephemeral_secret)
     key = derive_signing_key(secret)
     proxy = AssuranceProxy(policy, key, store, agent_id=args.agent,
-                           organization_id=args.org)
+                           organization_id=args.org, approvals=approvals)
     server = make_proxy_server(proxy, host=args.host, port=args.port)
 
     print(f"\033[32m✓ InterMesh Assurance sur http://{args.host}:{args.port}\033[0m")
@@ -162,6 +165,8 @@ def run_proxy(args):
     print(f"  journal   : {args.evidence or 'mémoire seule'}"
           f"  ({store.count} preuve(s) reprises)")
     print(f"  clé       : {source}")
+    print(f"  approbations : {args.approvals or 'aucune'}"
+          f"  ({len(approvals)} accordée(s))")
     print(f"\n  export HTTP_PROXY=http://{args.host}:{args.port}")
     print("  Ctrl+C pour arrêter.\n")
 
@@ -171,6 +176,54 @@ def run_proxy(args):
         print(f"\nArrêt. {store.count} preuve(s) au journal.")
     finally:
         server.server_close()
+    return 0
+
+
+def run_approve(args):
+    """Accorde une approbation humaine à une action mise en attente."""
+    import json as _json
+
+    from intermesh.assurance.approval import ApprovalStore
+
+    try:
+        lignes = Path(args.evidence).read_text(encoding="utf-8").strip().splitlines()
+    except OSError as exc:
+        print(f"\033[31m✗ Journal illisible : {exc}\033[0m")
+        return 2
+
+    attente = None
+    for ligne in lignes:
+        try:
+            preuve = _json.loads(ligne)
+        except _json.JSONDecodeError:
+            continue
+        if preuve.get("action_id") == args.action_id:
+            attente = preuve
+            break
+
+    if attente is None:
+        print(f"\033[31m✗ Aucune preuve '{args.action_id}' dans {args.evidence}\033[0m")
+        return 1
+
+    statut = (attente.get("execution") or {}).get("status")
+    if statut != "pending_approval":
+        # Approuver une action déjà exécutée n'aurait aucun sens, et
+        # approuver une action bloquée contournerait la politique.
+        print(f"\033[31m✗ Cette preuve est en état '{statut}', pas "
+              f"'pending_approval' — rien à approuver.\033[0m")
+        return 1
+
+    action = attente.get("action") or {}
+    store = ApprovalStore(args.approvals)
+    accord = store.grant(args.action_id, action.get("method", ""),
+                         action.get("target", ""), approved_by=args.by,
+                         ttl_ms=int(args.ttl * 1000))
+
+    print(f"\n\033[32m✓ Approuvé par {accord.approved_by}\033[0m")
+    print(f"  action : {accord.method} {accord.target}")
+    print(f"  risque : {(attente.get('risk') or {}).get('level')}")
+    print(f"  valide : {args.ttl / 60:.0f} min, un seul rejeu")
+    print(f"\n  L'agent rejoue avec : {args.action_id}\n")
     return 0
 
 
@@ -633,9 +686,25 @@ def main():
     proxy_parser.add_argument("--org", type=str, default="default")
     proxy_parser.add_argument("--secret-file", type=str, default=None,
                               help="Clé de signature des preuves")
+    proxy_parser.add_argument("--approvals", type=str, default=None,
+                              help="Fichier des approbations humaines accordées")
     proxy_parser.add_argument("--ephemeral-secret", action="store_true",
                               help="Clé jetable — les preuves ne seront plus "
                                    "vérifiables après l'arrêt")
+
+    # Command: approve — le chemin entre « bloqué » et « autorisé »
+    approve_parser = subparsers.add_parser(
+        "approve", help="Approuver une action mise en attente")
+    approve_parser.add_argument("action_id", type=str,
+                                help="Identifiant de la preuve en attente")
+    approve_parser.add_argument("--evidence", "-e", type=str, required=True,
+                                help="Journal de preuves où la chercher")
+    approve_parser.add_argument("--approvals", "-a", type=str, required=True,
+                                help="Fichier où enregistrer l'approbation")
+    approve_parser.add_argument("--by", type=str, default=os.environ.get("USER", "operator"),
+                                help="Qui approuve")
+    approve_parser.add_argument("--ttl", type=float, default=3600.0,
+                                help="Validité en secondes (défaut : 1 h)")
 
     # Command: verify — utilisable sans nous, c'est tout l'intérêt
     verify_parser = subparsers.add_parser(
@@ -681,6 +750,7 @@ def main():
     elif args.command == "ask": _run_or_explain(run_ask(args), args.agent, args)
     elif args.command == "task": _run_or_explain(run_task(args), args.assignee, args)
     elif args.command == "proxy": sys.exit(run_proxy(args))
+    elif args.command == "approve": sys.exit(run_approve(args))
     elif args.command == "verify": sys.exit(run_verify(args))
     elif args.command == "ledger": run_ledger(args)
     elif args.command == "keygen": run_keygen(args)
